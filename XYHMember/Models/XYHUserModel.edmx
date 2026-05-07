@@ -1,0 +1,189 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+  <!-- EF Runtime content -->
+  <edmx:Runtime>
+    <!-- SSDL content -->
+    <edmx:StorageModels>
+    <Schema Namespace="hisdataModel.Store" Provider="System.Data.SqlClient" ProviderManifestToken="2008" Alias="Self" xmlns:store="http://schemas.microsoft.com/ado/2007/12/edm/EntityStoreSchemaGenerator" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl">
+        <EntityType Name="MS_BRZH">
+          <Key>
+            <PropertyRef Name="ID" />
+          </Key>
+          <Property Name="ID" Type="numeric" Precision="18" Scale="0" Nullable="false" />
+          <Property Name="ZHLB" Type="numeric" Precision="2" Scale="0" />
+          <Property Name="YHBH" Type="varchar" MaxLength="30" />
+          <Property Name="YHZH" Type="varchar" MaxLength="20" />
+          <Property Name="PASS" Type="varchar" MaxLength="10" />
+          <Property Name="GZZE" Type="numeric" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="ZHYE" Type="numeric" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="LJFY" Type="numeric" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="ZFDJE" Type="numeric" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="CEZFBL" Type="numeric" Precision="4" Scale="2" Nullable="false" />
+          <Property Name="QTJE" Type="numeric" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="ZFPB" Type="numeric" Precision="1" Scale="0" Nullable="false" />
+          <Property Name="BRKH" Type="varchar" MaxLength="20" />
+          <Property Name="brxm" Type="varchar" MaxLength="50" />
+        </EntityType>
+        <EntityType Name="MS_SZMX">
+          <Key>
+            <PropertyRef Name="SBXH" />
+          </Key>
+          <Property Name="SBXH" Type="numeric" Precision="18" Scale="0" Nullable="false" />
+          <Property Name="ID" Type="numeric" Precision="18" Scale="0" />
+          <Property Name="RQ" Type="datetime" />
+          <Property Name="ZY" Type="varchar" MaxLength="30" />
+          <Property Name="JFJE" Type="numeric" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="DFJE" Type="numeric" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="CZGH" Type="varchar" MaxLength="4" />
+          <Property Name="SZLB" Type="numeric" Precision="2" Scale="0" />
+          <Property Name="PZHM" Type="varchar" MaxLength="30" />
+          <Property Name="JZRQ" Type="datetime" />
+          <Property Name="HZRQ" Type="datetime" />
+        </EntityType>
+        <EntityType Name="XYHUser">
+          <Key>
+            <PropertyRef Name="UserId" />
+          </Key>
+          <Property Name="UserId" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="Username" Type="nvarchar" MaxLength="100" />
+          <Property Name="Password" Type="nvarchar" MaxLength="100" />
+          <Property Name="Jobnumber" Type="nvarchar" MaxLength="100" />
+          <Property Name="Name" Type="nvarchar" MaxLength="100" />
+        </EntityType>
+        <EntityContainer Name="hisdataModelStoreContainer">
+          <EntitySet Name="MS_BRZH" EntityType="Self.MS_BRZH" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="MS_SZMX" EntityType="Self.MS_SZMX" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="XYHUser" EntityType="Self.XYHUser" Schema="dbo" store:Type="Tables" />
+        </EntityContainer>
+      </Schema></edmx:StorageModels>
+    <!-- CSDL content -->
+    <edmx:ConceptualModels>
+      <Schema Namespace="hisdataModel" Alias="Self" annotation:UseStrongSpatialTypes="false" xmlns:annotation="http://schemas.microsoft.com/ado/2009/02/edm/annotation" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm">
+        <EntityType Name="MS_BRZH">
+          <Key>
+            <PropertyRef Name="ID" />
+          </Key>
+          <Property Name="ID" Type="Decimal" Precision="18" Scale="0" Nullable="false" />
+          <Property Name="ZHLB" Type="Decimal" Precision="2" Scale="0" />
+          <Property Name="YHBH" Type="String" MaxLength="30" FixedLength="false" Unicode="false" />
+          <Property Name="YHZH" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="PASS" Type="String" MaxLength="10" FixedLength="false" Unicode="false" />
+          <Property Name="GZZE" Type="Decimal" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="ZHYE" Type="Decimal" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="LJFY" Type="Decimal" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="ZFDJE" Type="Decimal" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="CEZFBL" Type="Decimal" Precision="4" Scale="2" Nullable="false" />
+          <Property Name="QTJE" Type="Decimal" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="ZFPB" Type="Decimal" Precision="1" Scale="0" Nullable="false" />
+          <Property Name="BRKH" Type="String" MaxLength="20" FixedLength="false" Unicode="false" />
+          <Property Name="brxm" Type="String" MaxLength="50" FixedLength="false" Unicode="false" />
+        </EntityType>
+        <EntityType Name="MS_SZMX">
+          <Key>
+            <PropertyRef Name="SBXH" />
+          </Key>
+          <Property Name="SBXH" Type="Decimal" Precision="18" Scale="0" Nullable="false" />
+          <Property Name="ID" Type="Decimal" Precision="18" Scale="0" />
+          <Property Name="RQ" Type="DateTime" Precision="3" />
+          <Property Name="ZY" Type="String" MaxLength="30" FixedLength="false" Unicode="false" />
+          <Property Name="JFJE" Type="Decimal" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="DFJE" Type="Decimal" Precision="12" Scale="2" Nullable="false" />
+          <Property Name="CZGH" Type="String" MaxLength="4" FixedLength="false" Unicode="false" />
+          <Property Name="SZLB" Type="Decimal" Precision="2" Scale="0" />
+          <Property Name="PZHM" Type="String" MaxLength="30" FixedLength="false" Unicode="false" />
+          <Property Name="JZRQ" Type="DateTime" Precision="3" />
+          <Property Name="HZRQ" Type="DateTime" Precision="3" />
+        </EntityType>
+        <EntityType Name="XYHUser">
+          <Key>
+            <PropertyRef Name="UserId" />
+          </Key>
+          <Property Name="UserId" Type="Int32" Nullable="false" />
+          <Property Name="Username" Type="String" MaxLength="100" FixedLength="false" Unicode="true" />
+          <Property Name="Password" Type="String" MaxLength="100" FixedLength="false" Unicode="true" />
+          <Property Name="Jobnumber" Type="String" MaxLength="100" FixedLength="false" Unicode="true" />
+          <Property Name="Name" Type="String" MaxLength="100" FixedLength="false" Unicode="true" />
+        </EntityType>
+        <EntityContainer Name="hisdataEntities" annotation:LazyLoadingEnabled="true">
+          <EntitySet Name="MS_BRZH" EntityType="Self.MS_BRZH" />
+          <EntitySet Name="MS_SZMX" EntityType="Self.MS_SZMX" />
+          <EntitySet Name="XYHUser" EntityType="Self.XYHUser" />
+        </EntityContainer>
+      </Schema>
+    </edmx:ConceptualModels>
+    <!-- C-S mapping content -->
+    <edmx:Mappings>
+      <Mapping Space="C-S" xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+        <EntityContainerMapping StorageEntityContainer="hisdataModelStoreContainer" CdmEntityContainer="hisdataEntities">
+          <EntitySetMapping Name="MS_BRZH">
+            <EntityTypeMapping TypeName="hisdataModel.MS_BRZH">
+              <MappingFragment StoreEntitySet="MS_BRZH">
+                <ScalarProperty Name="ID" ColumnName="ID" />
+                <ScalarProperty Name="ZHLB" ColumnName="ZHLB" />
+                <ScalarProperty Name="YHBH" ColumnName="YHBH" />
+                <ScalarProperty Name="YHZH" ColumnName="YHZH" />
+                <ScalarProperty Name="PASS" ColumnName="PASS" />
+                <ScalarProperty Name="GZZE" ColumnName="GZZE" />
+                <ScalarProperty Name="ZHYE" ColumnName="ZHYE" />
+                <ScalarProperty Name="LJFY" ColumnName="LJFY" />
+                <ScalarProperty Name="ZFDJE" ColumnName="ZFDJE" />
+                <ScalarProperty Name="CEZFBL" ColumnName="CEZFBL" />
+                <ScalarProperty Name="QTJE" ColumnName="QTJE" />
+                <ScalarProperty Name="ZFPB" ColumnName="ZFPB" />
+                <ScalarProperty Name="BRKH" ColumnName="BRKH" />
+                <ScalarProperty Name="brxm" ColumnName="brxm" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="MS_SZMX">
+            <EntityTypeMapping TypeName="hisdataModel.MS_SZMX">
+              <MappingFragment StoreEntitySet="MS_SZMX">
+                <ScalarProperty Name="SBXH" ColumnName="SBXH" />
+                <ScalarProperty Name="ID" ColumnName="ID" />
+                <ScalarProperty Name="RQ" ColumnName="RQ" />
+                <ScalarProperty Name="ZY" ColumnName="ZY" />
+                <ScalarProperty Name="JFJE" ColumnName="JFJE" />
+                <ScalarProperty Name="DFJE" ColumnName="DFJE" />
+                <ScalarProperty Name="CZGH" ColumnName="CZGH" />
+                <ScalarProperty Name="SZLB" ColumnName="SZLB" />
+                <ScalarProperty Name="PZHM" ColumnName="PZHM" />
+                <ScalarProperty Name="JZRQ" ColumnName="JZRQ" />
+                <ScalarProperty Name="HZRQ" ColumnName="HZRQ" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="XYHUser">
+            <EntityTypeMapping TypeName="hisdataModel.XYHUser">
+              <MappingFragment StoreEntitySet="XYHUser">
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Jobnumber" ColumnName="Jobnumber" />
+                <ScalarProperty Name="UserId" ColumnName="UserId" />
+                <ScalarProperty Name="Username" ColumnName="Username" />
+                <ScalarProperty Name="Password" ColumnName="Password" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+        </EntityContainerMapping>
+      </Mapping>
+    </edmx:Mappings>
+  </edmx:Runtime>
+  <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <Connection>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="MetadataArtifactProcessing" Value="EmbedInOutputAssembly" />
+      </DesignerInfoPropertySet>
+    </Connection>
+    <Options>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="ValidateOnBuild" Value="true" />
+        <DesignerProperty Name="EnablePluralization" Value="false" />
+        <DesignerProperty Name="IncludeForeignKeysInModel" Value="true" />
+        <DesignerProperty Name="UseLegacyProvider" Value="false" />
+        <DesignerProperty Name="CodeGenerationStrategy" Value="无" />
+      </DesignerInfoPropertySet>
+    </Options>
+    <!-- Diagram content (shape and connector positions) -->
+    <Diagrams></Diagrams>
+  </Designer>
+</edmx:Edmx>

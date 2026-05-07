@@ -1,0 +1,81 @@
+﻿
+@{
+    ViewBag.Title = "AddUser";
+}
+
+
+@Styles.Render("~/Content/upcss")
+
+
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>add</title>
+    <link rel="stylesheet" href="css/amazeui.min.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/app.css">
+    <style>
+        .admin-main {
+            padding-top: 0px;
+        }
+    </style>
+</head>
+<body>
+    <div class="am-cf admin-main">
+        <!-- content start -->
+        <div class="admin-content">
+            <div class="admin-content-body">
+                <div class="am-g">
+                    <form class="am-form am-form-horizontal" action="@Url.Action("Add", "User")" method="post" style="padding-top:30px;" data-am-validator="">
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                工号：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-1" required="" placeholder="请输入工号" name="jobnumber"> 
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                姓名：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" placeholder="请输入姓名" name="name" data-equal-to="#doc-vld-pwd-1">
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                用户名：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" placeholder="请输入用户名" name="username" data-equal-to="#doc-vld-pwd-1" >
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                密码：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="password" id="doc-vld-pwd-2" required="" placeholder="请输入密码" name="pwd" data-equal-to="#doc-vld-pwd-1" >
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <div class="am-u-sm-9 am-u-sm-push-3">
+                                <button type="submit" class="am-btn am-btn-success" >保存</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @Scripts.Render("~/Scripts/jquery")
+    @Scripts.Render("~/Scripts/plugs")
+
+
+
+</body>
+</html>
+

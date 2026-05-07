@@ -1,0 +1,120 @@
+﻿
+@{
+    ViewBag.Title = "TopUP";
+}
+
+@Styles.Render("~/Content/upcss")
+
+
+
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>add</title>
+
+    <style>
+        .admin-main {
+            padding-top: 0px;
+        }
+    </style>
+</head>
+<body>
+    <div class="am-cf admin-main">
+        <!-- content start -->
+        <div class="admin-content">
+            <div class="admin-content-body">
+                <div class="am-g">
+                    <form class="am-form am-form-horizontal" action="@Url.Action("TopUPMember", "Member")" method="post" style="padding-top:30px;" data-am-validator="">
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                PID：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-1" required="" name="pid" value="@Model.PID" readonly>
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                门诊号：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" name="mzhm" data-equal-to="#doc-vld-pwd-1" value="@Model.门诊号" readonly>
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                姓名：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" name="name" data-equal-to="#doc-vld-pwd-1" value="@Model.姓名" readonly>
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                余额：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" name="balance" data-equal-to="#doc-vld-pwd-1" value="@Model.余额" readonly>
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                支付金额：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" name="pay" data-equal-to="#doc-vld-pwd-1">
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                支付方式：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" name="state" data-equal-to="#doc-vld-pwd-1">
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                备注：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" name="remark" data-equal-to="#doc-vld-pwd-1">
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                折扣金额：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" name="discount" data-equal-to="#doc-vld-pwd-1">
+                            </div>
+                        </div>
+                        <div class="am-form-group">
+                            <label for="user-name" class="am-u-sm-3 am-form-label">
+                                关联销售：
+                            </label>
+                            <div class="am-u-sm-9">
+                                <input type="text" id="doc-vld-pwd-2" required="" name="relatedSales" data-equal-to="#doc-vld-pwd-1">
+                            </div>
+                        </div>
+
+                        <div class="am-form-group">
+                            <div class="am-u-sm-9 am-u-sm-push-3">
+                                <button type="submit" class="am-btn am-btn-success">确定</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @Scripts.Render("~/Scripts/jquery1")
+    @Scripts.Render("~/Scripts/plugs")
+
+
+
+</body>
+</html>
+

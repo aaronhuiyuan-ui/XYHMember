@@ -1,0 +1,41 @@
+﻿.container {
+    display: flex;
+    align-items: center; /* 确保所有子元素在纵轴上居中对齐 */
+    gap: 80px; /* 设置子元素之间的间距 */
+    margin-top: 20px; /* 如果需要将整个容器下移，可以使用margin-top */
+}
+
+    .container input, .container button, .container form input, .container form button {
+        height: 38px; /* 确保输入框和按钮具有相同的高度 */
+        box-sizing: border-box; /* 确保padding和border包含在高度内 */
+    }
+
+.am-input-group {
+    display: flex;
+}
+
+.am-input-group-btn button {
+    height: 38px;
+}
+
+.scrollable-container {
+    width: 100%; /* 将容器的宽度设置为填充可用空间 */
+    height: 1200px; /* 根据实际需要调整高度，通常不需要800px那么高 */
+    overflow-x: auto; /* 启用横向滚动 */
+    overflow-y: auto; /* 启用纵向滚动 */
+    /* 固定在底部 */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    z-index: 1000; /* 确保在其他元素上方 */
+    /* 可选样式 */
+    background-color: white; /* 设置背景色 */
+    border-top: 1px solid #ddd; /* 顶部边框 */
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1); /* 添加阴影效果 */
+}
+
+.scrollable-content {
+    /* 将内容的宽度设置为大于容器的宽度 */
+    width: 200%; /* 根据需要调整此值 */
+    white-space: nowrap; /* 防止内容换行 */
+}

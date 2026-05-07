@@ -1,0 +1,158 @@
+﻿
+@{
+    ViewBag.Title = "Member";
+}
+@using XYHMember.Context;
+@model List<Member>
+
+
+@{ 
+    var name = Request["name"];
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+
+</head>
+
+<body>
+
+    <div class="am-g">
+
+
+        <div class="container">
+            <div style="margin-left:1200px;">
+                <form controller="Member" action="GetMemberByNamePay" method="get">
+                    <div class="am-input-group am-input-group-sm">
+                        <input type="text" class="am-form-field" name="name" value="@name" placeholder="请输入姓名">
+                        <span class="am-input-group-btn">
+                            <button class="am-btn am-btn-default" type="submit">搜索</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+            <div width:100px;><button class="am-btn am-btn-default" id="exportButton" style="margin-top:-20px;">导出到Excel</button></div>
+        </div>
+
+
+        <div class="am-g">
+            <div class="am-u-sm-12">
+                <form class="am-form">
+                    <table class="am-table am-table-striped am-table-hover table-main" id="dataTable">
+                        <thead>
+                            <tr>
+                                <th class="table-check"><input type="checkbox"></th>
+                                <th class="table-title">PID</th>
+                                <th class="table-type">储值卡号</th>
+                                <th class="table-author">姓名</th>
+                                <th>性别</th>
+                                <th>身份证号</th>
+                                <th>联系手机</th>
+                                <th>储值卡余额</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var result in Model)
+                            {
+                                <tr>
+                                    <td><input type="checkbox"></td>
+                                    <td>@result.PID</td>
+                                    <td>@result.门诊号</td>
+                                    <td>@result.姓名</td>
+                                    <td>@result.性别</td>
+                                    <td>@result.身份证号</td>
+                                    <td>@result.联系手机</td>
+                                    <td>@result.余额</td>
+                                    <td>
+                                        <div class="am-btn-toolbar">
+                                            <div class="am-btn-group am-btn-group-xs">
+                                                <button class="am-btn am-btn-default am-btn-xs am-text-secondary" onclick="updateCard('充值',@result.PID)"><span class="am-icon-pencil-square-o"></span> 充值</button>
+
+
+
+
+
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                            }
+
+
+                        </tbody>
+                    </table>
+                </form>
+
+            </div>
+
+        </div>
+    </div>
+
+
+
+    <script type="text/javascript">
+
+        //添加编辑弹出层
+        function updateCard(title, pid)
+        {
+            var urlWithParams = '@Url.Action("TopUP", "Member")' + '?pid=' + pid;
+            var width = 500;
+            var height = 600;
+            var left = (screen.width / 2) - (width / 2);
+            var top = (screen.height / 2) - (height / 2);
+
+            window.open(urlWithParams, title, 'width=' + width + ',height=' + height + ',top=' + top + ',left=' + left);
+        }
+
+
+
+        document.getElementById('exportButton').addEventListener('click', function () {
+                // 获取表头
+                var headers = Array.from(document.querySelectorAll('#dataTable thead th')).map(th => th.innerText);
+
+                // 获取数据行
+                var rows = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(tr => {
+                    return Array.from(tr.children).map(td => td.innerText);
+                });
+
+                // 构建导出数据
+                var exportData = {
+                    Headers: headers,
+                    Rows: rows
+                };
+
+                // 发送数据到服务器进行导出
+                fetch('@Url.Action("ExportToExcel", "Export")', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(exportData)
+                })
+                    .then(response => response.blob())
+                    .then(blob => {
+                        var url = window.URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = '开卡查询.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                    })
+                    .catch(error => console.error('Error exporting to Excel:', error));
+            });
+    </script>
+
+
+
+
+
+</body>
+</html>
+

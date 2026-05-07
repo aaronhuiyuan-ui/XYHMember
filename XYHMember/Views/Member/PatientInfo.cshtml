@@ -1,0 +1,122 @@
+﻿
+@{
+    ViewBag.Title = "PatientInfo";
+}
+
+@using XYHMember.Context;
+@model List<PatientInfo>
+
+
+@{
+    var name = Request["name"];
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+
+</head>
+
+<body>
+    <div>
+
+
+
+        <div class="container">
+            <div style="margin-left:1400px;">
+                <form controller="Member" action="GetMemberByName" method="get">
+                    <div class="am-input-group am-input-group-sm">
+                        <input type="text" class="am-form-field" name="name" value="@name" placeholder="请输入姓名">
+                        <span class="am-input-group-btn">
+                            <button class="am-btn am-btn-default" type="submit">搜索</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="am-g">
+            <div class="am-u-sm-12">
+
+                <table class="am-table am-table-striped am-table-hover table-main">
+                    <thead>
+                        <tr>
+                            <th class="table-chck"><input type="checkbox"></th>
+                            <th class="table-title">pid</th>
+                            <th class="table-author">姓名</th>
+                            <th>性别</th>
+                            <th>身份证号</th>
+                            <th>联系手机</th>
+                            <th>是否开卡</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var result in Model)
+                        {
+                            <tr>
+                                <td><input type="checkbox"></td>
+                                <td>@result.PID</td>
+                                <td>@result.姓名</td>
+                                <td>@result.性别</td>
+                                <td>@result.身份证号</td>
+                                <td>@result.联系手机</td>
+                                <td>
+
+                                    @if (@result.是否开卡 == "未开卡")
+                                    {
+                                        <form action="@Url.Action("AddMemberCard", "Member")" method="post" style="display:inline;">
+                                            <input type="hidden" name="pid" value="@result.PID" />
+                                            <button class="am-btn am-btn-default am-btn-xs am-text-secondary" type="submit" onclick="return confirm('您确定要为此用户开卡吗')"><span class="am-icon-trash-o"></span> 开卡</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="am-icon-trash-o">已开卡</span>
+                                    }
+                                </td>
+                            </tr>
+
+                        }
+
+
+                    </tbody>
+                </table>
+                @*<div class="am-cf">
+                        共 15 条记录
+                        <div class="am-fr">
+                            <ul class="am-pagination">
+                                <li class="am-disabled">
+                                    <a href="#">«</a>
+                                </li>
+                                <li class="am-active">
+                                    <a href="#">1</a>
+                                </li>
+                                <li>
+                                    <a href="#">2</a>
+                                </li>
+                                <li>
+                                    <a href="#">3</a>
+                                </li>
+                                <li>
+                                    <a href="#">4</a>
+                                </li>
+                                <li>
+                                    <a href="#">5</a>
+                                </li>
+                                <li>
+                                    <a href="#">»</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>*@
+
+
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

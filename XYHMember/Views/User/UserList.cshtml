@@ -1,0 +1,210 @@
+﻿@{
+    Layout = null;
+}
+@using XYHMember.Context;
+
+@model List<XYHUserEntity>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>User</title>
+
+    @Styles.Render("~/Content/upcss")
+    @Scripts.Render("~/Scripts/jquery")
+
+</head>
+
+<body>
+    <div class="admin-content-body">
+        @*<div class="am-cf am-padding am-padding-bottom-0">
+                <div class="am-fl am-cf"><strong class="am-text-primary am-text-lg">新闻管理</strong><small></small></div>
+            </div>*@
+
+        <hr>
+
+        <div class="am-g">
+            <div class="am-u-sm-12 am-u-md-6">
+                <div class="am-btn-toolbar">
+                    <div class="am-btn-group am-btn-group-xs">
+                        <button type="button" class="am-btn am-btn-default" id="addButton"><span class="am-icon-plus"></span> 新增</button>
+                    </div>
+                </div>
+            </div>
+            <div class="am-u-sm-12 am-u-md-3">
+
+            </div>
+            <div class="am-u-sm-12 am-u-md-3">
+                <form controller="User" action="GetUserByName" method="get">
+                    <div class="am-input-group am-input-group-sm">
+
+                        <input type="text" class="am-form-field" name="username" placeholder="Enter User name" />
+                        <span class="am-input-group-btn">
+                            <button class="am-btn am-btn-default" type="submit">搜索</button>
+                        </span>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+        <div class="am-g">
+            <div class="am-u-sm-12">
+                @*<form class="am-form">*@
+                <table class="am-table am-table-striped am-table-hover table-main">
+                    <thead>
+                        <tr>
+                            <th class="table-check"><input type="checkbox"></th>
+                            <th class="table-id">ID</th>
+                            <th class="table-author am-hide-sm-only">工号</th>
+                            <th class="table-title">姓名</th>
+                            <th class="table-type">用户名</th>
+                            <th class="table-set">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in Model)
+                        {
+                            <tr>
+                                <td><input type="checkbox"></td>
+                                <td>@user.UserId</td>
+                                <td>
+                                    <a href="#">@user.JobNumber</a>
+                                </td>
+                                <td>@user.Name</td>
+                                <td class="am-hide-sm-only">@user.Username</td>
+                                <td>
+                                    <div class="am-btn-toolbar">
+                                        <div class="am-btn-group am-btn-group-xs">
+                                            <button class="am-btn am-btn-default am-btn-xs am-text-secondary" onclick="resetPassword()"><span class="am-icon-pencil-square-o"></span> 重置</button>
+                                            <input type="hidden" id="UserId_@user.UserId" value="@user.UserId">
+                                            <form action="@Url.Action("DeleteUser", "User")" method="post" style="display:inline;">
+                                                <input type="hidden" name="id" value="@user.UserId" />
+                                                <button class="am-btn am-btn-default am-btn-xs am-text-danger am-hide-sm-only" type="submit" onclick="return confirm('您确定要删除此用户吗')"><span class="am-icon-trash-o"></span> 删除</button>
+                                            </form>
+
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="am-cf">
+                    共  @Model.Count 条记录
+                    @*<div class="am-fr">
+                            <ul class="am-pagination">
+                                <li class="am-disabled">
+                                    <a href="#">«</a>
+                                </li>
+                                <li class="am-active">
+                                    <a href="#">1</a>
+                                </li>
+                                <li>
+                                    <a href="#">2</a>
+                                </li>
+                                <li>
+                                    <a href="#">3</a>
+                                </li>
+                                <li>
+                                    <a href="#">4</a>
+                                </li>
+                                <li>
+                                    <a href="#">5</a>
+                                </li>
+                                <li>
+                                    <a href="#">»</a>
+                                </li>
+                            </ul>
+                        </div>*@
+                </div>
+                <hr>
+                @*</form>*@
+            </div>
+        </div>
+    </div>
+
+
+    <script type="text/javascript">
+
+        function resetPassword() {
+            var button = event.target;
+
+            // 获取按钮的父级元素（<div>）
+            var div = button.parentNode;
+
+            // 获取父级元素中的隐藏输入框（用户 ID）
+            var userIdInput = div.querySelector('input[type="hidden"]');
+
+            // 获取隐藏输入框的值（用户 ID）
+            var userId = userIdInput.value;
+
+            // 输出用户 ID
+            console.log("User ID:", userId);
+
+            var confirmed = window.confirm("您确定要重置密码吗？");
+
+            if (confirmed) {
+
+                // 执行重置密码操作
+
+                $.ajax({
+                    type: 'POST',
+                    url: '@Url.Action("UpdatePass", "User")',
+                    data: { userId: userId }, // 传递用户 ID
+                    timeout:3000,
+                    success: function (data) {
+                        console.log('Ajax 请求成功！');
+                        // 在这里可以处理成功后的逻辑
+                        if (data.redirectTo)
+                        {
+                            window.parent.location.href = data.redirectTo;
+                        }
+                        else {
+                            console.error('未返回跳转目标 URL');
+                        }
+
+
+                    },
+                    error: function (error) {
+                        console.error('Ajax 请求失败：', error)
+                        // 在这里可以处理失败后的逻辑
+                    }
+                    });
+
+
+                console.log("密码重置已启动...");
+            } else {
+                console.log("取消了密码重置。");
+                    }
+
+
+        }
+
+    </script>
+
+
+    <script>
+        // 当页面加载完成后执行
+        document.addEventListener("DOMContentLoaded", function () {
+            // 获取屏幕尺寸
+            var screenWidth = window.screen.width;
+            var screenHeight = window.screen.height;
+
+            // 计算弹出窗口的左上角坐标使其居中
+            var popupWidth = 600; // 弹出窗口的宽度
+            var popupHeight = 400; // 弹出窗口的高度
+            var left = (screenWidth - popupWidth) / 2;
+            var top = (screenHeight - popupHeight) / 2;
+
+            // 获取新增按钮元素
+            var addButton = document.getElementById("addButton");
+
+            // 为新增按钮添加点击事件处理程序
+            addButton.addEventListener("click", function () {
+                // 打开一个新的浏览器窗口并加载指定页面
+                window.open("/User/AddUser", "_blank", "width=" + popupWidth + ", height=" + popupHeight + ", left=" + left + ", top=" + top);
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+﻿
+@{
+    ViewBag.Title = "DoctorInfo";
+}
+
+@{
+    var bdatepicker = Request.QueryString["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edatepicker = Request.QueryString["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var name = Request["name"];
+}
+
+@using System.Linq
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/flatpickr")
+    @Styles.Render("~/Content/my")
+</head>
+
+<body>
+
+    <div class="scrollable-container">
+        <div class="scrollable-content">
+
+
+            <div class="am-g">
+                <div class="am-u-sm-12 am-u-md-6">
+                    <div class="am-btn-toolbar">
+                    </div>
+                </div>
+                <div class="am-u-sm-12 am-u-md-3">
+
+                </div>
+                <div class="container">
+                    <div>
+                        <form controller="Member" action="GetDoctorInfo" method="get">
+                            <div class="am-input-group am-input-group-sm" style="margin-left:20px;">
+                                <label style="margin-right:10px;margin-top:10px; width:150px;">日期：</label>
+                                <input type="text" name="bdatepicker" id="bdatepicker" value="@bdatepicker" placeholder="开始日期" style="margin-left:-10px;">
+                                <label style="margin:auto;margin-left:10px;">—</label>
+                                <input type="text" name="edatepicker" id="edatepicker" value="@edatepicker" placeholder="结束日期" style="margin-left:10px;">
+                                <input type="text" class="am-form-field" name="name" value="@name" placeholder="请输入医生姓名" style="margin-left:50px;margin-top:5px;">
+                                <span class="am-input-group-btn">
+                                    <button class="am-btn am-btn-default" type="submit" style="margin-top:5px;">搜索</button>
+                                </span>
+                            </div>
+                        </form>
+                    </div>
+                    <div width:100px;><button class="am-btn am-btn-default" id="exportButton" style="margin-top:-20px;">导出到Excel</button></div>
+
+                </div>
+            </div>
+            <div class="am-g">
+                <div class="am-u-sm-12">
+                    <form class="am-form">
+                        <table class="am-table am-table-striped am-table-hover table-main" id="dataTable">
+                            <thead>
+                                <tr>
+                                    <th>序号</th>
+                                    <th class="table-title">结帐日期</th>
+                                    <th>接诊医生</th>
+                                    <th>总金额</th>
+                                    <th>诊查费</th>
+                                    <th>材料费</th>
+                                    <th>检查费</th>
+                                    <th>检验费</th>
+                                    <th>治疗费</th>
+                                    <th>中草药</th>
+                                    <th>理疗费</th>
+                                    <th>加工费</th>
+                                    <th>辨证论治费</th>
+                                    <th>现金</th>
+                                    <th>POS</th>
+                                    <th>储值卡</th>
+                                    <th>折扣</th>
+                                    <th>微信</th>
+                                    <th>支付宝</th>
+                                    <th>实际支付</th>
+
+                                </tr>
+                            </thead>
+                            @if (Model != null && Model.Count > 0)
+                            {
+                                <tbody>
+                                    @{
+                                        int id = 1; // 初始化自增ID
+                                    }
+
+                                    @foreach (var result in Model)
+                                    {
+                                    <tr>
+                                        <td>@id</td> <!-- 添加自增ID列 -->
+                                        <td>@result.结帐日期</td>
+                                        <td>@result.接诊医生</td>
+                                        <td>@result.总金额</td>
+                                        <td>@result.诊查费</td>
+                                        <td>@result.材料费</td>
+                                        <td>@result.检查费</td>
+                                        <td>@result.检验费</td>
+                                        <td>@result.治疗费</td>
+                                        <td>@result.中草药</td>
+                                        <td>@result.理疗费</td>
+                                        <td>@result.加工费</td>
+                                        <td>@result.辨证论治费</td>
+                                        <td>@result.现金</td>
+                                        <td>@result.POS</td>
+                                        <td>@result.储值卡</td>
+                                        <td>@result.折扣</td>
+                                        <td>@result.微信</td>
+                                        <td>@result.支付宝</td>
+                                        <td>@result.实际支付</td>
+                                    </tr>
+
+                                        id++; // 每次迭代增加自增ID
+
+                                    }
+
+                                </tbody>
+                            }
+                        </table>
+
+
+                    </form>
+
+                    @if (Model != null && Model.Count > 0)
+                    {
+                        <div class="am-cf">共 @Model.Count 条记录</div>
+                    }
+
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        document.getElementById('exportButton').addEventListener('click', function () {
+    // 获取表头
+    var headers = Array.from(document.querySelectorAll('#dataTable thead th')).map(th => th.innerText);
+
+    // 获取数据行
+    var rows = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(tr => {
+        return Array.from(tr.children).map(td => td.innerText);
+    });
+
+    // 构建导出数据
+    var exportData = {
+        Headers: headers,
+        Rows: rows
+    };
+
+    // 发送数据到服务器进行导出
+    fetch('@Url.Action("ExportToExcel", "Export")', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(exportData)
+    })
+        .then(response => response.blob())
+        .then(blob => {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = '各医生查询.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        })
+        .catch(error => console.error('Error exporting to Excel:', error));
+});
+
+
+        flatpickr("#bdatepicker", {
+            // 默认配置选项
+            dateFormat: "Y-m-d", // 日期格式
+            defaultDate: "@bdatepicker", // 默认日期为今天
+            minDate: "2024-05-13", // 可选择的最小日期为今天
+        });
+
+        flatpickr("#edatepicker", {
+            // 默认配置选项
+            dateFormat: "Y-m-d", // 日期格式
+            defaultDate: "@edatepicker", // 默认日期为今天
+            minDate: "2024-05-13", // 可选择的最小日期为今天
+        });
+    </script>
+
+</body>
+</html>
+

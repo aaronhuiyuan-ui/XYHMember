@@ -1,0 +1,49 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+}
+@Styles.Render("~/Content/style.css")
+@Styles.Render("~/Content/font-awesome.min.css")
+
+<!DOCTYPE html>
+<html lang="zxx">
+
+<head>
+    <title>Login</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8" />
+    <meta name="keywords"
+          content="Report Login Form Responsive web template, Bootstrap Web Templates, Flat Web Templates, Android Compatible web template, Smartphone Compatible web template, free webdesigns for Nokia, Samsung, LG, SonyEricsson, Motorola web design" />
+
+</head>
+<body>
+
+
+    <section class="w3l-hotair-form">
+        <h1>幸融门诊储值卡管理</h1>
+        <div class="container">
+            <!-- /form -->
+            <div class="workinghny-form-grid">
+                <div class="main-hotair">
+                    <div class="content-wthree">
+                        <h2>Log In</h2>
+                        <form action="/Home/Login" method="post">
+                            <input type="text" class="text" name="name" placeholder="User Name" required="" autofocus>
+                            <input type="password" class="password" name="password" placeholder="User Password" required="" autofocus>
+                            <button class="btn" type="submit">Log In</button>
+                        </form>
+                    </div>
+                    <div class="w3l_form align-self">
+                        <div class="left_grid_info">
+                            <img src="@Url.Content("~/Images/login.png")" alt="" class="img-fluid">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- //form -->
+        </div>
+
+    </section>
+</body>
+
+</html>

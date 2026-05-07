@@ -1,0 +1,193 @@
+﻿@{
+    Layout = null;
+}
+
+@using XYHMember.Context;
+@model List<MS_SZMX>
+
+@{
+    var bdatepicker = Request.QueryString["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edatepicker = Request.QueryString["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var name = Request["name"];
+    var selectedValue = Request.QueryString["mySelect"] ?? "0"; // 默认选择全部
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/flatpickr")
+</head>
+
+<body>
+    <div class="admin-content-body">
+        @*<div class="am-cf am-padding am-padding-bottom-0">
+                <div class="am-fl am-cf"><strong class="am-text-primary am-text-lg">新闻管理</strong><small></small></div>
+            </div>*@
+
+        <hr>
+
+        <div class="container">
+            <div>
+                <form controller="Member" action="GetMemberByNameCost" method="get">
+                    <div class="am-input-group am-input-group-sm" style="margin-left:20px;">
+                        <label style="margin-right:10px;margin-top:10px; width:150px;">日期：</label>
+                        <input type="text" name="bdatepicker" id="bdatepicker" value="@bdatepicker" placeholder="开始日期" style="margin-left:-10px;">
+                        <label style="margin:auto;margin-left:10px;">—</label>
+                        <input type="text" name="edatepicker" id="edatepicker" value="@edatepicker" placeholder="结束日期" style="margin-left:10px;">
+
+                        <select id="mySelect" name="mySelect" style="margin-left:20px;">
+                            <option value="0" @(selectedValue == "0" ? "selected" : "")>全部</option>
+                            <option value="1" @(selectedValue == "1" ? "selected" : "")>充值</option>
+                            <option value="2" @(selectedValue == "2" ? "selected" : "")>收费</option>
+                            <option value="3" @(selectedValue == "3" ? "selected" : "")>销卡</option>
+                        </select>
+
+                        <input type="text" class="am-form-field" name="name" value="@name" placeholder="请输入姓名" style="margin-left:20px;margin-top:5px;">
+                        <span class="am-input-group-btn">
+                            <button class="am-btn am-btn-default" type="submit" style="margin-top:5px;">搜索</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+            <div width:100px;><button class="am-btn am-btn-default" id="exportButton" style="margin-top:-20px;">导出到Excel</button></div>
+        </div>
+
+        <div class="am-g">
+            <div class="am-u-sm-12">
+                <form class="am-form">
+                    <table class="am-table am-table-striped am-table-hover table-main" id="dataTable">
+                        <thead>
+                            <tr>
+                                <th class="table-check"><input type="checkbox"></th>
+                                <th class="table-title">序号</th>
+                                <th class="table-type">储值卡号</th>
+                                <th>姓名</th>
+                                <th class="table-author">充值金额</th>
+                                <th>消费金额</th>
+                                <th>操作工号</th>
+                                <th>操作日期</th>
+                                <th>备注</th>
+                                <th>折扣金额</th>
+                                <th>关联销售</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model != null && Model.Count > 0)
+                            {
+                                foreach (var result in Model)
+                                {
+                                    <tr>
+                                        <td><input type="checkbox"></td>
+                                        <td>@result.序号</td>
+                                        <td>@result.门诊号</td>
+                                        <td>@result.姓名</td>
+                                        <td>@result.借方金额</td>
+                                        <td>@result.贷方金额</td>
+                                        <td>@result.操作工号</td>
+                                        <td>@result.操作日期</td>
+                                        <td>@result.备注</td>
+                                        <td>@result.折扣金额</td>
+                                        <td>@result.关联销售</td>
+                                    </tr>
+
+                                }
+
+                            }
+
+                        </tbody>
+                    </table>
+                    @*<div class="am-cf">
+                            共 15 条记录
+                            <div class="am-fr">
+                                <ul class="am-pagination">
+                                    <li class="am-disabled">
+                                        <a href="#">«</a>
+                                    </li>
+                                    <li class="am-active">
+                                        <a href="#">1</a>
+                                    </li>
+                                    <li>
+                                        <a href="#">2</a>
+                                    </li>
+                                    <li>
+                                        <a href="#">3</a>
+                                    </li>
+                                    <li>
+                                        <a href="#">4</a>
+                                    </li>
+                                    <li>
+                                        <a href="#">5</a>
+                                    </li>
+                                    <li>
+                                        <a href="#">»</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>*@
+
+                </form>
+            </div>
+        </div>
+    </div>
+
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        document.getElementById('exportButton').addEventListener('click', function () {
+    // 获取表头
+    var headers = Array.from(document.querySelectorAll('#dataTable thead th')).map(th => th.innerText);
+
+    // 获取数据行
+    var rows = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(tr => {
+        return Array.from(tr.children).map(td => td.innerText);
+    });
+
+    // 构建导出数据
+    var exportData = {
+        Headers: headers,
+        Rows: rows
+    };
+
+    // 发送数据到服务器进行导出
+    fetch('@Url.Action("ExportToExcel", "Export")', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(exportData)
+    })
+        .then(response => response.blob())
+        .then(blob => {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = '明细查询.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        })
+        .catch(error => console.error('Error exporting to Excel:', error));
+});
+
+
+        flatpickr("#bdatepicker", {
+            // 默认配置选项
+            dateFormat: "Y-m-d", // 日期格式
+            defaultDate: "@bdatepicker", // 默认日期为今天
+            minDate: "2024-05-13", // 可选择的最小日期为今天
+        });
+
+        flatpickr("#edatepicker", {
+            // 默认配置选项
+            dateFormat: "Y-m-d", // 日期格式
+            defaultDate: "@edatepicker", // 默认日期为今天
+            minDate: "2024-05-13", // 可选择的最小日期为今天
+        });
+
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+}
+
+@Styles.Render("~/Content/layui.css")
+
+
+
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>幸融门诊储值卡管理</title>
+
+
+</head>
+
+<body class="layui-layout-body">
+    <div class="layui-layout layui-layout-admin">
+        <div class="layui-header">
+            <div class="layui-logo">幸融门诊储值卡管理</div>
+
+            <ul class="layui-nav layui-layout-right">
+                <li class="layui-nav-item">
+                    <a>
+                        <img src="@Url.Content("~/Images/info.png")" class="layui-nav-img">@ViewBag.Username
+                        <span class="layui-nav-more"></span>
+                    </a>
+                    <dl class="layui-nav-child layui-anim layui-anim-upbit">
+                        <dd>
+                            <a href="">基本资料</a>
+                        </dd>
+                        <dd>
+                            <a href="">安全设置</a>
+                        </dd>
+                    </dl>
+                </li>
+                <li class="layui-nav-item">
+                    <a href="/Home/Login">退了</a>
+                </li>
+                <span class="layui-nav-bar" style="left: 208.891px; top: 55px; width: 0px; opacity: 0;"></span>
+            </ul>
+        </div>
+
+        <div class="layui-side layui-bg-black">
+            <div class="layui-side-scroll">
+
+                <ul class="layui-nav layui-nav-tree" lay-filter="test">
+                    <li class="layui-nav-item">
+
+                        <a>储值卡管理<span class="layui-nav-more"></span></a>
+                        <dl class="layui-nav-child">
+                            <dd>
+                                <a href="/Member/PatientInfo" target="right">储值卡开卡</a>
+                            </dd>
+                            <dd>
+                                <a href="/Member/Member" target="right">储值卡充值</a>
+                            </dd>
+                            <dd>
+                                <a href="/Member/Cost" target="right">费用明细</a>
+                            </dd>
+
+                        </dl>
+                    </li>
+
+                    <li class="layui-nav-item">
+                        <a>报表管理<span class="layui-nav-more"></span></a>
+                        <dl class="layui-nav-child">
+                            <dd><a href="/ReportForms/DailyReport" target="right">日报表查询</a></dd>
+                            <dd><a href="/ReportForms/Department" target="right">各科室查询</a></dd>
+                            <dd><a href="/ReportForms/DoctorInfo" target="right">各医生查询</a></dd>
+                            <dd><a href="/ReportForms/Medicament" target="right">药品收入及成本查询</a></dd>
+                            <dd><a href="/ReportForms/Reception" target="right">接诊明细查询</a></dd>
+                            <dd><a href="/ReportForms/MannerInfo" target="right">煎药查询</a></dd>
+
+                        </dl>
+                    </li>
+
+                    <li class="layui-nav-item">
+                        <a>用户管理<span class="layui-nav-more"></span></a>
+                        <dl class="layui-nav-child">
+                            <dd>
+                                <a href="/User/UserList" target="right">用户查询</a>
+                            </dd>
+                            <dd>
+                                <a href="javascript:void(0)" onclick="updatePwd('修改密码',@ViewBag.UserId)">修改密码</a>
+                            </dd>
+                        </dl>
+                    </li>
+
+                    <span class="layui-nav-bar"></span>
+                </ul>
+            </div>
+        </div>
+
+        <div class="layui-body" style="z-index: 0;">
+            <!-- 内容主体区域 -->
+            <div style="padding: 15px;">
+                @*src="product.html"*@
+                <iframe name="right" frameborder="0" width="1680" height="1200" src="/Member/Member"></iframe>
+
+            </div>
+        </div>
+
+        <div class="layui-footer">
+            <!-- 底部固定区域 -->
+        </div>
+    </div>
+
+
+    @Scripts.Render("~/Scripts/jquery")
+    @Scripts.Render("~/Scripts/plugs")
+    @Scripts.Render("~/Scripts/bootstrap")
+    @Scripts.Render("~/Scripts/layui")
+    <script type="text/javascript">
+
+        //添加编辑弹出层
+        function updatePwd(title, id) {
+            var urlWithParams = '@Url.Action("Update", "User")' + '?id=' + id;
+            $.jq_Panel({
+                title: title,
+                iframeWidth: 500,
+                iframeHeight: 300,
+                url: urlWithParams
+            });
+        }
+    </script>
+
+
+    <script>
+        layui.use('element', function () {
+            var element = layui.element; // 初始化Layui导航元素
+        });
+    </script>
+
+
+
+</body>
+</html>

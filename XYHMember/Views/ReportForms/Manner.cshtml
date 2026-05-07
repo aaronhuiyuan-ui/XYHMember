@@ -1,0 +1,157 @@
+@{    ViewBag.Title = "Manner";}
+
+@{    var bdatepicker = Request.QueryString["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");    var edatepicker = Request.QueryString["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");    var name = Request["name"];}
+
+@using System.Linq
+
+<html>
+<head>    
+    <meta charset="UTF-8">    
+    <title></title>
+    
+    @Styles.Render("~/Content/upcss")    
+    @Styles.Render("~/Content/flatpickr")    
+    @Styles.Render("~/Content/my")
+
+</head>
+
+<body>
+
+    <div class="scrollable-container">        
+        <div class="scrollable-content">
+
+            <div class="am-g">                
+                <div class="am-u-sm-12 am-u-md-6">                    
+                    <div class="am-btn-toolbar">                    </div>                
+                </div>                
+                <div class="am-u-sm-12 am-u-md-3">
+
+                </div>                
+                <div class="container">                    
+                    <div>                        
+                        <form controller="Member" action="GetMannerReport" method="get">                            
+                            <div class="am-input-group am-input-group-sm" style="margin-left:20px;">                                
+                                <label style="margin-right:10px;margin-top:10px; width:150px;">日期：</label>                                
+                                <input type="text" name="bdatepicker" id="bdatepicker" value="@bdatepicker" placeholder="开始日期" style="margin-left:-10px;">                                
+                                <label style="margin:auto;margin-left:10px;">—</label>                                
+                                <input type="text" name="edatepicker" id="edatepicker" value="@edatepicker" placeholder="结束日期" style="margin-left:10px;">                                
+                                <input type="text" class="am-form-field" name="name" value="@name" placeholder="请输入项目名称" style="margin-left:50px;margin-top:5px;">                                
+                                <span class="am-input-group-btn">                                    
+                                    <button class="am-btn am-btn-default" type="submit" style="margin-top:5px;">搜索</button>                                
+                                </span>                            
+                            </div>                        
+                        </form>                    
+                    </div>                    
+                    <div style="width:100px;">
+                        
+                        <button class="am-btn am-btn-default" id="exportButton" style="margin-top:-20px;">导出到Excel</button>
+                    
+                    </div>
+
+                </div>            
+            </div>            
+            <div class="am-g">                
+                <div class="am-u-sm-12">                    
+                    <form class="am-form">                        
+                        <table class="am-table am-table-striped am-table-hover table-main" id="dataTable">                            
+                            <thead>                                
+                                <tr>                                    
+                                    <th>序号</th>                                    
+                                    <th>项目名称</th>                                    
+                                    <th>单价</th>                                    
+                                    <th>数量</th>                                    
+                                    <th>金额</th>                                
+                                </tr>                            
+                            </thead>                            
+                            @if (Model != null && Model.Count > 0)                            {                                
+                                <tbody>                                    
+                                    @{                                        int id = 0; // 初始化自增ID                                    } 
+
+                                    @foreach (var result in Model)                                    {                                        
+                                        id++; // 每次循环都自增                                    
+                                        <tr>                                            
+                                            <td>                                                
+                                                @if (@id != 0)                                                {                                                    @id                                                }                                            
+                                            </td>                                            
+                                            <td>@result.项目名称</td>                                            
+                                            <td>@result.单价</td>                                            
+                                            <td>@result.数量</td>                                            
+                                            <td>@result.金额</td>                                        
+                                        </tr>
+
+                                    }
+
+                                </tbody>                            
+                            }                        
+                        </table>
+
+                    </form>
+
+                    @if (Model != null && Model.Count > 1)                    {                        
+                        <div class="am-cf">共 @(Model.Count - 1 ) 条记录</div>                    
+                    }
+
+                </div>            
+            </div>        
+        </div>    
+    </div>
+
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+    
+        document.getElementById('exportButton').addEventListener('click', function () {
+
+            // 提取表头
+            var headers = Array.from(document.querySelectorAll('#dataTable thead th'))                       .map(th => th.innerText.trim());
+
+            // 提取数据行（每行是一个数组）
+            var rows = [];
+            document.querySelectorAll('#dataTable tbody tr').forEach(tr => {
+                var cols = Array.from(tr.children).map(td => td.innerText.trim());
+                rows.push(cols);
+            });
+
+            // 发送给后台
+            fetch('@Url.Action("ExportToExcel", "Export")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    Headers: headers,
+                    Rows: rows
+                })
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '项目报表.xlsx';
+                a.click();
+            })
+            .catch(error => console.error('Error exporting:', error));
+        });
+        
+        flatpickr("#bdatepicker", {
+            // 默认配置选项
+            dateFormat: "Y-m-d", // 日期格式
+            defaultDate: "@bdatepicker", // 默认日期为今天
+            minDate: "2024-05-13", // 可选择的最小日期为今天
+        });
+
+        flatpickr("#edatepicker", {
+            // 默认配置选项
+            dateFormat: "Y-m-d", // 日期格式
+            defaultDate: "@edatepicker", // 默认日期为今天
+            minDate: "2024-05-13", // 可选择的最小日期为今天
+        });
+        
+    </script>
+
+
+
+
+
+</body></html>
