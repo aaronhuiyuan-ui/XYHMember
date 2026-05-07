@@ -104,14 +104,19 @@
 
                                     @foreach (var result in Model)
                                     {
-                                        id++; // 每次循环都自增，不管身份证号是否为空
-                                    <tr>
+                                        bool isTotal = result.就诊ID == null;
+                                        id = isTotal ? id : id + 1;
+                                    <tr class="@(isTotal ? "summary-row" : "")">
                                         <td>
-                                            @if (@id != 0)
+                                            @if (isTotal)
+                                            {
+                                                <strong>合计</strong>
+                                            }
+                                            else
                                             {
                                                 @id
                                             }
-                                        </td> <!-- 添加自增ID列 -->
+                                        </td>
                                         <td>@result.就诊ID</td>
                                         <td>@result.PID</td>
                                         <td>@result.门诊号</td>
@@ -143,9 +148,6 @@
                                         <td>@result.支付宝</td>
                                         <td>@result.实际支付</td>
                                     </tr>
-
-                                        
-
                                     }
 
                                 </tbody>
@@ -157,7 +159,7 @@
 
                     @if (Model != null && Model.Count > 1)
                     {
-                        <div class="am-cf">共 @(Model.Count - 1 ) 条记录</div>
+                        <div id="paginationContainer"></div>
                     }
 
 
@@ -167,6 +169,7 @@
     </div>
 
     @Scripts.Render("~/Scripts/flatpickrjs")
+    <script src="~/Scripts/pagination.js"></script>
 
     <script>
 document.getElementById('exportButton').addEventListener('click', function () {
@@ -221,6 +224,8 @@ document.getElementById('exportButton').addEventListener('click', function () {
     defaultDate: "@edatepicker", // 默认日期为今天
     minDate: "2024-05-13", // 可选择的最小日期为今天
     });
+
+    initTablePagination('dataTable', { summaryRows: 1 });
     </script>
 
 

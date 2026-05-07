@@ -97,7 +97,7 @@
 
                     @if (Model != null && Model.Count > 0)
                     {
-                        <div class="am-cf">共 @Model.Count 条记录</div>
+                        <div id="paginationContainer"></div>
                     }
 
 
@@ -107,6 +107,7 @@
     </div>
 
     @Scripts.Render("~/Scripts/flatpickrjs")
+    <script src="~/Scripts/pagination.js"></script>
 
     <script>
         document.getElementById('exportButton').addEventListener('click', function () {
@@ -159,6 +160,8 @@
             defaultDate: "@edatepicker", // 默认日期为今天
             minDate: "2024-05-13", // 可选择的最小日期为今天
         });
+
+        initTablePagination('dataTable');
     </script>
 
 </body>
