@@ -23,10 +23,6 @@
 
 <body>
 
-    <div class="scrollable-container">
-        <div class="scrollable-content">
-
-
             <div class="am-g">
                 <div class="am-u-sm-12 am-u-md-6">
                     <div class="am-btn-toolbar">
@@ -56,7 +52,8 @@
             </div>
             <div class="am-g">
                 <div class="am-u-sm-12">
-                    <form class="am-form"  style="width:40%;">
+                    <form class="am-form">
+                        <div class="table-wrapper">
                         <table class="am-table am-table-striped am-table-hover table-main" id="dataTable">
                             <thead>
                                 <tr>
@@ -91,8 +88,7 @@
                                 </tbody>
                             }
                         </table>
-
-
+                        </div>
                     </form>
 
                     @if (Model != null && Model.Count > 0)
@@ -103,11 +99,9 @@
 
                 </div>
             </div>
-        </div>
-    </div>
-
     @Scripts.Render("~/Scripts/flatpickrjs")
     <script src="~/Scripts/pagination.js"></script>
+    <script src="~/Scripts/table-scroll.js"></script>
 
     <script>
         document.getElementById('exportButton').addEventListener('click', function () {
