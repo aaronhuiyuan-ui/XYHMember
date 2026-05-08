@@ -153,6 +153,9 @@
 
 
 
+<script>
+document.querySelector('#dataTable thead input[type=checkbox]').addEventListener('change',function(){var c=this.checked;document.querySelectorAll('#dataTable tbody input[type=checkbox]').forEach(function(b){b.checked=c})});
+</script>
 </body>
 </html>
 

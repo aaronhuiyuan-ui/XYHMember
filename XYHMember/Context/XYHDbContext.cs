@@ -212,6 +212,23 @@ namespace XYHMember.Context
         public decimal? 金额 { get; set; }
     }
 
+    //体检病人信息
+    public class HealthExamPatient
+    {
+        public string 体检号 { get; set; }
+        public string 姓名 { get; set; }
+        public string 身份证号 { get; set; }
+        public string 电话 { get; set; }
+        public string 住址 { get; set; }
+        public string 门诊号 { get; set; }
+    }
+
+    public class PidMapping
+    {
+        public string 身份证号 { get; set; }
+        public int PID { get; set; }
+    }
+
     //分页
     public class PaginationModel<T>
     {

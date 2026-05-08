@@ -41,7 +41,7 @@
         <div class="am-g">
             <div class="am-u-sm-12">
 
-                <table class="am-table am-table-striped am-table-hover table-main">
+                <table class="am-table am-table-striped am-table-hover table-main" id="dataTable">
                     <thead>
                         <tr>
                             <th class="table-chck"><input type="checkbox"></th>
@@ -117,6 +117,14 @@
             </div>
         </div>
     </div>
+    <script>
+        document.querySelector('#dataTable thead input[type=checkbox]').addEventListener('change', function () {
+            var checked = this.checked;
+            document.querySelectorAll('#dataTable tbody input[type=checkbox]').forEach(function (cb) {
+                cb.checked = checked;
+            });
+        });
+    </script>
 </body>
 </html>
 
