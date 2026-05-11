@@ -33,6 +33,7 @@
                         </span>
                     </div>
                 </form>
+                <button class="am-btn am-btn-default" id="saveBtn" style="margin-left:10px;" disabled>保存到门诊</button>
             </div>
         </div>
         <div class="am-g">
@@ -89,6 +90,70 @@
                 cb.checked = checked;
             });
         });
+
+        //有数据时才启用保存按钮
+        @if (Model != null && Model.Count > 0)
+        {
+            <text>
+            var saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = false;
+
+            saveBtn.addEventListener('click', function () {
+                var checkedBoxes = document.querySelectorAll('#dataTable tbody input[type=checkbox]:checked');
+                if (checkedBoxes.length === 0) {
+                    alert('请选择体检病人信息');
+                    return;
+                }
+
+                var hasMzh = false;
+                checkedBoxes.forEach(function (cb) {
+                    var row = cb.closest('tr');
+                    var mzh = row.children[4].innerText.trim();
+                    if (mzh !== '') {
+                        hasMzh = true;
+                    }
+                });
+
+                if (hasMzh) {
+                    alert('请去掉已有门诊号');
+                    return;
+                }
+
+                var idCards = [];
+                checkedBoxes.forEach(function (cb) {
+                    var row = cb.closest('tr');
+                    idCards.push(row.children[3].innerText.trim());
+                });
+                var unique = new Set(idCards);
+                if (unique.size < idCards.length) {
+                    alert('同一个身份证号请仅选择一条');
+                    return;
+                }
+
+                var studyIds = [];
+                checkedBoxes.forEach(function (cb) {
+                    var row = cb.closest('tr');
+                    studyIds.push(row.children[1].innerText.trim());
+                });
+
+                fetch('@Url.Action("SaveToOutpatient", "Outpatient")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ studyIds: studyIds })
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    alert(data.msg);
+                    if (data.success) {
+                        location.reload();
+                    }
+                })
+                .catch(function (err) {
+                    alert('保存失败：' + err);
+                });
+            });
+            </text>
+        }
     </script>
 
 </body>
