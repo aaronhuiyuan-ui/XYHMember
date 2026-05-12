@@ -221,6 +221,7 @@ namespace XYHMember.Context
         public string 电话 { get; set; }
         public string 住址 { get; set; }
         public string 门诊号 { get; set; }
+        public string 检查日期 { get; set; }
     }
 
     public class PidMapping

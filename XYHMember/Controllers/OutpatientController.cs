@@ -34,14 +34,16 @@ namespace XYHMember.Controllers
         [HttpGet]
         public ActionResult GetPhysicalExamQuery()
         {
-            var keyword = Request["name"].Trim();
+            var keyword = Request["name"]?.Trim() ?? "";
+            var startDate = Request["bdatepicker"]?.Trim();
+            var endDate = Request["edatepicker"]?.Trim();
 
-            var result = SearchPatients(keyword);
+            var result = SearchPatients(keyword, startDate, endDate);
 
             return View("PhysicalExamQuery", result);
         }
 
-        private List<HealthExamPatient> SearchPatients(string keyword)
+        private List<HealthExamPatient> SearchPatients(string keyword, string startDate = null, string endDate = null)
         {
             var token = GetToken();
             if (token == null)
@@ -53,8 +55,15 @@ namespace XYHMember.Controllers
             {
                 ["type"] = "1",
                 ["page"] = 1,
-                ["size"] = 100
+                ["size"] = 100,
+                ["reportStatus"] = "0"
             };
+
+            //传日期范围
+            if (!string.IsNullOrEmpty(startDate))
+                body["startTime"] = startDate;
+            if (!string.IsNullOrEmpty(endDate))
+                body["endTime"] = endDate;
 
             //判断输入是身份证号还是姓名
             if (!string.IsNullOrEmpty(keyword))
@@ -87,13 +96,19 @@ namespace XYHMember.Controllers
                 var idCard = item["idCardNo"]?.Value<string>() ?? "";
                 idCards.Add(idCard);
                 _rawDataCache[studyId] = item;
+
+                var examTime = item["examinationTime"]?.Value<string>() ?? "";
+                if (examTime.Length >= 10)
+                    examTime = examTime.Substring(0, 10);
+
                 patients.Add(new HealthExamPatient
                 {
                     体检号 = studyId,
                     姓名 = item["name"]?.Value<string>() ?? "",
                     身份证号 = idCard,
                     电话 = item["telephone"]?.Value<string>() ?? "",
-                    住址 = item["address"]?.Value<string>() ?? ""
+                    住址 = item["address"]?.Value<string>() ?? "",
+                    检查日期 = examTime
                 });
             }
 

@@ -124,6 +124,27 @@ body {
     background: #468847 !important;
 }
 
+/* 保存到门诊按钮 */
+#saveBtn {
+    height: 36px !important;
+    padding: 0 18px !important;
+    background: #51a351 !important;
+    color: #fff !important;
+    border: 1px solid #51a351 !important;
+    border-radius: 4px !important;
+    font-size: 13px !important;
+    cursor: pointer;
+    transition: background .2s;
+}
+#saveBtn:hover {
+    background: #468847 !important;
+}
+#saveBtn:disabled {
+    background: #ccc !important;
+    border-color: #ccc !important;
+    cursor: default;
+}
+
 /* ============================================================
    表格区域
    ============================================================ */
@@ -139,8 +160,21 @@ body {
 /* 表格横向滚动容器 */
 .table-wrapper {
     width: 100%;
-    overflow-x: auto;
+    overflow: auto;
     -webkit-overflow-scrolling: touch;
+}
+
+/* 表格横向滚动容器内表格固定布局支持列宽分配 */
+.table-wrapper > table {
+    display: inline-table;
+    width: auto !important;
+    min-width: 100%;
+    max-width: none !important;
+    table-layout: auto;
+    white-space: nowrap;
+    margin-bottom: 0;
+    border-collapse: collapse;
+    font-size: 13px;
 }
 
 /*
