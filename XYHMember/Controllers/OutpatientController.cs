@@ -56,7 +56,8 @@ namespace XYHMember.Controllers
                 ["type"] = "1",
                 ["page"] = 1,
                 ["size"] = 100,
-                ["reportStatus"] = "0"
+                ["reportStatus"] = "0",
+                ["orgId"] =86
             };
 
             //传日期范围
