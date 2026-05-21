@@ -19,6 +19,20 @@
     @Styles.Render("~/Content/upcss")
     @Styles.Render("~/Content/flatpickr")
     @Styles.Render("~/Content/my")
+    <style>
+        #dailyTable {
+            width: 9000px !important;
+            min-width: 3000px !important;
+            table-layout: fixed !important;
+        }
+        .table-wrapper {
+            overflow: auto !important;
+            max-width: calc(100vw - 40px) !important;
+        }
+        .table-wrapper > table {
+            display: table !important;
+        }
+    </style>
 
 </head>
 
@@ -55,7 +69,7 @@
                 <div class="am-u-sm-12">
                     <form class="am-form">
                         <div class="table-wrapper">
-                        <table class="am-table am-table-striped am-table-hover table-main" id="dataTable">
+                        <table class="am-table am-table-striped am-table-hover table-main" id="dailyTable">
                             <thead>
                                 <tr>
                                     <th>序号</th>
@@ -174,12 +188,12 @@
 document.getElementById('exportButton').addEventListener('click', function () {
 
     // 提取表头
-    var headers = Array.from(document.querySelectorAll('#dataTable thead th'))
+    var headers = Array.from(document.querySelectorAll('#dailyTable thead th'))
                        .map(th => th.innerText.trim());
 
     // 提取数据行（每行是一个数组）
     var rows = [];
-    document.querySelectorAll('#dataTable tbody tr').forEach(tr => {
+    document.querySelectorAll('#dailyTable tbody tr').forEach(tr => {
         var cols = Array.from(tr.children).map(td => td.innerText.trim());
         rows.push(cols);
     });
@@ -224,7 +238,7 @@ document.getElementById('exportButton').addEventListener('click', function () {
     minDate: "2024-05-13", // 可选择的最小日期为今天
     });
 
-    initTablePagination('dataTable', { summaryRows: 1 });
+    initTablePagination('dailyTable', { summaryRows: 1 });
     </script>
 
 
