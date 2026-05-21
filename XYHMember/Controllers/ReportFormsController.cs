@@ -81,8 +81,9 @@ WITH sfrbb AS (
 		ISNULL( d.微信, 0 ) AS 微信,
 		ISNULL( d.支付宝, 0 ) AS 支付宝,
         ISNULL( d.现金, 0 ) + ISNULL( d.POS, 0 ) + ISNULL( d.储值卡, 0 ) + 
-	    ISNULL( d.微信, 0 ) + ISNULL( d.支付宝, 0 ) AS 实际支付
-
+	    ISNULL( d.微信, 0 ) + ISNULL( d.支付宝, 0 ) AS 实际支付,
+        d.折扣比例,d.备注
+        
 	FROM
 		fghis5..系统_病人基本信息表 a
 		LEFT JOIN fghis5..门诊_收费发票表 b ON a.门诊号 = b.门诊号
@@ -107,13 +108,15 @@ WITH sfrbb AS (
 			SUM ( CASE WHEN 支付方式 = 4 THEN 支付金额 ELSE 0 END ) AS 储值卡,
 			SUM ( CASE WHEN 支付方式 = 6 THEN 支付金额 ELSE 0 END ) AS 折扣,
 			SUM ( CASE WHEN 支付方式 = 31 THEN 支付金额 ELSE 0 END ) AS 微信,
-			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝 
+			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝,
+            fghis5.dbo.ExtractFieldValue(备注, '备注') AS 备注,
+            fghis5.dbo.ExtractFieldValue(备注, '折扣比例') AS 折扣比例
 		FROM
 			fghis5..门诊_收费支付表 
 		WHERE
 			支付方式 IN ( 0, 1, 4, 6, 31, 32 ) 
 		GROUP BY
-			结帐ID 
+			结帐ID,fghis5.dbo.ExtractFieldValue(备注, '备注'),fghis5.dbo.ExtractFieldValue(备注, '折扣比例')
 		) d ON b.结帐ID = d.结帐ID 
 	WHERE
 		b.操作工号 != '6666' 
@@ -139,7 +142,7 @@ WITH sfrbb AS (
 		d.储值卡,
 		d.折扣,
 		d.微信,
-		d.支付宝 
+		d.支付宝,d.折扣比例,d.备注
 		UNION ALL
 	SELECT
 		b.就诊id,
@@ -173,7 +176,8 @@ WITH sfrbb AS (
 		ISNULL( d.微信, 0 ) AS 微信,
 		ISNULL( d.支付宝, 0 ) AS 支付宝,
         ISNULL( d.现金, 0 ) + ISNULL( d.POS, 0 ) + ISNULL( d.储值卡, 0 ) + 
-	    ISNULL( d.微信, 0 ) + ISNULL( d.支付宝, 0 ) AS 实际支付
+	    ISNULL( d.微信, 0 ) + ISNULL( d.支付宝, 0 ) AS 实际支付,
+        d.折扣比例,d.备注
 	FROM
 		fghis5..系统_病人基本信息表 a
 		LEFT JOIN fghis5..门诊_挂号发票表_结帐ID b ON a.门诊号 = b.门诊号
@@ -185,13 +189,16 @@ WITH sfrbb AS (
 			SUM ( CASE WHEN 支付方式 = 4 THEN 支付金额 ELSE 0 END ) AS 储值卡,
 			SUM ( CASE WHEN 支付方式 = 6 THEN 支付金额 ELSE 0 END ) AS 折扣,
 			SUM ( CASE WHEN 支付方式 = 31 THEN 支付金额 ELSE 0 END ) AS 微信,
-			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝 
+			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝,
+            fghis5.dbo.ExtractFieldValue(备注, '备注') AS 备注,
+            fghis5.dbo.ExtractFieldValue(备注, '折扣比例') AS 折扣比例
 		FROM
 			fghis5..门诊_挂号支付表 
 		WHERE
 			支付方式 IN ( 0, 1, 4, 6, 31, 32 ) 
 		GROUP BY
-			结帐ID 
+			结帐ID,fghis5.dbo.ExtractFieldValue(备注, '备注'),
+            fghis5.dbo.ExtractFieldValue(备注, '折扣比例') 
 		) d ON b.结帐ID = d.结帐ID 
 			left join fghis5..门诊_挂号信息表 f on f.就诊ID =b.就诊ID
 	WHERE
@@ -238,7 +245,8 @@ SELECT
 	SUM ( 微信 ) AS 微信,
 	SUM ( 支付宝 ) AS 支付宝,
 	SUM ( 现金 ) + SUM ( POS ) + SUM ( 储值卡 ) + 
-    SUM ( 微信 ) + SUM ( 支付宝 ) AS 实际支付
+    SUM ( 微信 ) + SUM ( 支付宝 ) AS 实际支付,
+     '' 折扣比例,'' 备注
 FROM
 	sfrbb";
 

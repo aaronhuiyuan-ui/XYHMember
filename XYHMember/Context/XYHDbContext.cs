@@ -128,6 +128,8 @@ namespace XYHMember.Context
         public decimal? 微信 { get; set; }
         public decimal? 支付宝 { get; set; }
         public decimal? 实际支付 { get; set; }
+        public string 折扣比例 { get; set; }
+        public string 备注 { get; set; }
 
     }
 
