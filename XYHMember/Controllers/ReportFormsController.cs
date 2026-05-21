@@ -109,14 +109,14 @@ WITH sfrbb AS (
 			SUM ( CASE WHEN 支付方式 = 6 THEN 支付金额 ELSE 0 END ) AS 折扣,
 			SUM ( CASE WHEN 支付方式 = 31 THEN 支付金额 ELSE 0 END ) AS 微信,
 			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝,
-            fghis5.dbo.ExtractFieldValue(备注, '备注') AS 备注,
-            fghis5.dbo.ExtractFieldValue(备注, '折扣比例') AS 折扣比例
+            max(fghis5.dbo.ExtractFieldValue(备注, '备注')) AS 备注,
+            max(fghis5.dbo.ExtractFieldValue(备注, '折扣比例')) AS 折扣比例
 		FROM
 			fghis5..门诊_收费支付表 
 		WHERE
 			支付方式 IN ( 0, 1, 4, 6, 31, 32 ) 
 		GROUP BY
-			结帐ID,fghis5.dbo.ExtractFieldValue(备注, '备注'),fghis5.dbo.ExtractFieldValue(备注, '折扣比例')
+			结帐ID
 		) d ON b.结帐ID = d.结帐ID 
 	WHERE
 		b.操作工号 != '6666' 
@@ -190,15 +190,14 @@ WITH sfrbb AS (
 			SUM ( CASE WHEN 支付方式 = 6 THEN 支付金额 ELSE 0 END ) AS 折扣,
 			SUM ( CASE WHEN 支付方式 = 31 THEN 支付金额 ELSE 0 END ) AS 微信,
 			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝,
-            fghis5.dbo.ExtractFieldValue(备注, '备注') AS 备注,
-            fghis5.dbo.ExtractFieldValue(备注, '折扣比例') AS 折扣比例
+            max(fghis5.dbo.ExtractFieldValue(备注, '备注')) AS 备注,
+            max(fghis5.dbo.ExtractFieldValue(备注, '折扣比例')) AS 折扣比例
 		FROM
 			fghis5..门诊_挂号支付表 
 		WHERE
 			支付方式 IN ( 0, 1, 4, 6, 31, 32 ) 
 		GROUP BY
-			结帐ID,fghis5.dbo.ExtractFieldValue(备注, '备注'),
-            fghis5.dbo.ExtractFieldValue(备注, '折扣比例') 
+			结帐ID
 		) d ON b.结帐ID = d.结帐ID 
 			left join fghis5..门诊_挂号信息表 f on f.就诊ID =b.就诊ID
 	WHERE
