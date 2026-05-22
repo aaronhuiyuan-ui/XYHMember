@@ -226,6 +226,15 @@ namespace XYHMember.Context
         public string 检查日期 { get; set; }
     }
 
+    public class SavedPatient
+    {
+        public string 门诊号 { get; set; }
+        public string 姓名 { get; set; }
+        public string 身份证号 { get; set; }
+        public string 电话 { get; set; }
+        public string 创建时间 { get; set; }
+    }
+
     public class PidMapping
     {
         public string 身份证号 { get; set; }

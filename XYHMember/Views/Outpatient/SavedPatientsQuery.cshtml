@@ -1,0 +1,110 @@
+﻿@{
+    ViewBag.Title = "SavedPatientsQuery";
+}
+
+@using XYHMember.Context;
+@model List<SavedPatient>
+
+@{
+    var name = Request["name"];
+    var bdatepicker = Request["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edatepicker = Request["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    @Styles.Render("~/Content/flatpickr")
+
+</head>
+
+<body>
+    <div>
+
+        <div class="container">
+            <div style="margin-left:300px;">
+                <form controller="Outpatient" action="GetSavedPatientsQuery" method="get">
+                    <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;">
+                        <label style="margin:0 5px 0 10px;">创建日期</label>
+                        <input type="text" name="bdatepicker" id="bdatepicker"
+                               value="@bdatepicker" placeholder="开始日期" style="height:30px;">
+                        <label style="margin:0 5px;">—</label>
+                        <input type="text" name="edatepicker" id="edatepicker"
+                               value="@edatepicker" placeholder="结束日期" style="height:30px;">
+                        <input type="text" class="am-form-field" name="name" value="@name" placeholder="姓名/身份证号" style="width:180px;margin-left:10px;">
+                        <span class="am-input-group-btn">
+                            <button class="am-btn am-btn-default" type="submit">查询</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="am-g">
+            <div class="am-u-sm-12">
+
+                <div class="table-wrapper" style="overflow:auto;">
+                <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>序号</th>
+                            <th>门诊号</th>
+                            <th>姓名</th>
+                            <th>身份证号</th>
+                            <th>电话</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    @if (Model != null && Model.Count > 0)
+                    {
+                        <tbody>
+                            @{
+                                int rowNum = 0;
+                            }
+                            @foreach (var result in Model)
+                            {
+                                rowNum++;
+                                <tr>
+                                    <td>@rowNum</td>
+                                    <td>@result.门诊号</td>
+                                    <td>@result.姓名</td>
+                                    <td>@result.身份证号</td>
+                                    <td>@result.电话</td>
+                                    <td>@result.创建时间</td>
+                                </tr>
+                            }
+                        </tbody>
+                    }
+                </table>
+                </div>
+
+                @if (Model != null && Model.Count > 1)
+                {
+                    <div id="paginationContainer"></div>
+                }
+
+            </div>
+        </div>
+    </div>
+
+    <script src="~/Scripts/pagination.js"></script>
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        flatpickr("#bdatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@bdatepicker"
+        });
+        flatpickr("#edatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@edatepicker"
+        });
+
+        initTablePagination('dataTable');
+    </script>
+
+</body>
+</html>

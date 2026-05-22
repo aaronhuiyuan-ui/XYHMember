@@ -167,7 +167,7 @@ namespace XYHMember.Controllers
 VALUES (@mzh, @cardInfoId, @cardNo, N'', N'', @name, @sex, @birthday, '000000',
 @idCardNo, 0, 0, 0, 0, '', '', '', @telephone,
 '', '', @address, '', '', '0', 0,
-'', '0', '', CONVERT(VARCHAR(8), GETDATE(), 112), CONVERT(VARCHAR(8), GETDATE(), 112), '', 0,
+'', '0', '', CONVERT(VARCHAR(8), GETDATE(), 112), CONVERT(VARCHAR(8), GETDATE(), 112), 'TJ', 0,
 GETDATE(), @userId, '', '', '', '',fghis5.dbo.FB_GetChineseSpell(@name), '', 
 NULL, NULL, @pid, NULL, NULL, NULL, NULL)";
 
@@ -254,6 +254,32 @@ WHERE 分类 = '系统' AND 名称 = N'卡信息ID'").FirstOrDefault();
                 while (inner.InnerException != null) inner = inner.InnerException;
                 return Json(new { success = false, msg = inner.Message });
             }
+        }
+
+        //已保存至门诊信息查询页面
+        public ActionResult SavedPatientsQuery()
+        {
+            return View();
+        }
+
+        [HttpGet]
+        public ActionResult GetSavedPatientsQuery()
+        {
+            var keyword = Request["name"]?.Trim() ?? "";
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+
+            var sql = @"SELECT CAST(PID AS NVARCHAR(20)) AS 门诊号, 姓名, 身份证号, 联系手机 AS 电话, CONVERT(VARCHAR(19), 创建时间, 120) AS 创建时间
+FROM fghis5..系统_病人基本信息表
+WHERE 信息来源 = 'TJ'
+  AND CONVERT(VARCHAR(8), 创建时间, 112) BETWEEN @bdate AND @edate
+  AND (@name = '' OR 姓名 = @name OR 身份证号 = @name)
+ORDER BY 创建时间 DESC";
+
+            var result = db.Database.SqlQuery<SavedPatient>(sql,
+                QueryHelper.BuildReportParams(keyword, bdate, edate)).ToList();
+
+            return View("SavedPatientsQuery", result);
         }
 
         private string GetToken()
