@@ -288,6 +288,7 @@
     <Content Include="Views\Member\PatientInfo.cshtml" />
     <Content Include="Views\Member\TopUP.cshtml" />
     <Content Include="Views\Outpatient\PhysicalExamQuery.cshtml" />
+    <Content Include="Views\Outpatient\SavedPatientsQuery.cshtml" />
     <Content Include="Views\ReportForms\Reception.cshtml" />
     <Content Include="Views\ReportForms\DailyReport.cshtml" />
     <Content Include="Views\ReportForms\Department.cshtml" />
