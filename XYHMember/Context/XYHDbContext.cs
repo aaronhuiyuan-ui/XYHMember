@@ -241,6 +241,22 @@ namespace XYHMember.Context
         public int PID { get; set; }
     }
 
+    //门诊发药查询
+    public class PharmacyDispensing
+    {
+        public int? 结帐ID { get; set; }
+        public int? 处方ID { get; set; }
+        public int? 门诊号 { get; set; }
+        public string 姓名 { get; set; }
+        public string 开方日期 { get; set; }
+        public string 开方时间 { get; set; }
+        public string 医生工号 { get; set; }
+        public string 医生姓名 { get; set; }
+        public int? 草药帖数 { get; set; }
+        public decimal? 总金额 { get; set; }
+        public string 发票状态 { get; set; }
+    }
+
     //分页
     public class PaginationModel<T>
     {

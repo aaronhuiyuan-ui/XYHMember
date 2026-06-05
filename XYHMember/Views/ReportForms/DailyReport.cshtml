@@ -21,9 +21,17 @@
     @Styles.Render("~/Content/my")
     <style>
         #dailyTable {
-            width: 9000px !important;
-            min-width: 3000px !important;
-            table-layout: fixed !important;
+            width: 2900px !important;
+            min-width: 2900px !important;
+            table-layout: auto !important;
+        }
+        #dailyTable th,
+        #dailyTable td {
+            padding: 6px 8px !important;
+        }
+        #dailyTable th:last-child,
+        #dailyTable td:last-child {
+            padding-right: 100px !important;
         }
         .table-wrapper {
             overflow: auto !important;
