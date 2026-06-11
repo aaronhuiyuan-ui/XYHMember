@@ -21,17 +21,18 @@
     @Styles.Render("~/Content/flatpickr")
     <style>
         #dataTable {
-            width: 1800px !important;
-            min-width: 1800px !important;
+            width: 80% !important;
+            min-width: 600px !important;
             table-layout: auto !important;
+            white-space: nowrap;
         }
         #dataTable th,
         #dataTable td {
-            padding: 2px 5px !important;
+            padding: 2px 4px !important;
         }
         #dataTable th:last-child,
         #dataTable td:last-child {
-            padding-right: 40px !important;
+            padding-right: 8px !important;
         }
         .table-wrapper {
             overflow: auto !important;
@@ -48,18 +49,20 @@
 
         <div class="container">
             <div style="margin-left:300px;">
-                <form controller="Pharmacy" action="GetDispensingQuery" method="get">
-                    <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;">
+                <form action="@Url.Action("GetDispensingQuery", "Pharmacy")" method="get">
+                    <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;flex-wrap:wrap;">
                         <label style="margin:0 5px 0 10px;">开方日期</label>
                         <input type="text" name="bdatepicker" id="bdatepicker"
                                value="@bdatepicker" placeholder="开始日期" style="height:30px;">
                         <label style="margin:0 5px;">—</label>
                         <input type="text" name="edatepicker" id="edatepicker"
                                value="@edatepicker" placeholder="结束日期" style="height:30px;">
-                        <input type="text" class="am-form-field" name="name" value="@name" placeholder="姓名" style="width:180px;margin-left:10px;">
-                        <span class="am-input-group-btn">
-                            <button class="am-btn am-btn-default" type="submit">查询</button>
-                            <button class="am-btn am-btn-primary" type="button" id="dispenseBtn" style="margin-left:15px;background:#51a351!important;border-color:#51a351!important;color:#fff!important;" disabled>发药</button>
+                        <span style="margin-left:40px;display:inline-flex;align-items:center;gap:6px;">
+                            <input type="text" class="am-form-field" name="name" value="@name" placeholder="姓名" style="width:180px;">
+                            <span class="am-input-group-btn">
+                                <button class="am-btn am-btn-default" type="submit">查询</button>
+                                <button class="am-btn am-btn-primary" type="button" id="dispenseBtn" style="margin-left:15px;background:#51a351!important;border-color:#51a351!important;color:#fff!important;" disabled>发药</button>
+                            </span>
                         </span>
                     </div>
                 </form>
@@ -141,7 +144,7 @@
 
         initTablePagination('dataTable');
 
-        // 全选/取消全选
+// 全选/取消全选
         document.querySelector('#dataTable thead input[type=checkbox]').addEventListener('change', function () {
             var checked = this.checked;
             document.querySelectorAll('#dataTable tbody input[type=checkbox]').forEach(function (cb) {
@@ -163,33 +166,26 @@
                     return;
                 }
 
-                var prescriptionIds = [];
-                var checkoutIds = [];
-                checkedBoxes.forEach(function (cb) {
+                var pidStr = '';
+                checkedBoxes.forEach(function (cb, idx) {
                     var row = cb.closest('tr');
-                    var prescriptionId = row.children[2].innerText.trim(); // 处方ID
-                    var checkoutId = row.children[1].innerText.trim();    // 结帐ID
-                    if (prescriptionId) {
-                        prescriptionIds.push(prescriptionId);
-                        checkoutIds.push(checkoutId);
+                    var pid = row.children[3].innerText.trim();
+                    if (pid) {
+                        pidStr += (idx > 0 ? ',' : '') + pid;
                     }
                 });
 
-                fetch('@Url.Action("Dispense", "Pharmacy")', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prescriptionIds: prescriptionIds, checkoutIds: checkoutIds })
-                })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    alert(data.msg);
-                    if (data.success) {
-                        location.reload();
-                    }
-                })
-                .catch(function (err) {
-                    alert('发药失败：' + err);
-                });
+                if (!pidStr) {
+                    alert('未获取到处方ID');
+                    return;
+                }
+
+                // 带上日期参数
+                var bdate = document.getElementById('bdatepicker').value;
+                var edate = document.getElementById('edatepicker').value;
+
+                // 跳转到独立确认发药页面
+                window.location.href = '@Url.Action("DispensingConfirm", "Pharmacy")?prescriptionIds=' + encodeURIComponent(pidStr) + '&index=0&bdatepicker=' + encodeURIComponent(bdate) + '&edatepicker=' + encodeURIComponent(edate);
             });
             </text>
         }

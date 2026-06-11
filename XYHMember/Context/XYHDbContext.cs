@@ -257,6 +257,65 @@ namespace XYHMember.Context
         public string 发票状态 { get; set; }
     }
 
+    //发药预览-处方头
+    public class DispenseHeaderResult
+    {
+        public string orgcode { get; set; }
+        public string customercode { get; set; }
+        public string checkcode { get; set; }
+        public int 处方ID { get; set; }
+        public string outcfcode { get; set; }
+        public string outcfsn { get; set; }
+        public string department { get; set; }
+        public string jyyq { get; set; }
+        public string jynum { get; set; }
+        public string zgyq { get; set; }
+        public string cftype { get; set; }
+        public int? agentnum { get; set; }
+        public int? bags { get; set; }
+        public int? packagenum { get; set; }
+        public string patient { get; set; }
+        public string age { get; set; }
+        public string jyplan { get; set; }
+        public string sex { get; set; }
+        public string ispregnancy { get; set; }
+        public string telephone { get; set; }
+        public string deliveryaddr { get; set; }
+        public string client { get; set; }
+        public string remark { get; set; }
+        public string billdate { get; set; }
+        public string doctor { get; set; }
+        public string patientcode { get; set; }
+        public string customername { get; set; }
+        public int? sendmethod { get; set; }
+        public string totalprice { get; set; }
+        public string diagnosis { get; set; }
+        public string medicalno { get; set; }
+        public string hcysource { get; set; }
+        public string expresstradeno { get; set; }
+        public string birthdate { get; set; }
+        public string recipelurl { get; set; }
+        public string recipelurltype { get; set; }
+        public string paymethod { get; set; }
+        public string medicalhistory { get; set; }
+        public string bringbackflag { get; set; }
+        public string isurgent { get; set; }
+        public string iscopy { get; set; }
+    }
+
+    //发药预览-处方明细
+    public class DispenseDetailResult
+    {
+        public int 处方ID { get; set; }
+        public string goodscode { get; set; }
+        public string goodsname { get; set; }
+        public string dosage { get; set; }
+        public string tpyq { get; set; }
+        public string goodsspec { get; set; }
+        public string goodsunit { get; set; }
+        public string manufacturer { get; set; }
+    }
+
     //分页
     public class PaginationModel<T>
     {
@@ -265,6 +324,36 @@ namespace XYHMember.Context
         public int PageSize { get; set; }
         public int TotalItems { get; set; }
         public int TotalPages { get; set; }
+    }
+
+    //确认发药页面视图模型
+    public class DispensingConfirmViewModel
+    {
+        public DispenseHeaderResult Header { get; set; }
+        public List<DispenseDetailResult> Details { get; set; }
+    }
+
+    //已发药查询记录
+    public class DispensedRecord
+    {
+        public int 处方ID { get; set; }
+        public string 病人姓名 { get; set; }
+        public string 处方日期 { get; set; }
+        public string outcfcode_original { get; set; }
+        public string 发药人工号 { get; set; }
+        public string 发药人姓名 { get; set; }
+        public DateTime? 发药时间 { get; set; }
+        public int? 发药状态 { get; set; }
+        public string 发药日期 { get; set; }
+    }
+
+    //退药查询参数
+    public class DispenseCancelInfo
+    {
+        public string outcfcode { get; set; }
+        public string customercode { get; set; }
+        public string checkcode { get; set; }
+        public string billdate { get; set; }
     }
 
 }

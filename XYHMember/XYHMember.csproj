@@ -291,6 +291,8 @@
     <Content Include="Views\Outpatient\PhysicalExamQuery.cshtml" />
     <Content Include="Views\Outpatient\SavedPatientsQuery.cshtml" />
     <Content Include="Views\Pharmacy\DispensingQuery.cshtml" />
+    <Content Include="Views\Pharmacy\DispensingConfirm.cshtml" />
+    <Content Include="Views\Pharmacy\DispensedQuery.cshtml" />
     <Content Include="Views\ReportForms\Reception.cshtml" />
     <Content Include="Views\ReportForms\DailyReport.cshtml" />
     <Content Include="Views\ReportForms\Department.cshtml" />

@@ -1,0 +1,535 @@
+﻿@{
+    ViewBag.Title = "已发药查询";
+}
+
+@using XYHMember.Context;
+@model List<DispensedRecord>
+
+@{
+    var bdatepicker = Request["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edatepicker = Request["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    @Styles.Render("~/Content/flatpickr")
+    <style>
+        #dataTable {
+            width: 80% !important;
+            min-width: 600px !important;
+            table-layout: auto !important;
+        }
+        #dataTable th,
+        #dataTable td {
+            padding: 2px 5px !important;
+        }
+        #dataTable th:last-child,
+        #dataTable td:last-child {
+            padding-right: 40px !important;
+        }
+        .table-wrapper {
+            overflow: auto !important;
+            max-width: calc(100vw - 40px) !important;
+        }
+        .table-wrapper > table {
+            display: table !important;
+        }
+
+        /* 处方结果弹窗 */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 10000;
+            overflow: auto;
+            padding: 30px;
+        }
+        .modal-box {
+            max-width: 900px;
+            margin: 20px auto;
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid #eee;
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header .close-btn {
+            color: #999;
+            text-decoration: none;
+            font-size: 22px;
+            cursor: pointer;
+        }
+        .modal-header .close-btn:hover { color: #333; }
+        .modal-body {
+            padding: 20px;
+            max-height: 480px;
+            overflow: auto;
+        }
+        .modal-footer {
+            padding: 12px 20px;
+            border-top: 1px solid #eee;
+            text-align: right;
+        }
+        .modal-info-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 18px;
+            padding: 10px 14px;
+            background: #f5f8fc;
+            border-radius: 4px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        .modal-info-bar span { white-space: nowrap; }
+        .modal-info-bar label { color: #888; margin-right: 3px; }
+        .modal-info-bar .val { font-weight: 600; color: #333; }
+        .modal-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            padding-left: 10px;
+            border-left: 3px solid #4d7496;
+        }
+        .modal-field-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px 16px;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: #fafbfc;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+        .modal-field-grid .fg-item {
+            display: flex;
+            align-items: center;
+        }
+        .modal-field-grid .fg-item label {
+            width: 80px;
+            font-size: 13px;
+            color: #555;
+            flex-shrink: 0;
+        }
+        .modal-field-grid .fg-item span {
+            font-size: 13px;
+            color: #333;
+        }
+        .modal-field-grid .fg-full { grid-column: 1 / -1; }
+        .modal-detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+        .modal-detail-table th {
+            background: #f0f2f5;
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            white-space: nowrap;
+        }
+        .modal-detail-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            white-space: nowrap;
+        }
+        .modal-detail-table tbody tr:hover { background: #f5f8fc; }
+        .modal-error-msg {
+            padding: 40px 20px;
+            text-align: center;
+            color: #e4393c;
+            font-size: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+
+        <div class="container">
+            <div style="margin-left:300px;">
+                <form action="@Url.Action("GetDispensedQuery", "Pharmacy")" method="post">
+                    <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;">
+                        <label style="margin:0 5px 0 10px;">发药时间</label>
+                        <input type="text" name="bdatepicker" id="bdatepicker"
+                               value="@bdatepicker" placeholder="开始日期" style="height:30px;">
+                        <label style="margin:0 5px;">—</label>
+                        <input type="text" name="edatepicker" id="edatepicker"
+                               value="@edatepicker" placeholder="结束日期" style="height:30px;">
+                        <span class="am-input-group-btn">
+                            <button class="am-btn am-btn-default" type="submit">查询</button>
+                            <button class="am-btn am-btn-primary" type="button" id="detailBtn" style="margin-left:15px;background:#4d7496!important;border-color:#4d7496!important;color:#fff!important;" disabled>处方结果</button>
+                            <button class="am-btn am-btn-primary" type="button" id="cancelBtn" style="margin-left:15px;background:#d9534f!important;border-color:#d9534f!important;color:#fff!important;" disabled>退药</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="am-g">
+            <div class="am-u-sm-12">
+
+                <div class="table-wrapper" style="overflow:auto;">
+                <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th class="table-chck"><input type="checkbox"></th>
+                            <th>序号</th>
+                            <th>处方ID</th>
+                            <th>病人姓名</th>
+                            <th>处方日期</th>
+                            <th>发药人工号</th>
+                            <th>发药人姓名</th>
+                            <th>发药日期</th>
+                            <th>发药状态</th>
+                        </tr>
+                    </thead>
+                    @if (Model != null && Model.Count > 0)
+                    {
+                        <tbody>
+                            @{
+                                int rowNum = 0;
+                            }
+                            @foreach (var result in Model)
+                            {
+                                rowNum++;
+                                <tr>
+                                    <td><input type="checkbox" data-pid="@result.处方ID" data-billdate="@result.处方日期" data-outcfcode="@result.outcfcode_original" data-dispensedate="@result.发药日期"></td>
+                                    <td>@rowNum</td>
+                                    <td>@result.处方ID</td>
+                                    <td>@result.病人姓名</td>
+                                    <td>@result.处方日期</td>
+                                    <td>@result.发药人工号</td>
+                                    <td>@result.发药人姓名</td>
+                                    <td>@(result.发药时间 != null ? result.发药时间.Value.ToString("yyyy-MM-dd HH:mm") : "")</td>
+                                    <td>@(result.发药状态 == 3 ? "已发药" : result.发药状态 == 9 ? "已退药" : (result.发药状态.HasValue ? result.发药状态.Value.ToString() : ""))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    }
+                </table>
+                </div>
+
+                @if (Model != null && Model.Count > 1)
+                {
+                    <div id="paginationContainer"></div>
+                }
+
+            </div>
+        </div>
+    </div>
+
+    <!-- 处方结果弹窗 -->
+    <div class="modal-overlay" id="detailModal" style="display:none;">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>处方结果信息</span>
+                <a class="close-btn" href="javascript:void(0)" onclick="closeDetailModal()">&times;</a>
+            </div>
+            <div class="modal-body" id="detailModalBody">
+                <!-- 动态填充 -->
+            </div>
+            <div class="modal-footer">
+                <button class="am-btn am-btn-default" onclick="closeDetailModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/Scripts/pagination.js"></script>
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        flatpickr("#bdatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@bdatepicker"
+        });
+        flatpickr("#edatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@edatepicker"
+        });
+
+        initTablePagination('dataTable');
+
+        // 全选/取消全选
+        var headerChk = document.querySelector('#dataTable thead input[type=checkbox]');
+        if (headerChk) {
+            headerChk.addEventListener('change', function () {
+                var checked = this.checked;
+                document.querySelectorAll('#dataTable tbody input[type=checkbox]').forEach(function (cb) {
+                    cb.checked = checked;
+                });
+            });
+        }
+
+        // 有数据时启用退药按钮
+        @if (Model != null && Model.Count > 0)
+        {
+            <text>
+            var cancelBtn = document.getElementById('cancelBtn');
+            cancelBtn.disabled = false;
+
+            var detailBtn = document.getElementById('detailBtn');
+            detailBtn.disabled = false;
+
+            detailBtn.addEventListener('click', function () {
+                var checkedBoxes = document.querySelectorAll('#dataTable tbody input[type=checkbox]:checked');
+                if (checkedBoxes.length === 0) {
+                    alert('请选择要查看结果的处方');
+                    return;
+                }
+                if (checkedBoxes.length > 1) {
+                    alert('一次只能查看一个处方结果');
+                    return;
+                }
+
+                var pid = checkedBoxes[0].getAttribute('data-pid');
+                if (!pid) {
+                    alert('未获取到处方ID');
+                    return;
+                }
+
+                var billdate = checkedBoxes[0].getAttribute('data-billdate') || '';
+                var outcfcode = checkedBoxes[0].getAttribute('data-outcfcode') || '';
+
+                detailBtn.disabled = true;
+                detailBtn.innerText = '查询中...';
+
+                fetch('@Url.Action("GetPrescriptionDetail", "Pharmacy")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prescriptionId: parseInt(pid), billdate: billdate, outcfcode: outcfcode })
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    detailBtn.disabled = false;
+                    detailBtn.innerText = '处方结果';
+                    if (data.success) {
+                        renderDetailData(data.data);
+                        document.getElementById('detailModal').style.display = 'block';
+                    } else {
+                        alert('查询失败: ' + data.msg + '\n\n完整返回:\n' + (data.apiResponse || '无'));
+                    }
+                })
+                .catch(function (err) {
+                    detailBtn.disabled = false;
+                    detailBtn.innerText = '处方结果';
+                    alert('查询失败: ' + err);
+                });
+            });
+
+            cancelBtn.addEventListener('click', function () {
+                var checkedBoxes = document.querySelectorAll('#dataTable tbody input[type=checkbox]:checked');
+                if (checkedBoxes.length === 0) {
+                    alert('请选择要退药的处方');
+                    return;
+                }
+
+                if (!confirm('确认要退药吗？')) return;
+
+                var pids = [];
+                var outcfcodes = [];
+                var billdates = [];
+                checkedBoxes.forEach(function (cb) {
+                    var pid = cb.getAttribute('data-pid');
+                    if (pid) {
+                        pids.push(pid);
+                        outcfcodes.push(cb.getAttribute('data-outcfcode') || '');
+                        billdates.push(cb.getAttribute('data-dispensedate') || '');
+                    }
+                });
+
+                if (pids.length === 0) {
+                    alert('未获取到处方ID');
+                    return;
+                }
+
+                // 逐个退药
+                (function doCancel(idx) {
+                    if (idx >= pids.length) {
+                        alert('退药完成');
+                        location.reload();
+                        return;
+                    }
+
+                    fetch('@Url.Action("CancelDispensedPrescription", "Pharmacy")', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prescriptionId: parseInt(pids[idx]), outcfcode: outcfcodes[idx], billdate: billdates[idx] })
+                    })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            doCancel(idx + 1);
+                        } else {
+                            alert('退药失败(' + pids[idx] + '): ' + data.msg + '\n\n完整返回:\n' + (data.apiResponse || '无'));
+                        }
+                    })
+                    .catch(function (err) {
+                        alert('退药失败(' + pids[idx] + '): ' + err);
+                    });
+                })(0);
+            });
+            </text>
+        }
+
+        // 处方结果弹窗
+        function closeDetailModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        // 点击空白处关闭弹窗
+        document.getElementById('detailModal').addEventListener('click', function (e) {
+            if (e.target === this) closeDetailModal();
+        });
+
+        // 渲染处方结果数据
+        function renderDetailData(data) {
+            var body = document.getElementById('detailModalBody');
+            if (!data) {
+                body.innerHTML = '<div class="modal-error-msg">无返回数据</div>';
+                return;
+            }
+
+            var html = '';
+
+            // 优先显示的关键字段
+            var keyFields = {
+                'patient': '患者姓名',
+                'age': '年龄',
+                'sex': '性别',
+                'billdate': '处方日期',
+                'outcfcode': '处方编号',
+                'outcfsn': '处方序号',
+                'customercode': '客户编码',
+                'doctor': '医生',
+                'diagnosis': '诊断',
+                'totalprice': '总金额',
+                'sendmethod': '配送方式',
+                'telephone': '联系电话',
+                'deliveryaddr': '配送地址',
+                'remark': '备注',
+                'ispregnancy': '是否妊娠',
+                'jyyq': '煎药要求',
+                'jynum': '煎药次数',
+                'zgyq': '制膏要求',
+                'cftype': '处方类型',
+                'jyplan': '煎药方案',
+                'agentnum': '剂数/贴数',
+                'bags': '包数/剂',
+                'packagenum': '每包装量',
+                'medicalno': '病历号',
+                'hcysource': '来源',
+                'paymethod': '支付方式',
+                'medicalhistory': '病史',
+                'bringbackflag': '带回标志',
+                'isurgent': '急诊',
+                'iscopy': '是否复印'
+            };
+
+            // 提取明细数据
+            var mxList = data.sellKpMxVos || data.detailList || data.items || null;
+
+            // ---- 信息栏 ----
+            var infoItems = ['patient', 'age', 'sex', 'billdate', 'outcfcode', 'outcfsn'];
+            html += '<div class="modal-info-bar">';
+            for (var i = 0; i < infoItems.length; i++) {
+                var k = infoItems[i];
+                if (data[k] !== undefined && data[k] !== null && data[k] !== '') {
+                    html += '<span><label>' + (keyFields[k] || k) + '：</label><span class="val">' + data[k] + '</span></span>';
+                }
+            }
+            html += '</div>';
+
+            // ---- 字段网格 ----
+            var gridKeys = [];
+            for (var k2 in keyFields) {
+                if (data[k2] !== undefined && data[k2] !== null && data[k2] !== ''
+                    && infoItems.indexOf(k2) === -1) {
+                    gridKeys.push(k2);
+                }
+            }
+            // 再加一些不在keyFields里的自有属性
+            for (var prop in data) {
+                if (prop === 'sellKpMxVos' || prop === 'detailList' || prop === 'items') continue;
+                if (keyFields[prop] === undefined && typeof data[prop] !== 'object' && data[prop] !== null) {
+                    gridKeys.push(prop);
+                }
+            }
+
+            if (gridKeys.length > 0) {
+                html += '<div class="modal-section-title">处方信息</div>';
+                html += '<div class="modal-field-grid">';
+                for (var j = 0; j < gridKeys.length; j++) {
+                    var key = gridKeys[j];
+                    html += '<div class="fg-item"><label>' + (keyFields[key] || key) + '：</label><span>' + data[key] + '</span></div>';
+                }
+                html += '</div>';
+            }
+
+            // ---- 明细表格 ----
+            if (mxList && mxList.length > 0) {
+                html += '<div class="modal-section-title">饮片明细</div>';
+                html += '<div style="border:1px solid #e8e8e8;border-radius:4px;overflow:auto;max-height:220px;">';
+                html += '<table class="modal-detail-table">';
+                html += '<thead><tr>';
+
+                // 从第一项取所有key作为表头
+                var firstItem = mxList[0];
+                var colKeys = [];
+                for (var mk in firstItem) {
+                    if (mk !== '处方ID') colKeys.push(mk);
+                }
+                for (var ci = 0; ci < colKeys.length; ci++) {
+                    html += '<th>' + (keyFields[colKeys[ci]] || colKeys[ci]) + '</th>';
+                }
+                html += '</tr></thead><tbody>';
+
+                for (var ri = 0; ri < mxList.length; ri++) {
+                    html += '<tr>';
+                    for (var cj = 0; cj < colKeys.length; cj++) {
+                        var v = mxList[ri][colKeys[cj]];
+                        html += '<td>' + (v !== undefined && v !== null ? v : '') + '</td>';
+                    }
+                    html += '</tr>';
+                }
+                html += '</tbody></table></div>';
+            }
+
+            // ---- 其他嵌套对象 ----
+            var extraHtml = '';
+            for (var prop2 in data) {
+                if (prop2 === 'sellKpMxVos' || prop2 === 'detailList' || prop2 === 'items') continue;
+                if (typeof data[prop2] === 'object' && data[prop2] !== null) {
+                    extraHtml += '<div class="modal-section-title" style="margin-top:12px;">' + prop2 + '</div>';
+                    extraHtml += '<div class="modal-field-grid">';
+                    for (var sub in data[prop2]) {
+                        if (typeof data[prop2][sub] !== 'object') {
+                            extraHtml += '<div class="fg-item"><label>' + sub + '：</label><span>' + (data[prop2][sub] !== null ? data[prop2][sub] : '') + '</span></div>';
+                        }
+                    }
+                    extraHtml += '</div>';
+                }
+            }
+            html += extraHtml;
+
+            if (html === '') {
+                html = '<div class="modal-error-msg">无处方数据</div>';
+            }
+
+            body.innerHTML = html;
+        }
+    </script>
+
+</body>
+</html>

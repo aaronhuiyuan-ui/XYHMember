@@ -1,0 +1,421 @@
+﻿@model XYHMember.Context.DispensingConfirmViewModel
+@{
+    Layout = null;
+    ViewBag.Title = "确认发药";
+    var ids = ViewBag.PrescriptionIds as string ?? "";
+    var idx = (int)(ViewBag.CurrentIndex ?? 0);
+    var total = (int)(ViewBag.TotalCount ?? 0);
+    var h = Model.Header;
+    var strPid = h != null ? (h.outcfcode ?? "") : "";
+    int pid = 0;
+    int.TryParse(strPid, out pid);
+    var bdatepicker = Request["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edatepicker = Request["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var dateQuery = "?bdatepicker=" + HttpUtility.UrlEncode(bdatepicker) + "&edatepicker=" + HttpUtility.UrlEncode(edatepicker);
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>确认发药</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+            background: #f5f6fa;
+            padding: 0;
+            color: #333;
+        }
+        .page-wrap {
+            max-width: 860px;
+            margin: 20px 40px 20px 300px;
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            padding: 24px 30px 30px;
+        }
+        .page-title {
+            font-size: 18px;
+            font-weight: bold;
+            padding-bottom: 14px;
+            border-bottom: 2px solid #51a351;
+            margin-bottom: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .page-title .back-link {
+            font-size: 13px;
+            font-weight: normal;
+            color: #4d7496;
+            text-decoration: none;
+        }
+        .page-title .back-link:hover { text-decoration: underline; }
+        .info-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 20px;
+            padding: 12px 16px;
+            background: #f5f8fc;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+        .info-bar span { white-space: nowrap; }
+        .info-bar label { color: #888; margin-right: 4px; }
+        .info-bar .val { font-weight: 600; color: #333; }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            padding-left: 4px;
+            border-left: 3px solid #51a351;
+            padding-left: 10px;
+        }
+        .field-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px 16px;
+            margin-bottom: 18px;
+            padding: 14px;
+            background: #fafbfc;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+        .field-grid .fg-item {
+            display: flex;
+            align-items: center;
+        }
+        .field-grid .fg-item label {
+            width: 80px;
+            font-size: 13px;
+            color: #555;
+            flex-shrink: 0;
+        }
+        .red { color: #e4393c; margin-right: 2px; }
+        .field-grid .fg-item input,
+        .field-grid .fg-item select {
+            flex: 1;
+            min-width: 0;
+            height: 32px;
+            border: 1px solid #d9d9d9;
+            border-radius: 3px;
+            padding: 0 8px;
+            font-size: 13px;
+            background: #fff;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .field-grid .fg-item input:focus,
+        .field-grid .fg-item select:focus {
+            border-color: #4d7496;
+            outline: none;
+            box-shadow: 0 0 3px rgba(77,116,150,0.3);
+        }
+        .field-grid .fg-item.fg-full { grid-column: 1 / -1; }
+        .field-grid .fg-item.fg-double { grid-column: span 2; }
+        .detail-table-wrap {
+            margin-bottom: 20px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            overflow: auto;
+            max-height: 260px;
+        }
+        .detail-table-wrap table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .detail-table-wrap th {
+            background: #f0f2f5;
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+        }
+        .detail-table-wrap td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            white-space: nowrap;
+        }
+        .detail-table-wrap tbody tr:hover { background: #f5f8fc; }
+        .btn-bar {
+            text-align: right;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+        }
+        .btn-bar button {
+            margin-left: 12px;
+            padding: 8px 32px;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #d9d9d9;
+            background: #fff;
+            color: #333;
+        }
+        .btn-bar button:hover { opacity: 0.9; }
+        .btn-bar .btn-primary {
+            background: #51a351;
+            border-color: #51a351;
+            color: #fff;
+        }
+        .btn-bar .btn-primary:disabled {
+            background: #90c790;
+            border-color: #90c790;
+            cursor: not-allowed;
+        }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.7);
+            z-index: 9999;
+            text-align: center;
+            padding-top: 200px;
+            font-size: 16px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay">处理中，请稍候...</div>
+
+    <div class="page-wrap">
+        <div class="page-title">
+            <span>确认发药 (@(idx + 1)/@total)</span>
+            <a class="back-link" href="@Url.Action("DispensingQuery", "Pharmacy")@dateQuery">← 返回发药查询</a>
+        </div>
+
+        <!-- 信息栏 -->
+        <div class="info-bar">
+            <span><label><span class="red">*</span>患者：</label><span class="val">@h.patient</span></span>
+            <span><label><span class="red">*</span>年龄：</label><span class="val">@h.age</span></span>
+            <span><label><span class="red">*</span>性别：</label><span class="val">@h.sex</span></span>
+            <span><label><span class="red">*</span>处方日期：</label><span class="val">@h.billdate</span></span>
+            <span><label><span class="red">*</span>处方编号：</label><span class="val">@h.outcfcode</span></span>
+            <span><label><span class="red">*</span>处方序号：</label><span class="val">@h.outcfsn</span></span>
+        </div>
+
+        <!-- 可编辑字段 -->
+        <div class="section-title">必填项（可修改）</div>
+        <form id="confirmForm">
+            <input type="hidden" name="prescriptionId" value="@pid">
+            <div class="field-grid">
+                <div class="fg-item">
+                    <label><span class="red">*</span>煎药要求</label>
+                    <input type="text" name="jyyq" value="@h.jyyq">
+                </div>
+                <div class="fg-item">
+                    <label><span class="red">*</span>煎药次数</label>
+                    <select name="jynum">
+                        <option value="一煎" @(h.jynum == "一煎" ? "selected" : "")>一煎</option>
+                        <option value="二煎" @(h.jynum == "二煎" ? "selected" : "")>二煎</option>
+                        <option value="三煎" @(h.jynum == "三煎" ? "selected" : "")>三煎</option>
+                    </select>
+                </div>
+                <div class="fg-item">
+                    <label>制膏要求</label>
+                    <select name="zgyq">
+                        <option value="" @(string.IsNullOrEmpty(h.zgyq) ? "selected" : "")></option>
+                        <option value="罐装" @(h.zgyq == "罐装" ? "selected" : "")>罐装</option>
+                        <option value="袋装" @(h.zgyq == "袋装" ? "selected" : "")>袋装</option>
+                        <option value="蜡壳" @(h.zgyq == "蜡壳" ? "selected" : "")>蜡壳</option>
+                        <option value="袋装(长条)" @(h.zgyq == "袋装(长条)" ? "selected" : "")>袋装(长条)</option>
+                        <option value="袋装(方形)" @(h.zgyq == "袋装(方形)" ? "selected" : "")>袋装(方形)</option>
+                        <option value="切片膏" @(h.zgyq == "切片膏" ? "selected" : "")>切片膏</option>
+                        <option value="块状" @(h.zgyq == "块状" ? "selected" : "")>块状</option>
+                        <option value="香囊" @(h.zgyq == "香囊" ? "selected" : "")>香囊</option>
+                        <option value="瓶装" @(h.zgyq == "瓶装" ? "selected" : "")>瓶装</option>
+                    </select>
+                </div>
+                <div class="fg-item">
+                    <label><span class="red">*</span>处方类型</label>
+                    <select name="cftype">
+                        <option value="内服" @(h.cftype == "内服" ? "selected" : "")>内服</option>
+                        <option value="外用" @(h.cftype == "外用" ? "selected" : "")>外用</option>
+                        <option value="灌肠" @(h.cftype == "灌肠" ? "selected" : "")>灌肠</option>
+                        <option value="滴鼻" @(h.cftype == "滴鼻" ? "selected" : "")>滴鼻</option>
+                        <option value="煎服" @(h.cftype == "煎服" ? "selected" : "")>煎服</option>
+                        <option value="口服" @(h.cftype == "口服" ? "selected" : "")>口服</option>
+                        <option value="泡足" @(h.cftype == "泡足" ? "selected" : "")>泡足</option>
+                    </select>
+                </div>
+                <div class="fg-item">
+                    <label><span class="red">*</span>剂数/贴数</label>
+                    <input type="text" name="agentnum" value="@h.agentnum">
+                </div>
+                <div class="fg-item">
+                    <label><span class="red">*</span>包数/剂</label>
+                    <input type="text" name="bags" value="@h.bags">
+                </div>
+                <div class="fg-item">
+                    <label><span class="red">*</span>每包装量</label>
+                    <input type="text" name="packagenum" value="@h.packagenum">
+                </div>
+                <div class="fg-item fg-double">
+                    <label><span class="red">*</span>煎药方案</label>
+                    <select name="jyplan">
+                        <option value="1" @(h.jyplan == "1" ? "selected" : "")>微压（密闭）解表15min</option>
+                        <option value="2" @(h.jyplan == "2" ? "selected" : "")>微压（密闭）汤药30min</option>
+                        <option value="3" @(h.jyplan == "3" ? "selected" : "")>微压（密闭）汤药40min</option>
+                        <option value="4" @(h.jyplan == "4" ? "selected" : "")>常压解表（10min、10min)</option>
+                        <option value="5" @(h.jyplan == "5" ? "selected" : "")>常压汤药（20min、15min)</option>
+                        <option value="6" @(h.jyplan == "6" ? "selected" : "")>常压补药（25min、20min)</option>
+                        <option value="7" @(h.jyplan == "7" ? "selected" : "")>先煎解表（10min、10min、10min)</option>
+                        <option value="8" @(h.jyplan == "8" ? "selected" : "")>先煎汤药（10min、20min、15min)</option>
+                        <option value="9" @(h.jyplan == "9" ? "selected" : "")>先煎补药（10min、25min、20min)</option>
+                        <option value="10" @(h.jyplan == "10" ? "selected" : "")>后下解表（10min（3:7）、10min)</option>
+                        <option value="11" @(h.jyplan == "11" ? "selected" : "")>后下汤药（20min（13:7）、15min)</option>
+                        <option value="12" @(h.jyplan == "12" ? "selected" : "")>后下补药（25min（18:7）、20min)</option>
+                        <option value="13" @(h.jyplan == "13" ? "selected" : "")>微压（密闭）补药50min</option>
+                        <option value="14" @(h.jyplan == "14" ? "selected" : "")>微压（密闭）补药60min</option>
+                        <option value="15" @(h.jyplan == "15" ? "selected" : "")>微压（密闭）汤药50min</option>
+                    </select>
+                </div>
+                <div class="fg-item">
+                    <label><span class="red">*</span>是否妊娠</label>
+                    <input type="text" name="ispregnancy" value="@h.ispregnancy">
+                </div>
+                <div class="fg-item">
+                    <label>配送方式</label>
+                    <select name="sendmethod">
+                        <option value="0" @(h.sendmethod.GetValueOrDefault() == 0 ? "selected" : "")>到店自取</option>
+                        <option value="1" @(h.sendmethod.GetValueOrDefault() == 1 ? "selected" : "")>快递配送</option>
+                    </select>
+                </div>
+                <div class="fg-item fg-double">
+                    <label>收货电话</label>
+                    <input type="text" name="telephone" value="@h.telephone">
+                </div>
+                <div class="fg-item fg-full">
+                    <label>收货地址</label>
+                    <input type="text" name="deliveryaddr" value="@h.deliveryaddr">
+                </div>
+                <div class="fg-item">
+                    <label>收货人</label>
+                    <input type="text" name="client" value="@h.client">
+                </div>
+                <div class="fg-item fg-full">
+                    <label>备注</label>
+                    <input type="text" name="remark" value="@h.remark">
+                </div>
+            </div>
+        </form>
+
+        <!-- 饮片明细 -->
+        <div class="section-title">饮片明细</div>
+        <div class="detail-table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th><span class="red">*</span>饮片编码</th>
+                        <th>饮片名称</th>
+                        <th><span class="red">*</span>单剂用量</th>
+                        <th><span class="red">*</span>调配要求</th>
+                        <th>规格</th>
+                        <th>单位</th>
+                        <th>厂家</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Details != null && Model.Details.Count > 0)
+                    {
+                        foreach (var d in Model.Details)
+                        {
+                            <tr>
+                                <td>@d.goodscode</td>
+                                <td>@d.goodsname</td>
+                                <td>@d.dosage</td>
+                                <td>@d.tpyq</td>
+                                <td>@d.goodsspec</td>
+                                <td>@d.goodsunit</td>
+                                <td>@d.manufacturer</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr><td colspan="7" style="text-align:center;color:#999;">无明细数据</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 按钮 -->
+        <div class="btn-bar">
+            <button onclick="goBack()">取消返回</button>
+            <button class="btn-primary" id="confirmBtn" onclick="confirmDispense()">确认发药</button>
+        </div>
+    </div>
+
+    <script>
+        function confirmDispense() {
+            var btn = document.getElementById('confirmBtn');
+            btn.disabled = true;
+            btn.innerText = '发药中...';
+            document.getElementById('loadingOverlay').style.display = 'block';
+
+            var form = document.getElementById('confirmForm');
+            var prescriptionId = parseInt(form.prescriptionId.value) || 0;
+            if (!prescriptionId) {
+                alert('处方ID无效');
+                btn.disabled = false;
+                btn.innerText = '确认发药';
+                document.getElementById('loadingOverlay').style.display = 'none';
+                return;
+            }
+
+            var fields = {};
+            var numKeys = { agentnum:1, bags:1, packagenum:1, sendmethod:1 };
+            form.querySelectorAll('input[name], select[name]').forEach(function (inp) {
+                if (inp.name === 'prescriptionId') return;
+                var val = inp.value;
+                if (numKeys[inp.name]) val = parseInt(val) || 0;
+                fields[inp.name] = val;
+            });
+
+            fetch('@Url.Action("ConfirmDispense", "Pharmacy")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prescriptionId: prescriptionId, fields: fields })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    var apiMsg = data.msg || '发药成功';
+                    @if (idx + 1 < total)
+                    {
+                        @:alert('第 @(idx+1)/@total 个 ' + apiMsg + '，继续下一个');
+                        @:window.location.href = '@Url.Action("DispensingConfirm", "Pharmacy")?prescriptionIds=@ids&index=@(idx+1)&bdatepicker=@HttpUtility.UrlEncode(bdatepicker)&edatepicker=@HttpUtility.UrlEncode(edatepicker)';
+                    }
+                    else
+                    {
+                        @:alert(apiMsg);
+                        @:window.location.href = '@Url.Action("DispensingQuery", "Pharmacy")@dateQuery';
+                    }
+                } else {
+                    alert('发药失败：' + data.msg + '\n\n完整返回:\n' + (data.apiResponse || '无'));
+                    btn.disabled = false;
+                    btn.innerText = '确认发药';
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                }
+            })
+            .catch(function (err) {
+                alert('发药失败：' + err);
+                btn.disabled = false;
+                btn.innerText = '确认发药';
+                document.getElementById('loadingOverlay').style.display = 'none';
+            });
+        }
+
+        function goBack() {
+            window.location.href = '@Url.Action("DispensingQuery", "Pharmacy")@dateQuery';
+        }
+    </script>
+</body>
+</html>
