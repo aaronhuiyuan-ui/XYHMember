@@ -396,7 +396,7 @@
                     else
                     {
                         @:alert(apiMsg);
-                        @:window.location.href = '@Url.Action("DispensingQuery", "Pharmacy")@dateQuery';
+                        @:window.location.href = '@Url.Action("GetDispensingQuery", "Pharmacy")@dateQuery';
                     }
                 } else {
                     alert('发药失败：' + data.msg + '\n\n完整返回:\n' + (data.apiResponse || '无'));

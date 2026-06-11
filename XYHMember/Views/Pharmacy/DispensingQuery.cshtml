@@ -144,7 +144,12 @@
 
         initTablePagination('dataTable');
 
-// 全选/取消全选
+        // 进入页面时默认按当天日期查询
+        if (window.location.search === '' && !document.querySelector('#dataTable tbody')) {
+            document.querySelector('form').submit();
+        }
+
+        // 全选/取消全选
         document.querySelector('#dataTable thead input[type=checkbox]').addEventListener('change', function () {
             var checked = this.checked;
             document.querySelectorAll('#dataTable tbody input[type=checkbox]').forEach(function (cb) {

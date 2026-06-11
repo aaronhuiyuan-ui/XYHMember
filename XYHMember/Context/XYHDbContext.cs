@@ -345,6 +345,7 @@ namespace XYHMember.Context
         public DateTime? 发药时间 { get; set; }
         public int? 发药状态 { get; set; }
         public string 发药日期 { get; set; }
+        public string 发票状态 { get; set; }
     }
 
     //退药查询参数

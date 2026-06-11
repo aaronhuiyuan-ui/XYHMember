@@ -1,3 +1,4 @@
+using System;
 using System.Data.SqlClient;
 
 namespace XYHMember
@@ -9,6 +10,8 @@ namespace XYHMember
         /// </summary>
         public static string ParseDate(string datepickerValue)
         {
+            if (string.IsNullOrEmpty(datepickerValue) || datepickerValue.Length < 10)
+                return DateTime.Today.ToString("yyyyMMdd");
             return datepickerValue.Substring(0, 4)
                  + datepickerValue.Substring(5, 2)
                  + datepickerValue.Substring(8, 2);

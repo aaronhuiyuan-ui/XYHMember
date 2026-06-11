@@ -6,6 +6,7 @@
 @model List<DispensedRecord>
 
 @{
+    var name = Request["name"];
     var bdatepicker = Request["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
     var edatepicker = Request["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
 }
@@ -39,6 +40,7 @@
         .table-wrapper > table {
             display: table !important;
         }
+        .row-refund { background-color: #ffcccc !important; color: #cc0000 !important; font-weight: bold !important; }
 
         /* 处方结果弹窗 */
         .modal-overlay {
@@ -168,10 +170,13 @@
                         <label style="margin:0 5px;">—</label>
                         <input type="text" name="edatepicker" id="edatepicker"
                                value="@edatepicker" placeholder="结束日期" style="height:30px;">
-                        <span class="am-input-group-btn">
-                            <button class="am-btn am-btn-default" type="submit">查询</button>
-                            <button class="am-btn am-btn-primary" type="button" id="detailBtn" style="margin-left:15px;background:#4d7496!important;border-color:#4d7496!important;color:#fff!important;" disabled>处方结果</button>
-                            <button class="am-btn am-btn-primary" type="button" id="cancelBtn" style="margin-left:15px;background:#d9534f!important;border-color:#d9534f!important;color:#fff!important;" disabled>退药</button>
+                        <span style="margin-left:40px;display:inline-flex;align-items:center;gap:6px;">
+                            <input type="text" class="am-form-field" name="name" value="@name" placeholder="姓名" style="width:140px;">
+                            <span class="am-input-group-btn">
+                                <button class="am-btn am-btn-default" type="submit">查询</button>
+                                <button class="am-btn am-btn-primary" type="button" id="detailBtn" style="margin-left:15px;background:#4d7496!important;border-color:#4d7496!important;color:#fff!important;" disabled>处方结果</button>
+                                <button class="am-btn am-btn-primary" type="button" id="cancelBtn" style="margin-left:15px;background:#d9534f!important;border-color:#d9534f!important;color:#fff!important;" disabled>退药</button>
+                            </span>
                         </span>
                     </div>
                 </form>
@@ -192,6 +197,7 @@
                             <th>发药人工号</th>
                             <th>发药人姓名</th>
                             <th>发药日期</th>
+                            <th>发票状态</th>
                             <th>发药状态</th>
                         </tr>
                     </thead>
@@ -204,7 +210,7 @@
                             @foreach (var result in Model)
                             {
                                 rowNum++;
-                                <tr>
+                                <tr data-invoice-status="@result.发票状态">
                                     <td><input type="checkbox" data-pid="@result.处方ID" data-billdate="@result.处方日期" data-outcfcode="@result.outcfcode_original" data-dispensedate="@result.发药日期"></td>
                                     <td>@rowNum</td>
                                     <td>@result.处方ID</td>
@@ -213,6 +219,7 @@
                                     <td>@result.发药人工号</td>
                                     <td>@result.发药人姓名</td>
                                     <td>@(result.发药时间 != null ? result.发药时间.Value.ToString("yyyy-MM-dd HH:mm") : "")</td>
+                                    <td>@result.发票状态</td>
                                     <td>@(result.发药状态 == 3 ? "已发药" : result.发药状态 == 9 ? "已退药" : (result.发药状态.HasValue ? result.发药状态.Value.ToString() : ""))</td>
                                 </tr>
                             }
@@ -380,6 +387,17 @@
                     });
                 })(0);
             });
+
+            // 检测已退费发票状态
+            setTimeout(function() {
+                var refundRows = document.querySelectorAll('#dataTable tbody tr[data-invoice-status="已退费"]');
+                if (refundRows.length > 0) {
+                    alert('有已退费药品已发药，请立即退药');
+                    refundRows.forEach(function(tr) {
+                        tr.classList.add('row-refund');
+                    });
+                }
+            }, 200);
             </text>
         }
 

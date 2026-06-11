@@ -91,10 +91,11 @@ namespace XYHMember.Controllers
     CAST(outcfcode AS NVARCHAR(50)) AS outcfcode,
     CAST(outcfsn AS NVARCHAR(50)) AS outcfsn,
     department, jyyq, jynum, zgyq, cftype, agentnum, bags, packagenum,
-    patient, age, jyplan, sex, ispregnancy, telephone, deliveryaddr,
+    patient, CAST(age AS NVARCHAR(50)) AS age, jyplan, sex, ispregnancy, telephone, deliveryaddr,
     client, remark, CAST(billdate AS NVARCHAR(10)) AS billdate,
-    doctor, patientcode, customername, sendmethod, totalprice, diagnosis,
-    medicalno, hcysource, expresstradeno, birthdate, recipelurl,
+    doctor, CAST(patientcode AS NVARCHAR(50)) AS patientcode, customername, sendmethod, totalprice, diagnosis,
+    CAST(medicalno AS NVARCHAR(50)) AS medicalno, hcysource, expresstradeno,
+    CONVERT(varchar, birthdate, 23) AS birthdate, recipelurl,
     recipelurltype, paymethod, medicalhistory, bringbackflag, isurgent, iscopy
 FROM fghis5..门诊中药电子处方上传
 WHERE outcfcode = @pid";
@@ -141,10 +142,12 @@ WHERE 处方ID = @pid";
             var name = Request["name"]?.Trim() ?? "";
             var bdate = Request["bdatepicker"]?.Trim();
             var edate = Request["edatepicker"]?.Trim();
+            if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
 
             string sqlQuery = @"
 SELECT c.结帐ID, a.处方ID, a.门诊号, a.姓名, a.开方日期, a.开方时间,
-       a.医生工号, d.医生姓名, a.草药帖数, a.总金额,
+       CAST(a.医生工号 AS NVARCHAR(50)) AS 医生工号, d.医生姓名, a.草药帖数, a.总金额,
        CASE WHEN c.发票状态=2 THEN N'已收费' ELSE N'已退费' END AS 发票状态
 FROM fghis5..医生_处方流水帐 a
 JOIN fghis5..门诊_收费处方表 b ON a.处方ID=b.处方ID
@@ -198,10 +201,11 @@ ORDER BY c.结帐ID DESC, a.处方ID DESC";
     CAST(outcfcode AS NVARCHAR(50)) AS outcfcode,
     CAST(outcfsn AS NVARCHAR(50)) AS outcfsn,
     department, jyyq, jynum, zgyq, cftype, agentnum, bags, packagenum,
-    patient, age, jyplan, sex, ispregnancy, telephone, deliveryaddr,
+    patient, CAST(age AS NVARCHAR(50)) AS age, jyplan, sex, ispregnancy, telephone, deliveryaddr,
     client, remark, CAST(billdate AS NVARCHAR(10)) AS billdate,
-    doctor, patientcode, customername, sendmethod, totalprice, diagnosis,
-    medicalno, hcysource, expresstradeno, birthdate, recipelurl,
+    doctor, CAST(patientcode AS NVARCHAR(50)) AS patientcode, customername, sendmethod, totalprice, diagnosis,
+    CAST(medicalno AS NVARCHAR(50)) AS medicalno, hcysource, expresstradeno,
+    CONVERT(varchar, birthdate, 23) AS birthdate, recipelurl,
     recipelurltype, paymethod, medicalhistory, bringbackflag, isurgent, iscopy
 FROM fghis5..门诊中药电子处方上传
 WHERE outcfcode = @pid";
@@ -307,6 +311,7 @@ WHERE 处方ID = @pid";
         [HttpPost]
         public ActionResult GetDispensedQuery()
         {
+            var name = Request["name"]?.Trim() ?? "";
             var bdate = Request["bdatepicker"]?.Trim();
             var edate = Request["edatepicker"]?.Trim();
 
@@ -314,24 +319,81 @@ WHERE 处方ID = @pid";
             if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
 
             var sql = @"SELECT
-    CAST(处方ID AS INT) AS 处方ID,
+    CAST(a.处方ID AS INT) AS 处方ID,
     fghis5.dbo.fn_JsonExtract(content_json, 'patient') AS 病人姓名,
     fghis5.dbo.fn_JsonExtract(content_json, 'billdate') AS 处方日期,
     fghis5.dbo.fn_JsonExtract(content_json, 'outcfcode') AS outcfcode_original,
-    发药人工号, 发药人姓名, 发药时间, 发药状态,
+    CAST(发药人工号 AS NVARCHAR(50)) AS 发药人工号, 发药人姓名, 发药时间, 发药状态,
+    CASE WHEN c.发票状态=2 THEN '已收费' ELSE '已退费' END AS 发票状态,
     CONVERT(varchar, 发药时间, 23) AS 发药日期
-FROM fghis5..门诊_发药信息表
+FROM fghis5..门诊_发药信息表 a
+JOIN fghis5..门诊_收费处方表 b ON a.处方ID=b.处方ID
+JOIN fghis5..门诊_收费发票表 c ON b.结帐ID=c.结帐ID
 WHERE 发药状态 = 3
   AND CONVERT(date, 发药时间) >= @bdate AND CONVERT(date, 发药时间) <= @edate
   AND delete_flag = 0
-  AND 处方ID NOT IN (SELECT DISTINCT 处方ID FROM fghis5..门诊_收费明细表 WHERE 项目名称 LIKE '△%')
+  AND (@name = '' OR fghis5.dbo.fn_JsonExtract(content_json, 'patient') LIKE '%' + @name + '%')
+  AND a.处方ID NOT IN (SELECT DISTINCT 处方ID FROM fghis5..门诊_收费明细表 WHERE 项目名称 LIKE '△%')
 ORDER BY 发药时间 DESC";
 
             var result = db.Database.SqlQuery<DispensedRecord>(sql,
                 new SqlParameter("@bdate", bdate),
-                new SqlParameter("@edate", edate)).ToList();
+                new SqlParameter("@edate", edate),
+                new SqlParameter("@name", name)).ToList();
 
             return View("DispensedQuery", result);
+        }
+
+        // =====================================================================
+        //  已退药信息查询
+        // =====================================================================
+
+        /// <summary>
+        /// 已退药查询页面（GET）
+        /// </summary>
+        public ActionResult CancelledQuery()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询已退药列表（POST）
+        /// 查询发药状态=9（已退药）的记录
+        /// </summary>
+        [HttpPost]
+        public ActionResult GetCancelledQuery()
+        {
+            var name = Request["name"]?.Trim() ?? "";
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+
+            if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
+
+            var sql = @"SELECT
+    CAST(a.处方ID AS INT) AS 处方ID,
+    fghis5.dbo.fn_JsonExtract(content_json, 'patient') AS 病人姓名,
+    fghis5.dbo.fn_JsonExtract(content_json, 'billdate') AS 处方日期,
+    fghis5.dbo.fn_JsonExtract(content_json, 'outcfcode') AS outcfcode_original,
+    CAST(发药人工号 AS NVARCHAR(50)) AS 发药人工号, 发药人姓名, 发药时间, 发药状态,
+    CASE WHEN c.发票状态=2 THEN '已收费' ELSE '已退费' END AS 发票状态,
+    CONVERT(varchar, 发药时间, 23) AS 发药日期
+FROM fghis5..门诊_发药信息表 a
+JOIN fghis5..门诊_收费处方表 b ON a.处方ID=b.处方ID
+JOIN fghis5..门诊_收费发票表 c ON b.结帐ID=c.结帐ID
+WHERE 发药状态 = 9
+  AND CONVERT(date, 发药时间) >= @bdate AND CONVERT(date, 发药时间) <= @edate
+  AND delete_flag = 0
+  AND (@name = '' OR fghis5.dbo.fn_JsonExtract(content_json, 'patient') LIKE '%' + @name + '%')
+  AND a.处方ID NOT IN (SELECT DISTINCT 处方ID FROM fghis5..门诊_收费明细表 WHERE 项目名称 LIKE '△%')
+ORDER BY 发药时间 DESC";
+
+            var result = db.Database.SqlQuery<DispensedRecord>(sql,
+                new SqlParameter("@bdate", bdate),
+                new SqlParameter("@edate", edate),
+                new SqlParameter("@name", name)).ToList();
+
+            return View("CancelledQuery", result);
         }
 
         // =====================================================================
