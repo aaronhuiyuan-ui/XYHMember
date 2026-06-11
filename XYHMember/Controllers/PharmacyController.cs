@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 using System.Web.Mvc;
 using XYHMember.Context;
 
@@ -537,6 +538,7 @@ ORDER BY 发药时间 DESC";
                 request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
                 var httpClient = new HttpClient(new HttpClientHandler { UseProxy = false, Proxy = null });
+                httpClient.Timeout = TimeSpan.FromSeconds(30); // 30秒超时，防止一直挂起
                 var response = httpClient.SendAsync(request).ConfigureAwait(false).GetAwaiter().GetResult();
                 var responseBody = response.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult();
                 var jResp = JObject.Parse(responseBody);
@@ -545,6 +547,17 @@ ORDER BY 发药时间 DESC";
                 var msg = jResp["messageInfos"]?.ToString() ?? responseBody;
 
                 return Tuple.Create(isSuccess, msg, jResp.ToString());
+            }
+            catch (TaskCanceledException)
+            {
+                return Tuple.Create(false, "API请求超时（30秒），请检查服务器网络是否能访问 " + ApiBaseUrl, "");
+            }
+            catch (HttpRequestException ex)
+            {
+                var detail = ex.Message;
+                if (ex.InnerException != null)
+                    detail += " | " + ex.InnerException.Message;
+                return Tuple.Create(false, "网络请求失败: " + detail, "");
             }
             catch (Exception ex)
             {
@@ -576,6 +589,7 @@ ORDER BY 发药时间 DESC";
                 request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
                 var httpClient = new HttpClient(new HttpClientHandler { UseProxy = false, Proxy = null });
+                httpClient.Timeout = TimeSpan.FromSeconds(30); // 30秒超时，防止一直挂起
                 var response = httpClient.SendAsync(request).ConfigureAwait(false).GetAwaiter().GetResult();
                 var responseBody = response.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult();
                 var jResp = JObject.Parse(responseBody);
@@ -584,6 +598,17 @@ ORDER BY 发药时间 DESC";
                 var msg = jResp["messageInfos"]?.ToString() ?? responseBody;
 
                 return Tuple.Create(isSuccess, msg, jResp.ToString());
+            }
+            catch (TaskCanceledException)
+            {
+                return Tuple.Create(false, "退药API请求超时（30秒），请检查服务器网络是否能访问 " + ApiBaseUrl, "");
+            }
+            catch (HttpRequestException ex)
+            {
+                var detail = ex.Message;
+                if (ex.InnerException != null)
+                    detail += " | " + ex.InnerException.Message;
+                return Tuple.Create(false, "退药网络请求失败: " + detail, "");
             }
             catch (Exception ex)
             {
