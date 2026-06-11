@@ -353,6 +353,7 @@
         </div>
     </div>
 
+    <script src="~/Scripts/customDialog.js"></script>
     <script>
         function confirmDispense() {
             var btn = document.getElementById('confirmBtn');
@@ -363,7 +364,7 @@
             var form = document.getElementById('confirmForm');
             var prescriptionId = parseInt(form.prescriptionId.value) || 0;
             if (!prescriptionId) {
-                alert('处方ID无效');
+                customDialog.error('处方ID无效');
                 btn.disabled = false;
                 btn.innerText = '确认发药';
                 document.getElementById('loadingOverlay').style.display = 'none';
@@ -390,23 +391,31 @@
                     var apiMsg = data.msg || '发药成功';
                     @if (idx + 1 < total)
                     {
-                        @:alert('第 @(idx+1)/@total 个 ' + apiMsg + '，继续下一个');
-                        @:window.location.href = '@Url.Action("DispensingConfirm", "Pharmacy")?prescriptionIds=@ids&index=@(idx+1)&bdatepicker=@HttpUtility.UrlEncode(bdatepicker)&edatepicker=@HttpUtility.UrlEncode(edatepicker)';
+                        @:customDialog.success('第 @(idx+1)/@total 个 ' + apiMsg + '，继续下一个', '上传成功', function() {
+                        @:  window.location.href = '@Url.Action("DispensingConfirm", "Pharmacy")?prescriptionIds=@ids&index=@(idx+1)&bdatepicker=@HttpUtility.UrlEncode(bdatepicker)&edatepicker=@HttpUtility.UrlEncode(edatepicker)';
+                        @:});
                     }
                     else
                     {
-                        @:alert(apiMsg);
-                        @:window.location.href = '@Url.Action("GetDispensingQuery", "Pharmacy")@dateQuery';
+                        @:customDialog.success(apiMsg, '上传成功', function() {
+                        @:  window.location.href = '@Url.Action("GetDispensingQuery", "Pharmacy")@dateQuery';
+                        @:});
                     }
                 } else {
-                    alert('发药失败：' + data.msg + '\n\n完整返回:\n' + (data.apiResponse || '无'));
+                    window.scrollTo(0, 0);
+                    customDialog.error('发药失败：' + data.msg + '\n\n完整返回:\n' + (data.apiResponse || '无'), '错误', function() {
+                        window.scrollTo(0, 0);
+                    });
                     btn.disabled = false;
                     btn.innerText = '确认发药';
                     document.getElementById('loadingOverlay').style.display = 'none';
                 }
             })
             .catch(function (err) {
-                alert('发药失败：' + err);
+                window.scrollTo(0, 0);
+                customDialog.error('发药失败：' + err, '错误', function() {
+                    window.scrollTo(0, 0);
+                });
                 btn.disabled = false;
                 btn.innerText = '确认发药';
                 document.getElementById('loadingOverlay').style.display = 'none';
@@ -416,6 +425,9 @@
         function goBack() {
             window.location.href = '@Url.Action("DispensingQuery", "Pharmacy")@dateQuery';
         }
+
+        // 自动聚焦到确认发药按钮
+        document.getElementById('confirmBtn').focus();
     </script>
 </body>
 </html>

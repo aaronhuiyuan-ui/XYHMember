@@ -130,6 +130,7 @@
     </div>
 
     <script src="~/Scripts/pagination.js"></script>
+    <script src="~/Scripts/customDialog.js"></script>
     @Scripts.Render("~/Scripts/flatpickrjs")
 
     <script>
@@ -167,7 +168,7 @@
             dispenseBtn.addEventListener('click', function () {
                 var checkedBoxes = document.querySelectorAll('#dataTable tbody input[type=checkbox]:checked');
                 if (checkedBoxes.length === 0) {
-                    alert('请选择要发药的处方');
+                    customDialog.alert('请选择要发药的处方');
                     return;
                 }
 
@@ -181,7 +182,7 @@
                 });
 
                 if (!pidStr) {
-                    alert('未获取到处方ID');
+                    customDialog.alert('未获取到处方ID');
                     return;
                 }
 
