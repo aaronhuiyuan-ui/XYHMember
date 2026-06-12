@@ -380,13 +380,23 @@
                 fields[inp.name] = val;
             });
 
-            fetch('@Url.Action("ConfirmDispense", "Pharmacy")', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prescriptionId: prescriptionId, fields: fields })
-            })
-            .then(function (r) { return r.json(); })
+            // 35秒超时（兼容所有浏览器的 Promise.race 方式）
+            var timeoutId;
+            var promise = Promise.race([
+                fetch('@Url.Action("ConfirmDispense", "Pharmacy")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prescriptionId: prescriptionId, fields: fields })
+                }),
+                new Promise(function(resolve, reject) {
+                    timeoutId = setTimeout(function() { reject(new Error('请求超时（35秒无响应），请检查服务器状态')); }, 35000);
+                })
+            ]);
+            promise.then(function (r) { clearTimeout(timeoutId); return r.json(); })
             .then(function (data) {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                btn.disabled = false;
+                btn.innerText = '确认发药';
                 if (data.success) {
                     var apiMsg = data.msg || '发药成功';
                     @if (idx + 1 < total)
@@ -406,19 +416,21 @@
                     customDialog.error('发药失败：' + data.msg + '\n\n完整返回:\n' + (data.apiResponse || '无'), '错误', function() {
                         window.scrollTo(0, 0);
                     });
-                    btn.disabled = false;
-                    btn.innerText = '确认发药';
-                    document.getElementById('loadingOverlay').style.display = 'none';
                 }
             })
             .catch(function (err) {
                 window.scrollTo(0, 0);
-                customDialog.error('发药失败：' + err, '错误', function() {
-                    window.scrollTo(0, 0);
-                });
+                // catch 里也要关掉 loading（网络异常等情况）
+                document.getElementById('loadingOverlay').style.display = 'none';
                 btn.disabled = false;
                 btn.innerText = '确认发药';
-                document.getElementById('loadingOverlay').style.display = 'none';
+                if (err.name === 'AbortError') {
+                    customDialog.error('请求超时（35秒无响应），服务器处理无响应，请检查服务器状态', '超时');
+                } else {
+                    customDialog.error('发药失败：' + (err.message || err), '错误', function() {
+                        window.scrollTo(0, 0);
+                    });
+                }
             });
         }
 

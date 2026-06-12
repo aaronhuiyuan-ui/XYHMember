@@ -263,6 +263,7 @@
     <Content Include="Scripts\modernizr-2.8.3.js" />
     <Content Include="Scripts\MyScript.js" />
     <Content Include="Scripts\pagination.js" />
+    <Content Include="Scripts\customDialog.js" />
     <Content Include="Scripts\plugs.js" />
     <Content Include="Web.config">
       <SubType>Designer</SubType>
@@ -293,6 +294,7 @@
     <Content Include="Views\Pharmacy\DispensingQuery.cshtml" />
     <Content Include="Views\Pharmacy\DispensingConfirm.cshtml" />
     <Content Include="Views\Pharmacy\DispensedQuery.cshtml" />
+    <Content Include="Views\Pharmacy\CancelledQuery.cshtml" />
     <Content Include="Views\ReportForms\Reception.cshtml" />
     <Content Include="Views\ReportForms\DailyReport.cshtml" />
     <Content Include="Views\ReportForms\Department.cshtml" />

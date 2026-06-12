@@ -180,6 +180,9 @@ ORDER BY c.结帐ID DESC, a.处方ID DESC";
         [HttpPost]
         public ActionResult ConfirmDispense()
         {
+            // 分步追踪：找出卡在哪一步
+            var step = 0;
+
             var input = new System.IO.StreamReader(Request.InputStream).ReadToEnd();
             var req = JObject.Parse(input);
             var prescriptionId = req["prescriptionId"]?.Value<int>() ?? 0;
@@ -188,6 +191,7 @@ ORDER BY c.结帐ID DESC, a.处方ID DESC";
             if (prescriptionId <= 0)
                 return Json(new { success = false, msg = "处方ID无效" });
 
+            step = 1;
             // 获取当前操作用户信息
             var userId = ((int?)Session["UserId"]) ?? 1;
             var user = db.Users.Find(userId);
@@ -196,6 +200,7 @@ ORDER BY c.结帐ID DESC, a.处方ID DESC";
 
             try
             {
+                step = 2;
                 // 1. 查询处方头
                 var headerSql = @"SELECT
     CAST(outcfcode AS INT) AS 处方ID,
@@ -215,7 +220,7 @@ WHERE outcfcode = @pid";
                     new SqlParameter("@pid", prescriptionId)).ToList();
 
                 if (headers.Count == 0)
-                    return Json(new { success = false, msg = "未查询到处方数据" });
+                    return Json(new { success = false, msg = "未查询到处方数据", step = step });
 
                 var header = headers[0];
                 // 使用固定值覆盖数据库值（接口提供方要求）
@@ -223,6 +228,7 @@ WHERE outcfcode = @pid";
                 header.checkcode = CheckCodeMd5;
                 header.customercode = CustomerCode;
 
+                step = 3;
                 // 2. 查询处方明细
                 var detailSql = @"SELECT
     处方ID, CAST(dosage AS NVARCHAR(50)) AS dosage,
@@ -267,12 +273,14 @@ WHERE 处方ID = @pid";
                 var jsonContent = jHeader.ToString(Newtonsoft.Json.Formatting.None);
 
                 // 6. 调用外部上传接口
+                step = 5;
                 var apiResult = CallUploadApi(jsonContent);
 
                 if (!apiResult.Item1)
-                    return Json(new { success = false, msg = apiResult.Item2, apiResponse = apiResult.Item3 });
+                    return Json(new { success = false, msg = apiResult.Item2, apiResponse = apiResult.Item3, step = step });
 
                 // 7. API成功，保存到本地数据库
+                step = 6;
                 var sql = @"INSERT INTO fghis5..门诊_发药信息表
                             (处方ID, 发药人工号, 发药人姓名, 发药时间, 发药状态, delete_flag, content_json)
                             VALUES (@处方ID, @发药人工号, @发药人姓名, GETDATE(), 3, 0, @content_json)";
@@ -289,7 +297,7 @@ WHERE 处方ID = @pid";
             {
                 var inner = ex;
                 while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = inner.Message });
+                return Json(new { success = false, msg = inner.Message, step = step });
             }
         }
 
@@ -492,7 +500,8 @@ ORDER BY 发药时间 DESC";
                 httpRequest.Headers.Add("sign", sign);
                 httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
-                var httpClient = new HttpClient(new HttpClientHandler { UseProxy = false, Proxy = null });
+                var httpClient = new HttpClient();
+                httpClient.Timeout = TimeSpan.FromSeconds(30);
                 var response = httpClient.SendAsync(httpRequest).ConfigureAwait(false).GetAwaiter().GetResult();
                 var responseBody = response.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult();
                 var jResp = JObject.Parse(responseBody);
@@ -503,6 +512,17 @@ ORDER BY 发药时间 DESC";
                     return Json(new { success = false, msg = jResp["messageInfos"]?.ToString() ?? "查询失败", apiResponse = jResp.ToString() });
 
                 return Json(new { success = true, data = jResp });
+            }
+            catch (TaskCanceledException)
+            {
+                return Json(new { success = false, msg = "查询处方结果API请求超时（30秒），请检查服务器网络是否能访问 " + ApiBaseUrl });
+            }
+            catch (HttpRequestException ex)
+            {
+                var detail = ex.Message;
+                if (ex.InnerException != null)
+                    detail += " | " + ex.InnerException.Message;
+                return Json(new { success = false, msg = "查询处方结果网络请求失败: " + detail });
             }
             catch (Exception ex)
             {
@@ -537,7 +557,7 @@ ORDER BY 发药时间 DESC";
                 request.Headers.Add("sign", sign);
                 request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
-                var httpClient = new HttpClient(new HttpClientHandler { UseProxy = false, Proxy = null });
+                var httpClient = new HttpClient();
                 httpClient.Timeout = TimeSpan.FromSeconds(30); // 30秒超时，防止一直挂起
                 var response = httpClient.SendAsync(request).ConfigureAwait(false).GetAwaiter().GetResult();
                 var responseBody = response.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult();
@@ -588,7 +608,7 @@ ORDER BY 发药时间 DESC";
                 request.Headers.Add("sign", sign);
                 request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
-                var httpClient = new HttpClient(new HttpClientHandler { UseProxy = false, Proxy = null });
+                var httpClient = new HttpClient();
                 httpClient.Timeout = TimeSpan.FromSeconds(30); // 30秒超时，防止一直挂起
                 var response = httpClient.SendAsync(request).ConfigureAwait(false).GetAwaiter().GetResult();
                 var responseBody = response.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult();
@@ -656,5 +676,6 @@ ORDER BY 发药时间 DESC";
                 return sb.ToString();
             }
         }
+
     }
 }
