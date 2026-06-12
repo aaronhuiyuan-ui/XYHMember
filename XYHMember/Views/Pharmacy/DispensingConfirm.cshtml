@@ -208,7 +208,22 @@
             <div class="field-grid">
                 <div class="fg-item">
                     <label><span class="red">*</span>煎药要求</label>
-                    <input type="text" name="jyyq" value="@h.jyyq">
+                    <select name="jyyq">
+                        <option value="" @(string.IsNullOrEmpty(h.jyyq) || (new[]{"代配","代煎","膏方","浓汤","打粉","水丸","小蜜丸","大蜜丸","水蜜丸","浓缩水丸","浓缩蜜丸","茶包","散剂"}).Contains(h.jyyq) ? "" : "selected")></option>
+                        <option value="代配" @(h.jyyq == "代配" ? "selected" : "")>代配</option>
+                        <option value="代煎" @(h.jyyq == "代煎" ? "selected" : "")>代煎</option>
+                        <option value="膏方" @(h.jyyq == "膏方" ? "selected" : "")>膏方</option>
+                        <option value="浓汤" @(h.jyyq == "浓汤" ? "selected" : "")>浓汤</option>
+                        <option value="打粉" @(h.jyyq == "打粉" ? "selected" : "")>打粉</option>
+                        <option value="水丸" @(h.jyyq == "水丸" ? "selected" : "")>水丸</option>
+                        <option value="小蜜丸" @(h.jyyq == "小蜜丸" ? "selected" : "")>小蜜丸</option>
+                        <option value="大蜜丸" @(h.jyyq == "大蜜丸" ? "selected" : "")>大蜜丸</option>
+                        <option value="水蜜丸" @(h.jyyq == "水蜜丸" ? "selected" : "")>水蜜丸</option>
+                        <option value="浓缩水丸" @(h.jyyq == "浓缩水丸" ? "selected" : "")>浓缩水丸</option>
+                        <option value="浓缩蜜丸" @(h.jyyq == "浓缩蜜丸" ? "selected" : "")>浓缩蜜丸</option>
+                        <option value="茶包" @(h.jyyq == "茶包" ? "selected" : "")>茶包</option>
+                        <option value="散剂" @(h.jyyq == "散剂" ? "selected" : "")>散剂</option>
+                    </select>
                 </div>
                 <div class="fg-item">
                     <label><span class="red">*</span>煎药次数</label>
