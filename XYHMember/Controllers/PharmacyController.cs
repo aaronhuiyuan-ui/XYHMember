@@ -26,7 +26,7 @@ namespace XYHMember.Controllers
         private XYHDbContext db = new XYHDbContext();
 
         /// <summary>外部API基础地址</summary>
-        private const string ApiBaseUrl = "https://webapi.9zyc.com";
+        private static string ApiBaseUrl { get { return ConfigurationManager.AppSettings["ApiBaseUrl"]; } }
         /// <summary>API接口appId（从Web.config读取）</summary>
         private static string AppId { get { return ConfigurationManager.AppSettings["ApiAppId"]; } }
         /// <summary>API接口appSecret（从Web.config读取，签名用）</summary>
