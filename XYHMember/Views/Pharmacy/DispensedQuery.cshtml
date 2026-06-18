@@ -317,10 +317,13 @@
                     detailBtn.disabled = false;
                     detailBtn.innerText = '处方结果';
                     if (data.success) {
-                        renderDetailData(data.data);
+                        var body = document.getElementById('detailModalBody');
+                        var infoHtml = '<div style="margin-bottom:10px;font-size:12px;color:#888;">处方编号: ' + outcfcode + '</div>';
+                        var jsonStr = JSON.stringify(data.data, null, 2);
+                        body.innerHTML = infoHtml + '<pre style="background:#f5f5f5;padding:15px;border-radius:4px;font-size:13px;line-height:1.6;overflow:auto;max-height:450px;white-space:pre-wrap;word-break:break-all;">' + escapeHtml(jsonStr) + '</pre>';
                         document.getElementById('detailModal').style.display = 'block';
                     } else {
-                        customDialog.error('查询失败：' + data.msg + '\n\n完整返回:\n' + (data.apiResponse || '无'));
+                        customDialog.error('查询失败：' + data.msg + '\n\n原始响应:\n' + (data.rawResponse || data.apiResponse || '无'));
                     }
                 })
                 .catch(function (err) {
@@ -396,6 +399,13 @@
                 }
             }, 200);
 
+        // HTML转义
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+
         // 处方结果弹窗
         function closeDetailModal() {
             document.getElementById('detailModal').style.display = 'none';
@@ -412,6 +422,14 @@
             if (!data) {
                 body.innerHTML = '<div class="modal-error-msg">无返回数据</div>';
                 return;
+            }
+
+            // 如果data包含isSuccess/messageInfos等系统字段，尝试提取实际数据子对象
+            if (data.isSuccess !== undefined) {
+                var sub = data.result || data.data || null;
+                if (sub && typeof sub === 'object') {
+                    data = sub;
+                }
             }
 
             var html = '';
@@ -475,6 +493,7 @@
             // 再加一些不在keyFields里的自有属性
             for (var prop in data) {
                 if (prop === 'sellKpMxVos' || prop === 'detailList' || prop === 'items') continue;
+                if (prop === 'isSuccess' || prop === 'messageInfos') continue;
                 if (keyFields[prop] === undefined && typeof data[prop] !== 'object' && data[prop] !== null) {
                     gridKeys.push(prop);
                 }
@@ -523,6 +542,7 @@
             var extraHtml = '';
             for (var prop2 in data) {
                 if (prop2 === 'sellKpMxVos' || prop2 === 'detailList' || prop2 === 'items') continue;
+                if (prop2 === 'isSuccess' || prop2 === 'messageInfos') continue;
                 if (typeof data[prop2] === 'object' && data[prop2] !== null) {
                     extraHtml += '<div class="modal-section-title" style="margin-top:12px;">' + prop2 + '</div>';
                     extraHtml += '<div class="modal-field-grid">';

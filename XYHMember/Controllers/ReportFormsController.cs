@@ -618,7 +618,7 @@ group by c.项目ID ,c.项目代码,c.项目名称,c.单价,c.成本价";
             string sqlQuery = @"select 就诊ID,交易卡号,姓名,接诊医生工号,接诊医生姓名 from fghis5..门诊_挂号信息表
 where 挂号日期 between @bdate and @edate
 and 操作员工号 !='6666'
-and (@pid='' or 交易卡号=@pid or 姓名 = @pid)
+and (@name='' or 交易卡号=@name or 姓名 = @name)
 order by 挂号时间 desc  ";
 
             var result = db.Database.SqlQuery<JZMX>(sqlQuery, QueryHelper.BuildReportParams(PID, bdate, edate)).ToList();

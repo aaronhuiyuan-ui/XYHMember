@@ -511,7 +511,8 @@ ORDER BY 发药时间 DESC";
                 if (!isSuccess)
                     return Json(new { success = false, msg = jResp["messageInfos"]?.ToString() ?? "查询失败", apiResponse = jResp.ToString() });
 
-                return Json(new { success = true, data = jResp });
+                var respObj = new { success = true, data = jResp["data"] };
+                return Content(JsonConvert.SerializeObject(respObj), "application/json");
             }
             catch (TaskCanceledException)
             {
