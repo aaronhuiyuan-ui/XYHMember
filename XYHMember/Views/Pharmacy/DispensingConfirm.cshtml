@@ -455,6 +455,16 @@
 
         // 自动聚焦到确认发药按钮
         document.getElementById('confirmBtn').focus();
+
+        // 全局回车键确认发药（除下拉框外，下拉框回车是展开选项）
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.tagName !== 'SELECT') {
+                var btn = document.getElementById('confirmBtn');
+                if (btn && !btn.disabled) {
+                    btn.click();
+                }
+            }
+        });
     </script>
 </body>
 </html>
