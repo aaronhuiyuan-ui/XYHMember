@@ -42,7 +42,7 @@
         }
         .row-refund { background-color: #ffcccc !important; color: #cc0000 !important; font-weight: bold !important; }
 
-        /* 处方结果弹窗 */
+        /* 处方结果弹窗 - 参照确认发药界面 */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -76,7 +76,7 @@
         .modal-header .close-btn:hover { color: #333; }
         .modal-body {
             padding: 20px;
-            max-height: 480px;
+            max-height: 560px;
             overflow: auto;
         }
         .modal-footer {
@@ -84,76 +84,83 @@
             border-top: 1px solid #eee;
             text-align: right;
         }
-        .modal-info-bar {
+        /* 信息栏 */
+        .info-bar {
             display: flex;
             flex-wrap: wrap;
             gap: 8px 18px;
-            padding: 10px 14px;
+            padding: 12px 16px;
             background: #f5f8fc;
             border-radius: 4px;
             margin-bottom: 14px;
             font-size: 13px;
         }
-        .modal-info-bar span { white-space: nowrap; }
-        .modal-info-bar label { color: #888; margin-right: 3px; }
-        .modal-info-bar .val { font-weight: 600; color: #333; }
-        .modal-section-title {
+        .info-bar span { white-space: nowrap; }
+        .info-bar label { color: #888; margin-right: 3px; }
+        .info-bar .val { font-weight: 600; color: #333; }
+        /* 区块标题 */
+        .section-title {
             font-size: 14px;
             font-weight: 600;
             margin-bottom: 8px;
             padding-left: 10px;
             border-left: 3px solid #4d7496;
         }
-        .modal-field-grid {
+        /* 字段网格 */
+        .field-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 8px 16px;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             padding: 12px;
             background: #fafbfc;
             border-radius: 4px;
             border: 1px solid #eee;
         }
-        .modal-field-grid .fg-item {
+        .field-grid .fg-item {
             display: flex;
             align-items: center;
         }
-        .modal-field-grid .fg-item label {
-            width: 80px;
+        .field-grid .fg-item label {
+            width: 90px;
             font-size: 13px;
             color: #555;
             flex-shrink: 0;
         }
-        .modal-field-grid .fg-item span {
+        .field-grid .fg-item span {
             font-size: 13px;
             color: #333;
         }
-        .modal-field-grid .fg-full { grid-column: 1 / -1; }
-        .modal-detail-table {
+        .field-grid .fg-full { grid-column: 1 / -1; }
+        .field-grid .fg-double { grid-column: span 2; }
+        /* 明细表格 */
+        .detail-table-wrap {
+            margin-bottom: 14px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            overflow: auto;
+            max-height: 220px;
+        }
+        .detail-table-wrap table {
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
-            margin-bottom: 10px;
         }
-        .modal-detail-table th {
+        .detail-table-wrap th {
             background: #f0f2f5;
-            padding: 6px 8px;
+            padding: 6px 10px;
             text-align: left;
             border-bottom: 1px solid #ddd;
             white-space: nowrap;
+            position: sticky;
+            top: 0;
         }
-        .modal-detail-table td {
-            padding: 5px 8px;
+        .detail-table-wrap td {
+            padding: 5px 10px;
             border-bottom: 1px solid #f0f0f0;
             white-space: nowrap;
         }
-        .modal-detail-table tbody tr:hover { background: #f5f8fc; }
-        .modal-error-msg {
-            padding: 40px 20px;
-            text-align: center;
-            color: #e4393c;
-            font-size: 15px;
-        }
+        .detail-table-wrap tbody tr:hover { background: #f5f8fc; }
     </style>
 </head>
 
@@ -244,7 +251,7 @@
                 <span>处方结果信息</span>
                 <a class="close-btn" href="javascript:void(0)" onclick="closeDetailModal()">&times;</a>
             </div>
-            <div class="modal-body" id="detailModalBody">
+            <div class="modal-body" id="detailModalBody" style="padding:0;">
                 <!-- 动态填充 -->
             </div>
             <div class="modal-footer">
@@ -317,10 +324,7 @@
                     detailBtn.disabled = false;
                     detailBtn.innerText = '处方结果';
                     if (data.success) {
-                        var body = document.getElementById('detailModalBody');
-                        var infoHtml = '<div style="margin-bottom:10px;font-size:12px;color:#888;">处方编号: ' + outcfcode + '</div>';
-                        var jsonStr = JSON.stringify(data.data, null, 2);
-                        body.innerHTML = infoHtml + '<pre style="background:#f5f5f5;padding:15px;border-radius:4px;font-size:13px;line-height:1.6;overflow:auto;max-height:450px;white-space:pre-wrap;word-break:break-all;">' + escapeHtml(jsonStr) + '</pre>';
+                        renderDetailData(data.data);
                         document.getElementById('detailModal').style.display = 'block';
                     } else {
                         customDialog.error('查询失败：' + data.msg + '\n\n原始响应:\n' + (data.rawResponse || data.apiResponse || '无'));
@@ -406,7 +410,214 @@
             return div.innerHTML;
         }
 
-        // 处方结果弹窗
+        // 中文字段映射
+        var fieldLabels = {
+            'patient': '患者姓名',
+            'age': '年龄',
+            'sex': '性别',
+            'billdate': '业务日期',
+            'outcfcode': '客户处方编号',
+            'outcfsn': '客户处方序号',
+            'tpyq': '调配要求',
+            'zgyq': '制膏要求',
+            'cfdate': '处方日期',
+            'ispregnancy': '是否妊娠',
+            'cftype': '处方类型',
+            'agentnum': '剂数',
+            'remark': '备注',
+            'opinion': '审批意见',
+            'customername': '客户名称',
+            'orgname': '机构名称',
+            'dosages': '单剂总用量',
+            'jyyq': '煎药要求',
+            'jyplan': '煎药方案',
+            'department': '病区科室',
+            'pictureip': '图片地址',
+            'logisticscost': '物流费',
+            'processcost': '加工费',
+            'cfzt': '处方状态',
+            'reviewstaff': '审核员',
+            'cfreviewtime': '审核时间',
+            'mixstaff': '调配员',
+            'mixrequesttime': '调配索取时间',
+            'mixsuretime': '调配确认时间',
+            'mixreviewstaff': '调配复核员',
+            'mixreviewtime': '调配复核确认时间',
+            'soakstaff': '浸泡员',
+            'soakrequesttime': '浸泡索取时间',
+            'soaksuretime': '浸泡确认时间',
+            'jystaff': '煎药员',
+            'jyrequesttime': '煎药索取时间',
+            'jysuretime': '煎药确认时间',
+            'zgstaff': '制膏员',
+            'zgrequesttime': '制膏索取时间',
+            'zgsuretime': '制膏确认时间',
+            'inpackagestaff': '内包装员',
+            'inpackagetime': '内包装确认时间',
+            'outpackagestaff': '外包装员',
+            'outpackagetime': '外包装完成时间',
+            'logisticscompany': '物流公司',
+            'expressnumber': '快递单号',
+            'pk': '处方汇总主键'
+        };
+
+        // 明细列中文映射
+        var detailLabels = {
+            'goodsid': '饮片主键',
+            'goodsname': '饮片名称',
+            'dosage': '饮片用量',
+            'tpyq': '调配要求',
+            'price': '价格'
+        };
+
+        // 渲染处方结果
+        function renderDetailData(data) {
+            var body = document.getElementById('detailModalBody');
+            if (!data || typeof data !== 'object') {
+                body.innerHTML = '<div style="padding:40px;text-align:center;color:#e4393c;font-size:15px;">无处方数据</div>';
+                return;
+            }
+
+            var html = '';
+
+            // ---- 信息栏（关键信息） ----
+            var infoKeys = ['patient', 'age', 'sex', 'billdate', 'outcfcode', 'outcfsn'];
+            html += '<div class="info-bar">';
+            for (var i = 0; i < infoKeys.length; i++) {
+                var k = infoKeys[i];
+                if (data[k] !== undefined && data[k] !== null && data[k] !== '') {
+                    html += '<span><label>' + (fieldLabels[k] || k) + '：</label><span class="val">' + data[k] + '</span></span>';
+                }
+            }
+            html += '</div>';
+
+            // ---- 基本信息网格 ----
+            var basicKeys = ['cfdate', 'cftype', 'jyyq', 'jyplan', 'agentnum', 'ispregnancy', 'tpyq', 'zgyq', 'dosages', 'cfzt', 'department', 'customername', 'orgname', 'remark', 'opinion'];
+            html += '<div class="section-title">处方信息</div>';
+            html += '<div class="field-grid">';
+            for (var j = 0; j < basicKeys.length; j++) {
+                var k2 = basicKeys[j];
+                if (data[k2] !== undefined && data[k2] !== null && data[k2] !== '') {
+                    var cls = (k2 === 'remark' || k2 === 'opinion' || k2 === 'customername' || k2 === 'orgname' || k2 === 'department') ? ' fg-full' : '';
+                    html += '<div class="fg-item' + cls + '"><label>' + (fieldLabels[k2] || k2) + '：</label><span>' + data[k2] + '</span></div>';
+                }
+            }
+            html += '</div>';
+
+            // ---- 处方图片 ----
+            if (data.pictureip && data.pictureip !== '') {
+                html += '<div class="section-title">处方图片</div>';
+                html += '<div style="text-align:center;margin-bottom:14px;padding:12px;background:#fafbfc;border-radius:4px;border:1px solid #eee;">';
+                html += '<img src="' + data.pictureip + '" style="max-width:100%;max-height:400px;border-radius:4px;cursor:pointer;" onclick="window.open(this.src)" alt="处方图片" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'">';
+                html += '<div style="display:none;padding:20px;color:#999;font-size:13px;">图片加载失败<br><a href="' + data.pictureip + '" target="_blank" style="color:#4d7496;word-break:break-all;">' + data.pictureip + '</a></div>';
+                html += '</div>';
+            }
+
+            // ---- 费用信息 ----
+            var costKeys = ['logisticscost', 'processcost'];
+            var hasCost = false;
+            for (var c = 0; c < costKeys.length; c++) {
+                if (data[costKeys[c]] !== undefined && data[costKeys[c]] !== null && data[costKeys[c]] !== '') hasCost = true;
+            }
+            if (hasCost) {
+                html += '<div class="section-title">费用信息</div>';
+                html += '<div class="field-grid">';
+                for (var c2 = 0; c2 < costKeys.length; c2++) {
+                    var kc = costKeys[c2];
+                    if (data[kc] !== undefined && data[kc] !== null && data[kc] !== '') {
+                        html += '<div class="fg-item"><label>' + (fieldLabels[kc] || kc) + '：</label><span>' + data[kc] + '</span></div>';
+                    }
+                }
+                html += '</div>';
+            }
+
+            // ---- 物流信息 ----
+            html += '<div class="section-title">物流信息</div>';
+            html += '<div class="field-grid">';
+            var logisticsKeys = ['logisticscompany', 'expressnumber'];
+            for (var l = 0; l < logisticsKeys.length; l++) {
+                var kl = logisticsKeys[l];
+                var val = (data[kl] !== undefined && data[kl] !== null) ? data[kl] : '';
+                html += '<div class="fg-item"><label>' + (fieldLabels[kl] || kl) + '：</label><span>' + val + '</span></div>';
+            }
+            html += '</div>';
+
+            // ---- 审核/调配/煎药等流程信息 ----
+            var processGroups = [
+                { title: '审核信息', keys: ['reviewstaff', 'cfreviewtime'] },
+                { title: '调配信息', keys: ['mixstaff', 'mixrequesttime', 'mixsuretime', 'mixreviewstaff', 'mixreviewtime'] },
+                { title: '浸泡信息', keys: ['soakstaff', 'soakrequesttime', 'soaksuretime'] },
+                { title: '煎药信息', keys: ['jystaff', 'jyrequesttime', 'jysuretime'] },
+                { title: '制膏信息', keys: ['zgstaff', 'zgrequesttime', 'zgsuretime'] },
+                { title: '包装信息', keys: ['inpackagestaff', 'inpackagetime', 'outpackagestaff', 'outpackagetime'] }
+            ];
+            for (var g = 0; g < processGroups.length; g++) {
+                var group = processGroups[g];
+                var hasAny = false;
+                for (var gi = 0; gi < group.keys.length; gi++) {
+                    if (data[group.keys[gi]] !== undefined && data[group.keys[gi]] !== null && data[group.keys[gi]] !== '') { hasAny = true; break; }
+                }
+                if (hasAny) {
+                    html += '<div class="section-title">' + group.title + '</div>';
+                    html += '<div class="field-grid">';
+                    for (var gi2 = 0; gi2 < group.keys.length; gi2++) {
+                        var kg = group.keys[gi2];
+                        if (data[kg] !== undefined && data[kg] !== null && data[kg] !== '') {
+                            html += '<div class="fg-item"><label>' + (fieldLabels[kg] || kg) + '：</label><span>' + data[kg] + '</span></div>';
+                        }
+                    }
+                    html += '</div>';
+                }
+            }
+
+            // ---- 处方明细 ----
+            var mxList = data.sellKpMxVos || null;
+            if (mxList && mxList.length > 0) {
+                html += '<div class="section-title">饮片明细</div>';
+                html += '<div class="detail-table-wrap">';
+                html += '<table><thead><tr>';
+                // 明细表头：饮片名称、饮片用量、调配要求、价格
+                var detailCols = ['goodsname', 'dosage', 'tpyq', 'price'];
+                for (var di = 0; di < detailCols.length; di++) {
+                    html += '<th>' + (detailLabels[detailCols[di]] || detailCols[di]) + '</th>';
+                }
+                html += '</tr></thead><tbody>';
+                for (var ri = 0; ri < mxList.length; ri++) {
+                    html += '<tr>';
+                    for (var dj = 0; dj < detailCols.length; dj++) {
+                        var v = mxList[ri][detailCols[dj]];
+                        html += '<td>' + (v !== undefined && v !== null ? v : '') + '</td>';
+                    }
+                    html += '</tr>';
+                }
+                html += '</tbody></table></div>';
+            }
+
+            // ---- 其他未知字段 ----
+            var extraKeys = [];
+            for (var prop in data) {
+                if (fieldLabels[prop] !== undefined) continue;
+                if (prop === 'sellKpMxVos') continue;
+                if (typeof data[prop] === 'object' && data[prop] !== null) continue;
+                if (data[prop] === undefined || data[prop] === null || data[prop] === '') continue;
+                extraKeys.push(prop);
+            }
+            if (extraKeys.length > 0) {
+                html += '<div class="section-title">其他信息</div>';
+                html += '<div class="field-grid">';
+                for (var ei = 0; ei < extraKeys.length; ei++) {
+                    html += '<div class="fg-item"><label>' + extraKeys[ei] + '：</label><span>' + data[extraKeys[ei]] + '</span></div>';
+                }
+                html += '</div>';
+            }
+
+            if (html === '') {
+                html = '<div style="padding:40px;text-align:center;color:#e4393c;font-size:15px;">无处方数据</div>';
+            }
+
+            body.innerHTML = '<div style="padding:20px;">' + html + '</div>';
+        }
+
         function closeDetailModal() {
             document.getElementById('detailModal').style.display = 'none';
         }
@@ -415,153 +626,6 @@
         document.getElementById('detailModal').addEventListener('click', function (e) {
             if (e.target === this) closeDetailModal();
         });
-
-        // 渲染处方结果数据
-        function renderDetailData(data) {
-            var body = document.getElementById('detailModalBody');
-            if (!data) {
-                body.innerHTML = '<div class="modal-error-msg">无返回数据</div>';
-                return;
-            }
-
-            // 如果data包含isSuccess/messageInfos等系统字段，尝试提取实际数据子对象
-            if (data.isSuccess !== undefined) {
-                var sub = data.result || data.data || null;
-                if (sub && typeof sub === 'object') {
-                    data = sub;
-                }
-            }
-
-            var html = '';
-
-            // 优先显示的关键字段
-            var keyFields = {
-                'patient': '患者姓名',
-                'age': '年龄',
-                'sex': '性别',
-                'billdate': '处方日期',
-                'outcfcode': '处方编号',
-                'outcfsn': '处方序号',
-                'customercode': '客户编码',
-                'doctor': '医生',
-                'diagnosis': '诊断',
-                'totalprice': '总金额',
-                'sendmethod': '配送方式',
-                'telephone': '联系电话',
-                'deliveryaddr': '配送地址',
-                'remark': '备注',
-                'ispregnancy': '是否妊娠',
-                'jyyq': '煎药要求',
-                'jynum': '煎药次数',
-                'zgyq': '制膏要求',
-                'cftype': '处方类型',
-                'jyplan': '煎药方案',
-                'agentnum': '剂数/贴数',
-                'bags': '包数/剂',
-                'packagenum': '每包装量',
-                'medicalno': '病历号',
-                'hcysource': '来源',
-                'paymethod': '支付方式',
-                'medicalhistory': '病史',
-                'bringbackflag': '带回标志',
-                'isurgent': '急诊',
-                'iscopy': '是否复印'
-            };
-
-            // 提取明细数据
-            var mxList = data.sellKpMxVos || data.detailList || data.items || null;
-
-            // ---- 信息栏 ----
-            var infoItems = ['patient', 'age', 'sex', 'billdate', 'outcfcode', 'outcfsn'];
-            html += '<div class="modal-info-bar">';
-            for (var i = 0; i < infoItems.length; i++) {
-                var k = infoItems[i];
-                if (data[k] !== undefined && data[k] !== null && data[k] !== '') {
-                    html += '<span><label>' + (keyFields[k] || k) + '：</label><span class="val">' + data[k] + '</span></span>';
-                }
-            }
-            html += '</div>';
-
-            // ---- 字段网格 ----
-            var gridKeys = [];
-            for (var k2 in keyFields) {
-                if (data[k2] !== undefined && data[k2] !== null && data[k2] !== ''
-                    && infoItems.indexOf(k2) === -1) {
-                    gridKeys.push(k2);
-                }
-            }
-            // 再加一些不在keyFields里的自有属性
-            for (var prop in data) {
-                if (prop === 'sellKpMxVos' || prop === 'detailList' || prop === 'items') continue;
-                if (prop === 'isSuccess' || prop === 'messageInfos') continue;
-                if (keyFields[prop] === undefined && typeof data[prop] !== 'object' && data[prop] !== null) {
-                    gridKeys.push(prop);
-                }
-            }
-
-            if (gridKeys.length > 0) {
-                html += '<div class="modal-section-title">处方信息</div>';
-                html += '<div class="modal-field-grid">';
-                for (var j = 0; j < gridKeys.length; j++) {
-                    var key = gridKeys[j];
-                    html += '<div class="fg-item"><label>' + (keyFields[key] || key) + '：</label><span>' + data[key] + '</span></div>';
-                }
-                html += '</div>';
-            }
-
-            // ---- 明细表格 ----
-            if (mxList && mxList.length > 0) {
-                html += '<div class="modal-section-title">饮片明细</div>';
-                html += '<div style="border:1px solid #e8e8e8;border-radius:4px;overflow:auto;max-height:220px;">';
-                html += '<table class="modal-detail-table">';
-                html += '<thead><tr>';
-
-                // 从第一项取所有key作为表头
-                var firstItem = mxList[0];
-                var colKeys = [];
-                for (var mk in firstItem) {
-                    if (mk !== '处方ID') colKeys.push(mk);
-                }
-                for (var ci = 0; ci < colKeys.length; ci++) {
-                    html += '<th>' + (keyFields[colKeys[ci]] || colKeys[ci]) + '</th>';
-                }
-                html += '</tr></thead><tbody>';
-
-                for (var ri = 0; ri < mxList.length; ri++) {
-                    html += '<tr>';
-                    for (var cj = 0; cj < colKeys.length; cj++) {
-                        var v = mxList[ri][colKeys[cj]];
-                        html += '<td>' + (v !== undefined && v !== null ? v : '') + '</td>';
-                    }
-                    html += '</tr>';
-                }
-                html += '</tbody></table></div>';
-            }
-
-            // ---- 其他嵌套对象 ----
-            var extraHtml = '';
-            for (var prop2 in data) {
-                if (prop2 === 'sellKpMxVos' || prop2 === 'detailList' || prop2 === 'items') continue;
-                if (prop2 === 'isSuccess' || prop2 === 'messageInfos') continue;
-                if (typeof data[prop2] === 'object' && data[prop2] !== null) {
-                    extraHtml += '<div class="modal-section-title" style="margin-top:12px;">' + prop2 + '</div>';
-                    extraHtml += '<div class="modal-field-grid">';
-                    for (var sub in data[prop2]) {
-                        if (typeof data[prop2][sub] !== 'object') {
-                            extraHtml += '<div class="fg-item"><label>' + sub + '：</label><span>' + (data[prop2][sub] !== null ? data[prop2][sub] : '') + '</span></div>';
-                        }
-                    }
-                    extraHtml += '</div>';
-                }
-            }
-            html += extraHtml;
-
-            if (html === '') {
-                html = '<div class="modal-error-msg">无处方数据</div>';
-            }
-
-            body.innerHTML = html;
-        }
     </script>
 
 </body>
