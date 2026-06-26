@@ -332,6 +332,9 @@ WHERE 处方ID = @pid";
     fghis5.dbo.fn_JsonExtract(content_json, 'patient') AS 病人姓名,
     fghis5.dbo.fn_JsonExtract(content_json, 'billdate') AS 处方日期,
     fghis5.dbo.fn_JsonExtract(content_json, 'outcfcode') AS outcfcode_original,
+    fghis5.dbo.fn_JsonExtract(content_json, 'client') AS 收货人,
+    fghis5.dbo.fn_JsonExtract(content_json, 'telephone') AS 收货电话,
+    fghis5.dbo.fn_JsonExtract(content_json, 'deliveryaddr') AS 收货地址,
     CAST(发药人工号 AS NVARCHAR(50)) AS 发药人工号, 发药人姓名, 发药时间, 发药状态,
     CASE WHEN c.发票状态=2 THEN '已收费' ELSE '已退费' END AS 发票状态,
     CONVERT(varchar, 发药时间, 23) AS 发药日期
@@ -384,6 +387,9 @@ ORDER BY 发药时间 DESC";
     fghis5.dbo.fn_JsonExtract(content_json, 'patient') AS 病人姓名,
     fghis5.dbo.fn_JsonExtract(content_json, 'billdate') AS 处方日期,
     fghis5.dbo.fn_JsonExtract(content_json, 'outcfcode') AS outcfcode_original,
+    fghis5.dbo.fn_JsonExtract(content_json, 'client') AS 收货人,
+    fghis5.dbo.fn_JsonExtract(content_json, 'telephone') AS 收货电话,
+    fghis5.dbo.fn_JsonExtract(content_json, 'deliveryaddr') AS 收货地址,
     CAST(发药人工号 AS NVARCHAR(50)) AS 发药人工号, 发药人姓名, 发药时间, 发药状态,
     CASE WHEN c.发票状态=2 THEN '已收费' ELSE '已退费' END AS 发票状态,
     CONVERT(varchar, 发药时间, 23) AS 发药日期

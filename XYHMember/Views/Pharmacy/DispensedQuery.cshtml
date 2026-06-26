@@ -204,6 +204,9 @@
                             <th>发药人工号</th>
                             <th>发药人姓名</th>
                             <th>发药日期</th>
+                            <th>收货人</th>
+                            <th>收货电话</th>
+                            <th>收货地址</th>
                             <th>发票状态</th>
                             <th>发药状态</th>
                         </tr>
@@ -226,6 +229,9 @@
                                     <td>@result.发药人工号</td>
                                     <td>@result.发药人姓名</td>
                                     <td>@(result.发药时间 != null ? result.发药时间.Value.ToString("yyyy-MM-dd HH:mm") : "")</td>
+                                    <td>@result.收货人</td>
+                                    <td>@result.收货电话</td>
+                                    <td>@result.收货地址</td>
                                     <td>@result.发票状态</td>
                                     <td>@(result.发药状态 == 3 ? "已发药" : result.发药状态 == 9 ? "已退药" : (result.发药状态.HasValue ? result.发药状态.Value.ToString() : ""))</td>
                                 </tr>

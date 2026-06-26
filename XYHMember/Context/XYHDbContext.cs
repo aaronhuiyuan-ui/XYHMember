@@ -118,6 +118,7 @@ namespace XYHMember.Context
         public decimal? 检验费 { get; set; }
         public decimal? 治疗费 { get; set; }
         public decimal? 中草药 { get; set; }
+        public decimal? 工艺品 { get; set; }
         public decimal? 理疗费 { get; set; }
         public decimal? 加工费 { get; set; }
         public decimal? 辨证论治费 { get; set; }
@@ -154,6 +155,7 @@ namespace XYHMember.Context
         public decimal? 检验费 { get; set; }
         public decimal? 治疗费 { get; set; }
         public decimal? 中草药 { get; set; }
+        public decimal? 工艺品 { get; set; }
         public decimal? 理疗费 { get; set; }
         public decimal? 加工费 { get; set; }
         public decimal? 辨证论治费 { get; set; }
@@ -346,6 +348,9 @@ namespace XYHMember.Context
         public int? 发药状态 { get; set; }
         public string 发药日期 { get; set; }
         public string 发票状态 { get; set; }
+        public string 收货人 { get; set; }
+        public string 收货电话 { get; set; }
+        public string 收货地址 { get; set; }
     }
 
     //退药查询参数
