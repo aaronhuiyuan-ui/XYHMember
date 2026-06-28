@@ -40,6 +40,154 @@
         .table-wrapper > table {
             display: table !important;
         }
+        /* 列设置弹窗 */
+        @@keyframes colsettings-fadein {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @@keyframes colsettings-slidein {
+            from { opacity: 0; transform: translateY(-30px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .colsettings-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            animation: colsettings-fadein 0.2s ease;
+        }
+        .colsettings-overlay.active {
+            display: flex;
+        }
+        .colsettings-box {
+            background: #fff;
+            border-radius: 8px;
+            width: 500px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.25);
+            animation: colsettings-slidein 0.25s ease;
+        }
+        .colsettings-header {
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #0e90d2 0%, #0a6fa8 100%);
+            border-radius: 8px 8px 0 0;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #fff;
+            letter-spacing: 1px;
+            user-select: none;
+        }
+        .colsettings-header .close {
+            cursor: pointer;
+            font-size: 22px;
+            color: rgba(255,255,255,0.75);
+            line-height: 1;
+            transition: all 0.2s;
+        }
+        .colsettings-header .close:hover {
+            color: #fff;
+            transform: rotate(90deg);
+        }
+        .colsettings-body {
+            padding: 8px 0;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .colsettings-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 24px;
+            transition: background 0.15s;
+            border-bottom: 1px solid #f4f4f4;
+        }
+        .colsettings-item:hover {
+            background: #f0f9ff;
+        }
+        .colsettings-item label {
+            margin-left: 10px;
+            cursor: pointer;
+            font-weight: normal;
+            font-size: 14px;
+            color: #333;
+            flex: 1;
+            user-select: none;
+        }
+        .colsettings-item input[type="checkbox"] {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+            accent-color: #0e90d2;
+            flex-shrink: 0;
+        }
+        .colsettings-footer {
+            padding: 14px 24px;
+            border-top: 1px solid #e9e9e9;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            align-items: center;
+            background: #fafafa;
+            border-radius: 0 0 8px 8px;
+        }
+        .colsettings-footer button {
+            padding: 7px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            outline: none;
+        }
+        .colsettings-footer .btn-reset {
+            margin-right: auto;
+            border: 1px solid #e6a23c;
+            background: #fff;
+            color: #e6a23c;
+        }
+        .colsettings-footer .btn-reset:hover {
+            background: #e6a23c;
+            color: #fff;
+        }
+        .colsettings-footer .btn-cancel {
+            border: 1px solid #d0d0d0;
+            background: #fff;
+            color: #666;
+        }
+        .colsettings-footer .btn-cancel:hover {
+            border-color: #b0b0b0;
+            background: #f5f5f5;
+        }
+        .colsettings-footer .btn-primary {
+            border: 1px solid #0e90d2;
+            background: #0e90d2;
+            color: #fff;
+        }
+        .colsettings-footer .btn-primary:hover {
+            background: #0a7ec4;
+            border-color: #0a7ec4;
+            box-shadow: 0 2px 8px rgba(14,144,210,0.4);
+        }
+        /* 滚动条美化 */
+        .colsettings-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .colsettings-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .colsettings-body::-webkit-scrollbar-thumb {
+            background: #d0d0d0;
+            border-radius: 3px;
+        }
+        .colsettings-body::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
     </style>
 
 </head>
@@ -69,7 +217,7 @@
                             </div>
                         </form>
                     </div>
-                    <div width:100px;><button class="am-btn am-btn-default" id="exportButton" style="margin-top:-20px;">导出到Excel</button></div>
+                    <div width:100px;><button class="am-btn am-btn-default" id="exportButton" style="margin-top:-20px;">导出到Excel</button><button class="am-btn am-btn-default" id="colSettingsBtn" style="margin-top:-15px;margin-left:10px;">列设置</button></div>
 
                 </div>
             </div>
@@ -197,14 +345,21 @@
     <script>
 document.getElementById('exportButton').addEventListener('click', function () {
 
-    // 提取表头
-    var headers = Array.from(document.querySelectorAll('#dailyTable thead th'))
-                       .map(th => th.innerText.trim());
+    // 只取可见列
+    var allThs = Array.from(document.querySelectorAll('#dailyTable thead th'));
+    var visibleIndices = [];
+    allThs.forEach(function(th, idx) {
+        if (th.style.display !== 'none') visibleIndices.push(idx);
+    });
 
-    // 提取数据行（每行是一个数组）
+    // 提取表头（只含可见列）
+    var headers = visibleIndices.map(function(idx) { return allThs[idx].innerText.trim(); });
+
+    // 提取数据行（每行只含可见列）
     var rows = [];
-    document.querySelectorAll('#dailyTable tbody tr').forEach(tr => {
-        var cols = Array.from(tr.children).map(td => td.innerText.trim());
+    document.querySelectorAll('#dailyTable tbody tr').forEach(function(tr) {
+        var allTds = Array.from(tr.children);
+        var cols = visibleIndices.map(function(idx) { return allTds[idx].innerText.trim(); });
         rows.push(cols);
     });
 
@@ -254,6 +409,111 @@ document.getElementById('exportButton').addEventListener('click', function () {
 
 
 
+
+    <!-- 列设置弹窗 -->
+    <div class="colsettings-overlay" id="colSettingsOverlay">
+        <div class="colsettings-box">
+            <div class="colsettings-header">
+                <span>列设置</span>
+                <span class="close" onclick="closeColSettings()">&times;</span>
+            </div>
+            <div class="colsettings-body" id="colSettingsBody">
+                <!-- 动态生成 -->
+            </div>
+            <div class="colsettings-footer">
+                <button class="btn-reset" onclick="resetColumnSettings()">恢复全部</button>
+                <button onclick="closeColSettings()" class="btn-cancel">取消</button>
+                <button class="btn-primary" onclick="saveColumnSettings()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // 列设置功能
+    var columnDefs = [];
+
+    function loadColumnDefs() {
+        var ths = document.querySelectorAll('#dailyTable thead th');
+        columnDefs = [];
+        // 从索引1开始（跳过序号列）
+        for (var i = 1; i < ths.length; i++) {
+            columnDefs.push({ index: i, name: ths[i].innerText.trim() });
+        }
+    }
+
+    function openColumnSettings() {
+        loadColumnDefs();
+        var saved = localStorage.getItem('dailyReportColumnVisibility');
+        var settings = saved ? JSON.parse(saved) : {};
+        var html = '';
+        for (var i = 0; i < columnDefs.length; i++) {
+            var col = columnDefs[i];
+            var checked = settings[col.name] !== undefined ? settings[col.name] : true;
+            html += '<div class="colsettings-item">' +
+                '<input type="checkbox" id="col_' + i + '" ' + (checked ? 'checked' : '') + ' data-colindex="' + col.index + '">' +
+                '<label for="col_' + i + '">' + col.name + '</label>' +
+                '</div>';
+        }
+        document.getElementById('colSettingsBody').innerHTML = html;
+        document.getElementById('colSettingsOverlay').classList.add('active');
+    }
+
+    function closeColSettings() {
+        document.getElementById('colSettingsOverlay').classList.remove('active');
+    }
+
+    function saveColumnSettings() {
+        var settings = {};
+        var items = document.querySelectorAll('#colSettingsBody .colsettings-item');
+        items.forEach(function(item) {
+            var cb = item.querySelector('input[type="checkbox"]');
+            var label = item.querySelector('label');
+            settings[label.textContent] = cb.checked;
+        });
+        localStorage.setItem('dailyReportColumnVisibility', JSON.stringify(settings));
+        applyColumnSettings(settings);
+        closeColSettings();
+    }
+
+    function applyColumnSettings(settings) {
+        var ths = document.querySelectorAll('#dailyTable thead th');
+        var tbody = document.querySelector('#dailyTable tbody');
+        for (var i = 1; i < ths.length; i++) {
+            var colName = ths[i].innerText.trim();
+            var visible = settings[colName] !== undefined ? settings[colName] : true;
+            var display = visible ? '' : 'none';
+            ths[i].style.display = display;
+            if (tbody) {
+                var rows = tbody.querySelectorAll('tr');
+                rows.forEach(function(tr) {
+                    var td = tr.children[i];
+                    if (td) td.style.display = display;
+                });
+            }
+        }
+    }
+
+    function resetColumnSettings() {
+        localStorage.removeItem('dailyReportColumnVisibility');
+        location.reload();
+    }
+
+    function initColumnSettings() {
+        var saved = localStorage.getItem('dailyReportColumnVisibility');
+        if (saved) {
+            try {
+                var settings = JSON.parse(saved);
+                applyColumnSettings(settings);
+            } catch (e) {}
+        }
+    }
+
+    // 绑定列设置按钮事件
+    document.getElementById('colSettingsBtn').addEventListener('click', openColumnSettings);
+
+    // 页面加载时应用保存的列设置
+    initColumnSettings();
+    </script>
 
 </body>
 </html>
