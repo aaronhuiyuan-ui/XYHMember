@@ -104,7 +104,7 @@ namespace XYHMember.Controllers
         /// 执行一次医技
         /// </summary>
         [HttpPost]
-        public ActionResult Execute(int 登记ID, string 岗位, string 备注)
+        public ActionResult Execute(int 登记ID, string 执行时间, string 岗位, string 备注)
         {
             try
             {
@@ -132,13 +132,19 @@ namespace XYHMember.Controllers
                 var jobNumber = GetCurrentJobNumber();
                 var userName = GetCurrentUserName();
 
+                // 解析执行时间
+                DateTime parsedExecTime;
+                if (!DateTime.TryParse(执行时间 ?? "", out parsedExecTime))
+                    parsedExecTime = DateTime.Now;
+
                 // 插入执行记录
                 var execSql = @"INSERT INTO fghis5..医技执行记录表 (登记ID, 本次次数, 执行时间, 执行人工号, 执行人姓名, 岗位, 备注)
-                                VALUES (@登记ID, @本次次数, GETDATE(), @执行人工号, @执行人姓名, @岗位, @备注)";
+                                VALUES (@登记ID, @本次次数, @执行时间, @执行人工号, @执行人姓名, @岗位, @备注)";
 
                 db.Database.ExecuteSqlCommand(execSql,
                     new SqlParameter("@登记ID", 登记ID),
                     new SqlParameter("@本次次数", maxCount + 1),
+                    new SqlParameter("@执行时间", parsedExecTime),
                     new SqlParameter("@执行人工号", jobNumber ?? ""),
                     new SqlParameter("@执行人姓名", userName ?? ""),
                     new SqlParameter("@岗位", 岗位 ?? ""),
