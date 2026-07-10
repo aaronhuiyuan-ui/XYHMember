@@ -16,6 +16,8 @@ namespace XYHMember.Context
 
             // 明确指定 XYHUser 实体映射到 "XYHUser" 表
             modelBuilder.Entity<XYHUserEntity>().ToTable("XYHUser");
+            modelBuilder.Entity<MedicalTechRegistration>().ToTable("医技登记表");
+            modelBuilder.Entity<MedicalTechExecution>().ToTable("医技执行记录表");
         }
 
         public XYHDbContext() : base("name=XYHdb")
@@ -26,8 +28,10 @@ namespace XYHMember.Context
 
 
         public DbSet<XYHUserEntity> Users { get; set; }
-        public DbSet<MS_BRZH> MS_BRZH { get; set; }   
+        public DbSet<MS_BRZH> MS_BRZH { get; set; }
         public DbSet<Models.MS_SZMX> MS_SZMX { get; set; }
+        public DbSet<MedicalTechRegistration> MedicalTechRegistrations { get; set; }
+        public DbSet<MedicalTechExecution> MedicalTechExecutions { get; set; }
 
     }
 
@@ -360,6 +364,54 @@ namespace XYHMember.Context
         public string customercode { get; set; }
         public string checkcode { get; set; }
         public string billdate { get; set; }
+    }
+
+    //医技登记
+    public class MedicalTechRegistration
+    {
+        [Key]
+        public int 登记ID { get; set; }
+        public string 流水号 { get; set; }
+        public int? 门诊号 { get; set; }
+        public int? 就诊ID { get; set; }
+        public string 病人姓名 { get; set; }
+        public string 项目名称 { get; set; }
+        public int? 总次数 { get; set; }
+        public DateTime? 登记时间 { get; set; }
+        public string 登记人工号 { get; set; }
+    }
+
+    //医技执行记录
+    public class MedicalTechExecution
+    {
+        [Key]
+        public int 执行ID { get; set; }
+        public int 登记ID { get; set; }
+        public int 本次次数 { get; set; }
+        public DateTime? 执行时间 { get; set; }
+        public string 执行人工号 { get; set; }
+        public string 执行人姓名 { get; set; }
+        public string 岗位 { get; set; }
+        public string 备注 { get; set; }
+    }
+
+    //HIS收费明细查询结果（医技登记页面用）
+    public class MedicalTechChargeItem
+    {
+        public int? 结帐ID { get; set; }
+        public int? 门诊号 { get; set; }
+        public string 姓名 { get; set; }
+        public int? 就诊ID { get; set; }
+        public int? 处方ID { get; set; }
+        public string 日期 { get; set; }
+        public string 时间 { get; set; }
+        public string 项目名称 { get; set; }
+        public decimal? 单价 { get; set; }
+        public decimal? 数量 { get; set; }
+        public decimal? 金额 { get; set; }
+        public int? 登记ID { get; set; }
+        public int? 总次数 { get; set; }
+        public int? 已执行次数 { get; set; }
     }
 
 }
