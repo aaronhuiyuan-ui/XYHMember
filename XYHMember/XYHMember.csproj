@@ -293,6 +293,8 @@
     <Content Include="Views\Outpatient\PhysicalExamQuery.cshtml" />
     <Content Include="Views\Outpatient\SavedPatientsQuery.cshtml" />
     <Content Include="Views\MedicalTech\Index.cshtml" />
+    <Content Include="Views\MedicalTech\StaffList.cshtml" />
+    <Content Include="Views\MedicalTech\DefaultCount.cshtml" />
     <Content Include="Views\Pharmacy\DispensingQuery.cshtml" />
     <Content Include="Views\Pharmacy\DispensingConfirm.cshtml" />
     <Content Include="Views\Pharmacy\DispensedQuery.cshtml" />

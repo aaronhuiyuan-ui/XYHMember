@@ -104,12 +104,14 @@ namespace XYHMember.Controllers
         /// 执行一次医技
         /// </summary>
         [HttpPost]
-        public ActionResult Execute(int 登记ID, string 执行时间, string 岗位, string 备注)
+        public ActionResult Execute(int 登记ID, string 执行时间, int 执行次数, string 执行人工号, string 执行人姓名, string 岗位, string 备注)
         {
             try
             {
                 if (登记ID <= 0)
                     return Json(new { success = false, msg = "登记ID无效" });
+
+                if (执行次数 <= 0) 执行次数 = 1;
 
                 // 查询登记信息（只需总次数）
                 var totalSql = @"SELECT 总次数 FROM fghis5..医技登记表 WHERE 登记ID = @登记ID";
@@ -129,34 +131,40 @@ namespace XYHMember.Controllers
                 if (maxCount >= 总次数)
                     return Json(new { success = false, msg = "已到达总次数，无需再执行" });
 
-                var jobNumber = GetCurrentJobNumber();
-                var userName = GetCurrentUserName();
+                // 检查本次要执行的次数是否超出剩余次数
+                var 剩余次数 = 总次数 - maxCount;
+                if (执行次数 > 剩余次数)
+                    执行次数 = 剩余次数;
 
                 // 解析执行时间
                 DateTime parsedExecTime;
                 if (!DateTime.TryParse(执行时间 ?? "", out parsedExecTime))
                     parsedExecTime = DateTime.Now;
 
-                // 插入执行记录
+                // 批量插入执行记录
                 var execSql = @"INSERT INTO fghis5..医技执行记录表 (登记ID, 本次次数, 执行时间, 执行人工号, 执行人姓名, 岗位, 备注)
                                 VALUES (@登记ID, @本次次数, @执行时间, @执行人工号, @执行人姓名, @岗位, @备注)";
 
-                db.Database.ExecuteSqlCommand(execSql,
-                    new SqlParameter("@登记ID", 登记ID),
-                    new SqlParameter("@本次次数", maxCount + 1),
-                    new SqlParameter("@执行时间", parsedExecTime),
-                    new SqlParameter("@执行人工号", jobNumber ?? ""),
-                    new SqlParameter("@执行人姓名", userName ?? ""),
-                    new SqlParameter("@岗位", 岗位 ?? ""),
-                    new SqlParameter("@备注", 备注 ?? ""));
+                for (int i = 1; i <= 执行次数; i++)
+                {
+                    db.Database.ExecuteSqlCommand(execSql,
+                        new SqlParameter("@登记ID", 登记ID),
+                        new SqlParameter("@本次次数", maxCount + i),
+                        new SqlParameter("@执行时间", parsedExecTime),
+                        new SqlParameter("@执行人工号", 执行人工号 ?? ""),
+                        new SqlParameter("@执行人姓名", 执行人姓名 ?? ""),
+                        new SqlParameter("@岗位", 岗位 ?? ""),
+                        new SqlParameter("@备注", 备注 ?? ""));
+                }
 
-                var isCompleted = (maxCount + 1) >= 总次数;
+                var isCompleted = (maxCount + 执行次数) >= 总次数;
 
                 return Json(new
                 {
                     success = true,
                     msg = "执行成功",
-                    本次次数 = maxCount + 1,
+                    本次执行次数 = 执行次数,
+                    当前最大次数 = maxCount + 执行次数,
                     总次数 = 总次数,
                     已完成 = isCompleted
                 });
@@ -237,6 +245,206 @@ namespace XYHMember.Controllers
                 jobNumber = user?.JobNumber ?? "",
                 userName = user?.Name ?? ""
             }, JsonRequestBehavior.AllowGet);
+        }
+
+        // ========== 医技执行人员信息维护 ==========
+
+        /// <summary>
+        /// 人员信息维护页面
+        /// </summary>
+        public ActionResult StaffList()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询人员列表
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetStaffList(string name)
+        {
+            try
+            {
+                var sql = @"SELECT * FROM fghis5..医技执行人员信息表
+                            WHERE @name = '' OR 姓名 LIKE '%' + @name + '%' OR 工号 LIKE '%' + @name + '%'
+                            ORDER BY 序号 ASC";
+
+                var result = db.Database.SqlQuery<MedicalTechStaff>(sql,
+                    new SqlParameter("@name", (name ?? "").Trim())).ToList();
+
+                return Json(result, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 新增/修改人员
+        /// </summary>
+        [HttpPost]
+        public ActionResult SaveStaff(int? 序号, string 工号, string 姓名, string 岗位, string 备注)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(工号))
+                    return Json(new { success = false, msg = "工号不能为空" });
+                if (string.IsNullOrEmpty(姓名))
+                    return Json(new { success = false, msg = "姓名不能为空" });
+
+                if (序号.HasValue)
+                {
+                    // 修改
+                    var sql = @"UPDATE fghis5..医技执行人员信息表
+                                SET 工号 = @工号, 姓名 = @姓名, 岗位 = @岗位, 备注 = @备注
+                                WHERE 序号 = @序号";
+                    db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@序号", 序号.Value),
+                        new SqlParameter("@工号", 工号 ?? ""),
+                        new SqlParameter("@姓名", 姓名 ?? ""),
+                        new SqlParameter("@岗位", 岗位 ?? ""),
+                        new SqlParameter("@备注", 备注 ?? ""));
+                }
+                else
+                {
+                    // 新增
+                    var sql = @"INSERT INTO fghis5..医技执行人员信息表 (工号, 姓名, 岗位, 备注)
+                                VALUES (@工号, @姓名, @岗位, @备注)";
+                    db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@工号", 工号 ?? ""),
+                        new SqlParameter("@姓名", 姓名 ?? ""),
+                        new SqlParameter("@岗位", 岗位 ?? ""),
+                        new SqlParameter("@备注", 备注 ?? ""));
+                }
+
+                return Json(new { success = true, msg = "保存成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 删除人员
+        /// </summary>
+        [HttpPost]
+        public ActionResult DeleteStaff(int 序号)
+        {
+            try
+            {
+                var sql = @"DELETE FROM fghis5..医技执行人员信息表 WHERE 序号 = @序号";
+                db.Database.ExecuteSqlCommand(sql, new SqlParameter("@序号", 序号));
+                return Json(new { success = true, msg = "删除成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        // ========== 医技项目默认次数 ==========
+
+        /// <summary>
+        /// 项目默认次数页面
+        /// </summary>
+        public ActionResult DefaultCount()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询项目默认次数列表
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetDefaultCountList(string name)
+        {
+            try
+            {
+                var sql = @"SELECT * FROM fghis5..医技项目默认次数表
+                            WHERE @name = '' OR 项目名称 LIKE '%' + @name + '%'
+                            ORDER BY 序号 ASC";
+
+                var result = db.Database.SqlQuery<MedicalTechDefaultCount>(sql,
+                    new SqlParameter("@name", (name ?? "").Trim())).ToList();
+
+                return Json(result, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 新增/修改项目默认次数
+        /// </summary>
+        [HttpPost]
+        public ActionResult SaveDefaultCount(int? 序号, string 项目名称, int 默认总次数)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(项目名称))
+                    return Json(new { success = false, msg = "项目名称不能为空" });
+                if (默认总次数 <= 0)
+                    return Json(new { success = false, msg = "默认总次数必须大于0" });
+
+                if (序号.HasValue)
+                {
+                    var sql = @"UPDATE fghis5..医技项目默认次数表
+                                SET 项目名称 = @项目名称, 默认总次数 = @默认总次数
+                                WHERE 序号 = @序号";
+                    db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@序号", 序号.Value),
+                        new SqlParameter("@项目名称", 项目名称 ?? ""),
+                        new SqlParameter("@默认总次数", 默认总次数));
+                }
+                else
+                {
+                    var sql = @"INSERT INTO fghis5..医技项目默认次数表 (项目名称, 默认总次数)
+                                VALUES (@项目名称, @默认总次数)";
+                    db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@项目名称", 项目名称 ?? ""),
+                        new SqlParameter("@默认总次数", 默认总次数));
+                }
+
+                return Json(new { success = true, msg = "保存成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 删除项目默认次数
+        /// </summary>
+        [HttpPost]
+        public ActionResult DeleteDefaultCount(int 序号)
+        {
+            try
+            {
+                var sql = @"DELETE FROM fghis5..医技项目默认次数表 WHERE 序号 = @序号";
+                db.Database.ExecuteSqlCommand(sql, new SqlParameter("@序号", 序号));
+                return Json(new { success = true, msg = "删除成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
         }
 
         private string GetCurrentJobNumber()

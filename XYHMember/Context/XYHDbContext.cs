@@ -32,6 +32,8 @@ namespace XYHMember.Context
         public DbSet<Models.MS_SZMX> MS_SZMX { get; set; }
         public DbSet<MedicalTechRegistration> MedicalTechRegistrations { get; set; }
         public DbSet<MedicalTechExecution> MedicalTechExecutions { get; set; }
+        public DbSet<MedicalTechStaff> MedicalTechStaffs { get; set; }
+        public DbSet<MedicalTechDefaultCount> MedicalTechDefaultCounts { get; set; }
 
     }
 
@@ -393,6 +395,26 @@ namespace XYHMember.Context
         public string 执行人姓名 { get; set; }
         public string 岗位 { get; set; }
         public string 备注 { get; set; }
+    }
+
+    //医技执行人员信息
+    public class MedicalTechStaff
+    {
+        [Key]
+        public int 序号 { get; set; }
+        public string 工号 { get; set; }
+        public string 姓名 { get; set; }
+        public string 岗位 { get; set; }
+        public string 备注 { get; set; }
+    }
+
+    //医技项目默认次数
+    public class MedicalTechDefaultCount
+    {
+        [Key]
+        public int 序号 { get; set; }
+        public string 项目名称 { get; set; }
+        public int 默认总次数 { get; set; }
     }
 
     //HIS收费明细查询结果（医技登记页面用）

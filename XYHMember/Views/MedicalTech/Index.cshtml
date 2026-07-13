@@ -104,7 +104,7 @@
             width: 100%; padding: 6px 8px; border: 1px solid #d0d0d0;
             border-radius: 3px; font-size: 13px; box-sizing: border-box;
         }
-        .modal-body input:focus, .modal-body textarea:focus {
+        .modal-body input:focus, .modal-body textarea:focus, .modal-body select:focus {
             border-color: #0e90d2; outline: none;
         }
         .modal-body textarea { height: 50px; resize: vertical; }
@@ -211,7 +211,7 @@
                 </div>
                 <div class="field">
                     <label>总次数 <span style="color:#999;font-weight:normal;">（疗程总次数）</span></label>
-                    <input type="number" id="reg_总次数" value="6" min="1" max="99">
+                    <input type="number" id="reg_总次数" min="1" max="99" placeholder="请输入或留空">
                 </div>
                 <input type="hidden" id="reg_结帐ID">
                 <input type="hidden" id="reg_处方ID">
@@ -245,14 +245,22 @@
                     <label>执行时间</label>
                     <input type="text" id="exec_执行时间">
                 </div>
+                <div class="field">
+                    <label>执行次数</label>
+                    <input type="number" id="exec_执行次数" value="1" min="1" max="99" style="width:80px;">
+                </div>
                 <div class="field-row">
-                    <div class="field field-readonly">
-                        <label>执行人工号</label>
-                        <input type="text" id="exec_工号" readonly>
+                    <div class="field">
+                        <label>执行人工号 <span style="color:red;">*</span></label>
+                        <select id="exec_工号" style="width:100%;padding:6px 8px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;box-sizing:border-box;">
+                            <option value="">请选择</option>
+                        </select>
                     </div>
-                    <div class="field field-readonly">
-                        <label>执行人姓名</label>
-                        <input type="text" id="exec_姓名_" readonly>
+                    <div class="field">
+                        <label>执行人姓名 <span style="color:red;">*</span></label>
+                        <select id="exec_姓名_" style="width:100%;padding:6px 8px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;box-sizing:border-box;">
+                            <option value="">请选择</option>
+                        </select>
                     </div>
                 </div>
                 <div class="field">
@@ -382,11 +390,22 @@
             var d = window._queryData[idx];
             document.getElementById('reg_姓名').value = d.姓名;
             document.getElementById('reg_项目名称').value = d.项目名称;
-            document.getElementById('reg_总次数').value = 6;
+            document.getElementById('reg_总次数').value = '';
             document.getElementById('reg_结帐ID').value = d.结帐ID;
             document.getElementById('reg_处方ID').value = d.处方ID;
             document.getElementById('reg_就诊ID').value = d.就诊ID;
             document.getElementById('reg_门诊号').value = d.门诊号;
+
+            // 根据项目名称查询默认次数
+            fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?name=' + encodeURIComponent(d.项目名称))
+                .then(function(r) { return r.json(); })
+                .then(function(list) {
+                    if (list && list.length > 0 && list[0].默认总次数) {
+                        document.getElementById('reg_总次数').value = list[0].默认总次数;
+                    }
+                })
+                .catch(function() {});
+
             openModal('registerModal');
         }
 
@@ -431,16 +450,68 @@
                 now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) +
                 ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
 
-            document.getElementById('exec_工号').value = '';
-            document.getElementById('exec_姓名_').value = '';
+            document.getElementById('exec_工号').innerHTML = '<option value="">请选择</option>';
+            document.getElementById('exec_姓名_').innerHTML = '<option value="">请选择</option>';
             document.getElementById('exec_岗位').value = '';
             document.getElementById('exec_备注').value = '';
 
+            // 获取当前登录用户信息
+            var currentUser = null;
             fetch('@Url.Action("GetCurrentUser", "MedicalTech")')
                 .then(function(r) { return r.json(); })
                 .then(function(u) {
-                    document.getElementById('exec_工号').value = u.jobNumber;
-                    document.getElementById('exec_姓名_').value = u.userName;
+                    currentUser = u;
+                    // 再获取人员列表
+                    return fetch('@Url.Action("GetStaffList", "MedicalTech")?name=');
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(staffList) {
+                    if (!staffList || staffList.success === false) return;
+
+                    var jobSelect = document.getElementById('exec_工号');
+                    var nameSelect = document.getElementById('exec_姓名_');
+
+                    // 填充下拉
+                    for (var i = 0; i < staffList.length; i++) {
+                        var s = staffList[i];
+                        var jobOpt = document.createElement('option');
+                        jobOpt.value = s.工号;
+                        jobOpt.textContent = s.工号;
+                        jobOpt.dataset.name = s.姓名;
+                        jobOpt.dataset.position = s.岗位 || '';
+                        jobSelect.appendChild(jobOpt);
+
+                        var nameOpt = document.createElement('option');
+                        nameOpt.value = s.姓名;
+                        nameOpt.textContent = s.姓名;
+                        nameOpt.dataset.job = s.工号;
+                        nameOpt.dataset.position = s.岗位 || '';
+                        nameSelect.appendChild(nameOpt);
+                    }
+
+                    // 默认选中当前登录用户
+                    if (currentUser && currentUser.jobNumber) {
+                        for (var i = 0; i < jobSelect.options.length; i++) {
+                            if (jobSelect.options[i].value === currentUser.jobNumber) {
+                                jobSelect.selectedIndex = i;
+                                break;
+                            }
+                        }
+                        // 同步姓名
+                        var selOpt = jobSelect.options[jobSelect.selectedIndex];
+                        if (selOpt && selOpt.dataset.name) {
+                            for (var j = 0; j < nameSelect.options.length; j++) {
+                                if (nameSelect.options[j].value === selOpt.dataset.name) {
+                                    nameSelect.selectedIndex = j;
+                                    break;
+                                }
+                            }
+                        }
+                        // 自动填充岗位
+                        if (selOpt && selOpt.dataset.position) {
+                            document.getElementById('exec_岗位').value = selOpt.dataset.position;
+                        }
+                    }
                 })
                 .catch(function() {});
 
@@ -448,9 +519,17 @@
         }
 
         function submitExecute() {
+            var 工号 = document.getElementById('exec_工号').value;
+            var 姓名 = document.getElementById('exec_姓名_').value;
+            if (!工号) { alert('请选择执行人工号'); return; }
+            if (!姓名) { alert('请选择执行人姓名'); return; }
+
             var data = {
                 登记ID: parseInt(document.getElementById('exec_登记ID').value),
                 执行时间: document.getElementById('exec_执行时间').value,
+                执行次数: parseInt(document.getElementById('exec_执行次数').value) || 1,
+                执行人工号: 工号,
+                执行人姓名: 姓名,
                 岗位: document.getElementById('exec_岗位').value,
                 备注: document.getElementById('exec_备注').value
             };
@@ -471,6 +550,42 @@
             })
             .catch(function(err) { alert('请求失败：' + err.message); });
         }
+
+        // 级联：工号变动 → 姓名、岗位联动
+        document.getElementById('exec_工号').addEventListener('change', function() {
+            var selOpt = this.options[this.selectedIndex];
+            var nameSelect = document.getElementById('exec_姓名_');
+            if (selOpt && selOpt.dataset.name) {
+                for (var i = 0; i < nameSelect.options.length; i++) {
+                    if (nameSelect.options[i].value === selOpt.dataset.name) {
+                        nameSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+                document.getElementById('exec_岗位').value = selOpt.dataset.position || '';
+            } else {
+                nameSelect.selectedIndex = 0;
+                document.getElementById('exec_岗位').value = '';
+            }
+        });
+
+        // 级联：姓名变动 → 工号联动（同名的取第一个匹配）
+        document.getElementById('exec_姓名_').addEventListener('change', function() {
+            var selOpt = this.options[this.selectedIndex];
+            var jobSelect = document.getElementById('exec_工号');
+            if (selOpt && selOpt.dataset.job) {
+                for (var i = 0; i < jobSelect.options.length; i++) {
+                    if (jobSelect.options[i].value === selOpt.dataset.job) {
+                        jobSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+                document.getElementById('exec_岗位').value = selOpt.dataset.position || '';
+            } else {
+                jobSelect.selectedIndex = 0;
+                document.getElementById('exec_岗位').value = '';
+            }
+        });
 
         // ===== 历史 =====
         function openHistory(idx) {
