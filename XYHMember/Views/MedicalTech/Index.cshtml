@@ -157,6 +157,8 @@
                             <input type="text" class="am-form-field" name="name" value="@name" placeholder="病人姓名或项目名称" style="width:280px;">
                             <span class="am-input-group-btn">
                                 <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
+                                <button class="am-btn am-btn-primary" type="button" id="batchRegBtn" style="margin-left:10px;background:#0e90d2!important;border-color:#0e90d2!important;color:#fff!important;">批量登记</button>
+                                <button class="am-btn am-btn-primary" type="button" id="batchExecBtn" style="margin-left:5px;background:#5eb95e!important;border-color:#5eb95e!important;color:#fff!important;">批量执行</button>
                             </span>
                         </span>
                     </div>
@@ -170,6 +172,7 @@
                 <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
                     <thead>
                         <tr>
+                            <th class="table-chck" style="width:30px;"><input type="checkbox"></th>
                             <th>门诊号</th>
                             <th>姓名</th>
                             <th>项目名称</th>
@@ -182,7 +185,7 @@
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="9" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
+                        <tr><td colspan="10" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -229,8 +232,8 @@
     <div class="modal-overlay" id="executeModal">
         <div class="modal-box">
             <div class="modal-header">
-                <span>医技执行</span>
-                <span class="close" onclick="closeModal('executeModal')">&times;</span>
+                <span>医技执行 <span id="exec_progress" style="font-weight:normal;font-size:13px;color:#888;"></span></span>
+                <span class="close" onclick="closeModal('executeModal'); window._batchQueue = [];">&times;</span>
             </div>
             <div class="modal-body">
                 <div class="field field-readonly">
@@ -274,7 +277,8 @@
                 <input type="hidden" id="exec_登记ID">
             </div>
             <div class="modal-footer">
-                <button onclick="closeModal('executeModal')">取消</button>
+                <button onclick="closeModal('executeModal'); window._batchQueue = [];">取消</button>
+                <button id="exec_skipBtn" style="display:none;" onclick="skipBatchItem()">跳过</button>
                 <button class="btn-primary" onclick="submitExecute()">确认执行</button>
             </div>
         </div>
@@ -303,6 +307,7 @@
     </div>
 
     <script src="~/Scripts/pagination.js"></script>
+    <script src="~/Scripts/customDialog.js"></script>
     @Scripts.Render("~/Scripts/flatpickrjs")
 
     <script>
@@ -322,21 +327,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="9" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         renderTable(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="9" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">未找到数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999;">未找到数据</td></tr>';
                 return;
             }
 
@@ -364,6 +369,7 @@
                 }
 
                 html += '<tr>' +
+                    '<td><input type="checkbox" data-idx="' + i + '"></td>' +
                     '<td>' + d.门诊号 + '</td>' +
                     '<td>' + escapeHtml(d.姓名) + '</td>' +
                     '<td>' + escapeHtml(d.项目名称) + '</td>' +
@@ -431,14 +437,15 @@
                     closeModal('registerModal');
                     doSearch();
                 } else {
-                    alert('登记失败：' + res.msg);
+                    customDialog.error(res.msg, '登记失败');
                 }
             })
-            .catch(function(err) { alert('请求失败：' + err.message); });
+            .catch(function(err) { customDialog.error(err.message, '请求失败'); });
         }
 
         // ===== 执行 =====
         function openExecute(idx) {
+            window._batchQueue = []; // 退出批量模式
             var d = window._queryData[idx];
             document.getElementById('exec_姓名').value = d.姓名;
             document.getElementById('exec_项目名称').value = d.项目名称;
@@ -542,13 +549,19 @@
             .then(function(r) { return r.json(); })
             .then(function(res) {
                 if (res.success) {
-                    closeModal('executeModal');
-                    doSearch();
+                    // 批量模式：自动跳到下一个
+                    if (window._batchQueue && window._batchQueue.length > 0) {
+                        window._batchQueueIndex++;
+                        loadBatchItem();
+                    } else {
+                        closeModal('executeModal');
+                        doSearch();
+                    }
                 } else {
-                    alert('执行失败：' + res.msg);
+                    customDialog.error(res.msg, '执行失败');
                 }
             })
-            .catch(function(err) { alert('请求失败：' + err.message); });
+            .catch(function(err) { customDialog.error(err.message, '请求失败'); });
         }
 
         // 级联：工号变动 → 姓名、岗位联动
@@ -595,7 +608,7 @@
             fetch('@Url.Action("GetHistory", "MedicalTech")?登记ID=' + d.登记ID)
                 .then(function(r) { return r.json(); })
                 .then(function(res) {
-                    if (!res.success) { alert('查询失败：' + res.msg); return; }
+                    if (!res.success) { customDialog.error(res.msg, '查询失败'); return; }
                     document.getElementById('historySummary').innerHTML =
                         '病人：' + res.病人姓名 + ' ｜ 项目：' + res.项目名称 +
                         ' ｜ 进度：' + res.已执行次数 + '/' + res.总次数 + '次';
@@ -614,7 +627,7 @@
                     document.getElementById('historyBody').innerHTML = html;
                     openModal('historyModal');
                 })
-                .catch(function(err) { alert('请求失败：' + err.message); });
+                .catch(function(err) { customDialog.error(err.message, '请求失败'); });
         }
 
         function formatDate(dateStr) {
@@ -632,7 +645,161 @@
 
         document.querySelectorAll('.modal-overlay').forEach(function(el) {
             el.addEventListener('click', function(e) {
-                if (e.target === this) this.classList.remove('active');
+                if (e.target === this) { this.classList.remove('active'); window._batchQueue = []; }
+            });
+        });
+
+        // ===== 全选/取消全选 =====
+        document.querySelector('#dataTable thead input[type=checkbox]').addEventListener('change', function() {
+            var checked = this.checked;
+            document.querySelectorAll('#dataTable tbody input[type=checkbox]').forEach(function(cb) {
+                cb.checked = checked;
+            });
+        });
+
+        // ===== 获取选中行的数据 =====
+        function getCheckedData() {
+            var result = [];
+            document.querySelectorAll('#dataTable tbody input[type=checkbox]:checked').forEach(function(cb) {
+                var idx = parseInt(cb.getAttribute('data-idx'));
+                if (!isNaN(idx) && window._queryData && window._queryData[idx]) {
+                    result.push({ index: idx, data: window._queryData[idx] });
+                }
+            });
+            return result;
+        }
+
+        // ===== 批量登记 =====
+        document.getElementById('batchRegBtn').addEventListener('click', function() {
+            var checked = getCheckedData();
+            if (checked.length === 0) { customDialog.info('请先勾选要登记的项目', '提示'); return; }
+
+            // 筛选出未登记的项目
+            var toReg = checked.filter(function(item) { return item.data.登记ID == null; });
+            if (toReg.length === 0) { customDialog.info('勾选的项目均已登记，无需重复登记', '提示'); return; }
+
+            customDialog.confirm('确定要批量登记选中的 ' + toReg.length + ' 个项目吗？', '确认', function() {
+                var done = 0, fail = 0;
+                (function process(idx) {
+                    if (idx >= toReg.length) {
+                        var msg = '成功 ' + done + ' 个';
+                        if (fail > 0) msg += '，失败 ' + fail + ' 个';
+                        customDialog.success(msg, '批量登记完成');
+                        doSearch();
+                        return;
+                    }
+                    var item = toReg[idx];
+                var d = item.data;
+                // 查询默认次数
+                fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?name=' + encodeURIComponent(d.项目名称))
+                    .then(function(r) { return r.json(); })
+                    .then(function(list) {
+                        var 总次数 = 6;
+                        if (list && list.length > 0 && list[0].默认总次数) {
+                            总次数 = list[0].默认总次数;
+                        }
+                        return fetch('@Url.Action("Register", "MedicalTech")', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                结帐ID: d.结帐ID,
+                                处方ID: d.处方ID,
+                                就诊ID: d.就诊ID,
+                                病人姓名: d.姓名,
+                                门诊号: d.门诊号,
+                                项目名称: d.项目名称,
+                                总次数: 总次数
+                            })
+                        });
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(res) {
+                        if (res.success) done++; else fail++;
+                        process(idx + 1);
+                    })
+                    .catch(function() { fail++; process(idx + 1); });
+                })(0);
+            });
+        });
+
+        // ===== 批量执行（逐个确认） =====
+        window._batchQueue = [];
+        window._batchQueueIndex = 0;
+
+        function loadBatchItem() {
+            if (window._batchQueueIndex >= window._batchQueue.length) {
+                var total = window._batchQueue.length;
+                closeModal('executeModal');
+                window._batchQueue = [];
+                customDialog.success('共完成 ' + total + ' 个项目', '批量执行完成');
+                doSearch();
+                return;
+            }
+
+            var d = window._batchQueue[window._batchQueueIndex].data;
+            document.getElementById('exec_姓名').value = d.姓名;
+            document.getElementById('exec_项目名称').value = d.项目名称;
+            document.getElementById('exec_登记ID').value = d.登记ID;
+
+            var now = new Date();
+            var pad = function(n) { return n < 10 ? '0' + n : n; };
+            document.getElementById('exec_执行时间').value =
+                now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) +
+                ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+            document.getElementById('exec_执行次数').value = 1;
+            document.getElementById('exec_备注').value = '批量执行';
+
+            // 更新进度显示
+            document.getElementById('exec_progress').textContent =
+                '（' + (window._batchQueueIndex + 1) + '/' + window._batchQueue.length + '）';
+            document.getElementById('exec_skipBtn').style.display = '';
+
+            // 加载人员下拉（只加载一次，后续复用）
+            if (document.getElementById('exec_工号').options.length <= 1) {
+                fetch('@Url.Action("GetStaffList", "MedicalTech")?name=')
+                    .then(function(r) { return r.json(); })
+                    .then(function(staffList) {
+                        if (!staffList || staffList.success === false) return;
+                        var jobSelect = document.getElementById('exec_工号');
+                        var nameSelect = document.getElementById('exec_姓名_');
+                        for (var i = 0; i < staffList.length; i++) {
+                            var s = staffList[i];
+                            var jobOpt = document.createElement('option');
+                            jobOpt.value = s.工号; jobOpt.textContent = s.工号;
+                            jobOpt.dataset.name = s.姓名; jobOpt.dataset.position = s.岗位 || '';
+                            jobSelect.appendChild(jobOpt);
+                            var nameOpt = document.createElement('option');
+                            nameOpt.value = s.姓名; nameOpt.textContent = s.姓名;
+                            nameOpt.dataset.job = s.工号; nameOpt.dataset.position = s.岗位 || '';
+                            nameSelect.appendChild(nameOpt);
+                        }
+                    })
+                    .catch(function() {});
+            }
+
+            openModal('executeModal');
+        }
+
+        function skipBatchItem() {
+            window._batchQueueIndex++;
+            loadBatchItem();
+        }
+
+        document.getElementById('batchExecBtn').addEventListener('click', function() {
+            var checked = getCheckedData();
+            if (checked.length === 0) { customDialog.info('请先勾选要执行的项目', '提示'); return; }
+
+            // 筛选出进行中的项目（已登记且未完成）
+            var toExec = checked.filter(function(item) {
+                return item.data.登记ID != null && item.data.已执行次数 < item.data.总次数;
+            });
+            if (toExec.length === 0) { customDialog.info('勾选的项目中没有可执行的项目（已完成或未登记）', '提示'); return; }
+
+            customDialog.confirm('将对选中的 ' + toExec.length + ' 个项目逐个执行，确定开始吗？', '确认', function() {
+
+            window._batchQueue = toExec;
+            window._batchQueueIndex = 0;
+            loadBatchItem();
             });
         });
 
