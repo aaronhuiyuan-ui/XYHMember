@@ -395,6 +395,7 @@ namespace XYHMember.Context
         public string 执行人姓名 { get; set; }
         public string 岗位 { get; set; }
         public string 备注 { get; set; }
+        public string delete_flag { get; set; }
     }
 
     //医技执行人员信息

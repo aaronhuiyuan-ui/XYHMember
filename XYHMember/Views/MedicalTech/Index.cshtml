@@ -286,7 +286,7 @@
 
     <!-- ========== 历史记录弹窗 ========== -->
     <div class="modal-overlay" id="historyModal">
-        <div class="modal-box" style="width:550px;">
+        <div class="modal-box" style="width:600px;">
             <div class="modal-header">
                 <span>执行历史</span>
                 <span class="close" onclick="closeModal('historyModal')">&times;</span>
@@ -295,12 +295,13 @@
                 <div class="summary-bar" id="historySummary">加载中...</div>
                 <table class="history-table">
                     <thead>
-                        <tr><th>执行次数</th><th>执行时间</th><th>执行人</th><th>岗位</th><th>备注</th></tr>
+                        <tr><th style="width:30px;"></th><th>执行次数</th><th>执行时间</th><th>执行人</th><th>岗位</th><th>备注</th></tr>
                     </thead>
                     <tbody id="historyBody"></tbody>
                 </table>
             </div>
             <div class="modal-footer">
+                <button id="cancelExecBtnInHistory" class="am-btn am-btn-danger am-btn-xs" style="display:none;margin-right:auto;" onclick="doCancelExecution()">取消执行</button>
                 <button class="btn-primary" onclick="closeModal('historyModal')">关闭</button>
             </div>
         </div>
@@ -604,6 +605,7 @@
         function openHistory(idx) {
             var d = window._queryData[idx];
             if (!d.登记ID) return;
+            window._history登记ID = d.登记ID;
 
             fetch('@Url.Action("GetHistory", "MedicalTech")?登记ID=' + d.登记ID)
                 .then(function(r) { return r.json(); })
@@ -615,19 +617,79 @@
 
                     var html = '';
                     if (res.records && res.records.length > 0) {
+                        var lastIdx = res.records.length - 1;
                         for (var i = 0; i < res.records.length; i++) {
                             var r = res.records[i];
                             var timeStr = r.执行时间 ? formatDate(r.执行时间) : '';
-                            html += '<tr><td>第' + r.本次次数 + '次</td><td>' + timeStr + '</td>' +
-                                '<td>' + (r.执行人姓名 || '') + '</td><td>' + (r.岗位 || '') + '</td><td>' + (r.备注 || '') + '</td></tr>';
+                            var isLast = (i === lastIdx);
+                            // 只有最新的一条可选择（可取消）
+                            var chkDisabled = isLast ? '' : 'disabled style="opacity:0.4;"';
+                            html += '<tr>' +
+                                '<td><input type="checkbox" class="chk-exec" data-本次次数="' + r.本次次数 + '" ' + chkDisabled + '></td>' +
+                                '<td>第' + r.本次次数 + '次</td>' +
+                                '<td>' + timeStr + '</td>' +
+                                '<td>' + (r.执行人姓名 || '') + '</td>' +
+                                '<td>' + (r.岗位 || '') + '</td>' +
+                                '<td>' + (r.备注 || '') + '</td>' +
+                                '</tr>';
                         }
                     } else {
-                        html = '<tr><td colspan="5" style="color:#999;">暂无执行记录</td></tr>';
+                        html = '<tr><td colspan="6" style="color:#999;">暂无执行记录</td></tr>';
                     }
                     document.getElementById('historyBody').innerHTML = html;
+
+                    // 若有记录，最新一条默认选中，显示取消按钮
+                    var cancelBtn = document.getElementById('cancelExecBtnInHistory');
+                    if (res.records && res.records.length > 0) {
+                        var lastChk = document.querySelector('#historyBody .chk-exec:not([disabled])');
+                        if (lastChk) lastChk.checked = true;
+                        cancelBtn.style.display = '';
+                    } else {
+                        cancelBtn.style.display = 'none';
+                    }
+
                     openModal('historyModal');
                 })
                 .catch(function(err) { customDialog.error(err.message, '请求失败'); });
+        }
+
+        // ===== 取消执行 =====
+        function doCancelExecution() {
+            var checkedChk = document.querySelector('#historyBody .chk-exec:checked');
+            if (!checkedChk) { customDialog.info('请选择要取消的执行记录', '提示'); return; }
+
+            var 本次次数 = parseInt(checkedChk.getAttribute('data-本次次数'));
+            if (!本次次数) return;
+
+            customDialog.confirm('确定要取消第 ' + 本次次数 + ' 次执行记录吗？\n取消后该次数可重新执行。', '确认取消',
+                function() {
+                    fetch('@Url.Action("CancelExecution", "MedicalTech")', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 登记ID: window._history登记ID, 本次次数: 本次次数 })
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(res) {
+                        if (res.success) {
+                            customDialog.success('第 ' + 本次次数 + ' 次执行记录已取消', '取消成功', function() {
+                                // 刷新历史
+                                var allData = window._queryData || [];
+                                for (var i = 0; i < allData.length; i++) {
+                                    if (allData[i].登记ID === window._history登记ID) {
+                                        openHistory(i);
+                                        return;
+                                    }
+                                }
+                                closeModal('historyModal');
+                                doSearch();
+                            });
+                        } else {
+                            customDialog.error(res.msg, '取消失败');
+                        }
+                    })
+                    .catch(function(err) { customDialog.error(err.message, '请求失败'); });
+                }
+            );
         }
 
         function formatDate(dateStr) {
