@@ -69,10 +69,14 @@
                             <th>本次执行次数</th>
                             <th>本次执行金额</th>
                             <th>总次数</th>
+                            <th>进度</th>
+                            <th>执行人</th>
+                            <th>岗位</th>
+                            <th>备注</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="6" style="text-align:center;color:#999;">加载中...</td></tr>
+                        <tr><td colspan="10" style="text-align:center;color:#999;">加载中...</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -103,21 +107,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="6" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         renderTable(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="6" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">暂无执行记录</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999;">暂无执行记录</td></tr>';
                 return;
             }
 
@@ -133,6 +137,10 @@
                     '<td>' + d.本次执行次数 + '次</td>' +
                     '<td>' + execAmt.toFixed(2) + '</td>' +
                     '<td>' + (d.总次数 != null ? d.总次数 : '-') + '</td>' +
+                    '<td>' + d.最新本次次数 + '/' + (d.总次数 != null ? d.总次数 : '?') + '</td>' +
+                    '<td>' + escapeHtml(d.执行人姓名) + '</td>' +
+                    '<td>' + escapeHtml(d.岗位) + '</td>' +
+                    '<td>' + escapeHtml(d.备注) + '</td>' +
                     '</tr>';
             }
             // 合计（仅合计本次执行金额）
@@ -148,6 +156,10 @@
                 '<td></td>' +
                 '<td>' + sum已执行金额.toFixed(2) + '</td>' +
                 '<td></td>' +
+                '<td></td>' +
+                '<td></td>' +
+                '<td></td>' +
+                '<td></td>' +
                 '</tr>';
 
             tbody.innerHTML = html;
@@ -162,15 +174,15 @@
 
         // ===== 导出到Excel =====
         document.getElementById('exportBtn').addEventListener('click', function() {
-            var headers = ['执行时间', '病人姓名', '项目名称', '本次执行次数', '本次执行金额', '总次数'];
+            var headers = ['执行时间', '病人姓名', '项目名称', '本次执行次数', '本次执行金额', '总次数', '进度', '执行人', '岗位', '备注'];
             var rows = [];
             var trs = document.querySelectorAll('#dataTable tbody tr');
             for (var i = 0; i < trs.length; i++) {
                 if (trs[i].classList.contains('summary-row')) continue;
                 var tds = trs[i].querySelectorAll('td');
-                if (tds.length < 6) continue;
+                if (tds.length < 10) continue;
                 var row = [];
-                for (var c = 0; c < 6; c++) {
+                for (var c = 0; c < 10; c++) {
                     row.push(tds[c].innerText.trim());
                 }
                 rows.push(row);

@@ -542,7 +542,11 @@ namespace XYHMember.Controllers
                        r.病人姓名, r.项目名称,
                        COUNT(*) AS 本次执行次数,
                        SUM(ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额 * r.总次数, 0), 0)) AS 本次执行金额,
-                       r.总次数
+                       r.总次数,
+                       MAX(e.本次次数) AS 最新本次次数,
+                       MAX(e.执行人姓名) AS 执行人姓名,
+                       MAX(e.岗位) AS 岗位,
+                       MAX(e.备注) AS 备注
                 FROM fghis5..医技执行记录表 e
                 JOIN fghis5..医技登记表 r ON e.登记ID = r.登记ID
                 LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
