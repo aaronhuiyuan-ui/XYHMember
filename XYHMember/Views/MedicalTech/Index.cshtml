@@ -24,10 +24,44 @@
         #dataTable td {
             padding: 2px 4px !important;
         }
-        #dataTable th:last-child,
-        #dataTable td:last-child {
-            padding-right: 8px !important;
+        #dataTable th {
+            position: relative;
         }
+        .hdr-filter-trigger {
+            cursor: pointer;
+            font-size: 10px;
+            margin-left: 2px;
+            color: #999;
+            user-select: none;
+        }
+        .hdr-filter-trigger:hover,
+        .hdr-filter-trigger.active { color: #0e90d2; }
+        .hdr-filter-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%; left: 0;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            min-width: 130px;
+            max-height: 260px;
+            overflow-y: auto;
+            color: #333;
+        }
+        .hdr-filter-dropdown.show { display: block; }
+        .hdr-filter-opt {
+            padding: 6px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            color: #333;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .hdr-filter-opt:last-child { border-bottom: none; }
+        .hdr-filter-opt:hover { background: #f5f5f5; color: #000; }
+        .hdr-filter-opt.selected { background: #e6f2ff; color: #0e90d2; font-weight: bold; }
         .table-wrapper {
             overflow: auto !important;
             max-width: calc(100vw - 40px) !important;
@@ -154,7 +188,7 @@
                         <input type="text" name="edatepicker" id="edatepicker"
                                value="@edatepicker" placeholder="结束日期" style="height:30px;">
                         <span style="margin-left:40px;display:inline-flex;align-items:center;gap:6px;">
-                            <input type="text" class="am-form-field" name="name" value="@name" placeholder="病人姓名或项目名称" style="width:280px;">
+                            <input type="text" class="am-form-field" name="name" value="@name" placeholder="病人姓名或项目名称" style="width:200px;">
                             <span class="am-input-group-btn">
                                 <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
                                 <button class="am-btn am-btn-primary" type="button" id="batchRegBtn" style="margin-left:10px;background:#0e90d2!important;border-color:#0e90d2!important;color:#fff!important;">批量登记</button>
@@ -175,11 +209,22 @@
                             <th class="table-chck" style="width:30px;"><input type="checkbox"></th>
                             <th>门诊号</th>
                             <th>姓名</th>
-                            <th>项目名称</th>
+                            <th>项目名称<span class="hdr-filter-trigger" data-col="项目名称">▼</span>
+                                <div class="hdr-filter-dropdown" id="hdrDropdown项目名称">
+                                    <div class="hdr-filter-opt" data-value="">全部</div>
+                                </div>
+                            </th>
                             <th>数量</th>
                             <th>金额</th>
                             <th>收费日期</th>
-                            <th>状态</th>
+                            <th>状态<span class="hdr-filter-trigger" data-col="状态">▼</span>
+                                <div class="hdr-filter-dropdown" id="hdrDropdown状态">
+                                    <div class="hdr-filter-opt" data-value="">全部</div>
+                                    <div class="hdr-filter-opt" data-value="未登记">未登记</div>
+                                    <div class="hdr-filter-opt" data-value="进行中">进行中</div>
+                                    <div class="hdr-filter-opt" data-value="已完成">已完成</div>
+                                </div>
+                            </th>
                             <th>执行进度</th>
                             <th>操作</th>
                         </tr>
@@ -330,7 +375,8 @@
                         document.getElementById('tableBody').innerHTML =
                             '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
-                        renderTable(data);
+                        window._queryDataFull = data;
+                        applyHdrFilters();
                     }
                 })
                 .catch(function(err) {
@@ -391,6 +437,102 @@
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
+
+        // ===== 表头筛选 =====
+        window._hdrFilter = {};
+
+        // 点击三角展开下拉并动态填充内容
+        document.querySelectorAll('.hdr-filter-trigger').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var col = this.dataset.col;
+                var dd = document.getElementById('hdrDropdown' + col);
+                var isOpen = dd.classList.contains('show');
+                closeAllHdrDropdowns();
+
+                if (!isOpen) {
+                    // 展开前动态填充
+                    if (col === '项目名称') rebuildHdrDropdown项目名称();
+                    dd.classList.add('show');
+                    this.classList.add('active');
+                }
+            });
+        });
+
+        function rebuildHdrDropdown项目名称() {
+            var dd = document.getElementById('hdrDropdown项目名称');
+            var data = window._queryDataFull || [];
+            // 清空并用 createElement 构建（确保每个选项都绑上点击事件）
+            dd.innerHTML = '';
+            var allOpt = document.createElement('div');
+            allOpt.className = 'hdr-filter-opt';
+            allOpt.dataset.value = '';
+            allOpt.textContent = '全部';
+            allOpt.addEventListener('click', hdrOptClick);
+            dd.appendChild(allOpt);
+            var seen = {};
+            for (var i = 0; i < data.length; i++) {
+                var name = data[i].项目名称;
+                if (name && !seen[name]) {
+                    seen[name] = true;
+                    var opt = document.createElement('div');
+                    opt.className = 'hdr-filter-opt';
+                    opt.dataset.value = name;
+                    opt.textContent = name;
+                    opt.addEventListener('click', hdrOptClick);
+                    dd.appendChild(opt);
+                }
+            }
+            // 还原选中状态
+            var curVal = window._hdrFilter['项目名称'] || '';
+            dd.querySelectorAll('.hdr-filter-opt').forEach(function(o) {
+                if (o.dataset.value === curVal) o.classList.add('selected');
+            });
+        }
+
+        function hdrOptClick() {
+            var value = this.dataset.value;
+            var dd = this.closest('.hdr-filter-dropdown');
+            var col = dd.id.replace('hdrDropdown', '');
+            // 清除所有选中样式，当前点击的项标记为选中（包括"全部"）
+            dd.querySelectorAll('.hdr-filter-opt').forEach(function(o) { o.classList.remove('selected'); });
+            this.classList.add('selected');
+            window._hdrFilter[col] = value;
+            applyHdrFilters();
+            closeAllHdrDropdowns();
+        }
+
+        function applyHdrFilters() {
+            if (!window._queryDataFull) return;
+            var projectFilter = window._hdrFilter['项目名称'] || '';
+            var statusFilter = window._hdrFilter['状态'] || '';
+
+            var filtered = window._queryDataFull.filter(function(d) {
+                if (projectFilter && d.项目名称 !== projectFilter) return false;
+                if (statusFilter) {
+                    var status = '未登记';
+                    if (d.登记ID != null) {
+                        status = (d.已执行次数 < d.总次数) ? '进行中' : '已完成';
+                    }
+                    if (status !== statusFilter) return false;
+                }
+                return true;
+            });
+
+            renderTable(filtered);
+        }
+
+        // 状态下拉选项固定，直接绑点击
+        document.querySelectorAll('#hdrDropdown状态 .hdr-filter-opt').forEach(function(o) {
+            o.addEventListener('click', hdrOptClick);
+        });
+
+        function closeAllHdrDropdowns() {
+            document.querySelectorAll('.hdr-filter-dropdown').forEach(function(d) { d.classList.remove('show'); });
+            document.querySelectorAll('.hdr-filter-trigger').forEach(function(t) { t.classList.remove('active'); });
+        }
+
+        document.addEventListener('click', function() { closeAllHdrDropdowns(); });
 
         // ===== 登记 =====
         function openRegister(idx) {
