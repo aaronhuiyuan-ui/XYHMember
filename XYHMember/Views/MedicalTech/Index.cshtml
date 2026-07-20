@@ -193,6 +193,7 @@
                                 <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
                                 <button class="am-btn am-btn-primary" type="button" id="batchRegBtn" style="margin-left:10px;background:#0e90d2!important;border-color:#0e90d2!important;color:#fff!important;">批量登记</button>
                                 <button class="am-btn am-btn-primary" type="button" id="batchExecBtn" style="margin-left:5px;background:#5eb95e!important;border-color:#5eb95e!important;color:#fff!important;">批量执行</button>
+                                <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:10px;">导出到Excel</button>
                             </span>
                         </span>
                     </div>
@@ -215,7 +216,8 @@
                                 </div>
                             </th>
                             <th>数量</th>
-                            <th>金额</th>
+                            <th>项目金额</th>
+                            <th>实收金额</th>
                             <th>收费日期</th>
                             <th>状态<span class="hdr-filter-trigger" data-col="状态">▼</span>
                                 <div class="hdr-filter-dropdown" id="hdrDropdown状态">
@@ -226,11 +228,13 @@
                                 </div>
                             </th>
                             <th>执行进度</th>
+                            <th>已执行金额</th>
+                            <th>未执行金额</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="10" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
+                        <tr><td colspan="13" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -373,7 +377,7 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="13" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         window._queryDataFull = data;
                         applyHdrFilters();
@@ -381,14 +385,14 @@
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="13" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999;">未找到数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#999;">未找到数据</td></tr>';
                 return;
             }
 
@@ -415,6 +419,15 @@
                     actionHtml = '<button class="btn-action btn-view" onclick="openHistory(' + i + ')">查看</button>';
                 }
 
+                // 计算已执行金额和未执行金额
+                var 项目金额 = d.金额 != null ? d.金额 : 0;
+                var 实收金额 = d.实收金额 != null ? d.实收金额 : 项目金额;
+                var 已执行金额 = 0, 未执行金额 = 0;
+                if (d.登记ID != null && d.总次数 > 0 && d.已执行次数 > 0) {
+                    已执行金额 = 项目金额 / d.总次数 * d.已执行次数;
+                }
+                未执行金额 = 项目金额 - 已执行金额;
+
                 html += '<tr>' +
                     '<td><input type="checkbox" data-idx="' + i + '"></td>' +
                     '<td>' + d.门诊号 + '</td>' +
@@ -422,9 +435,12 @@
                     '<td>' + escapeHtml(d.项目名称) + '</td>' +
                     '<td>' + (d.数量 != null ? d.数量 : '') + '</td>' +
                     '<td>' + (d.金额 != null ? d.金额.toFixed(2) : '') + '</td>' +
+                    '<td>' + (实收金额.toFixed(2)) + '</td>' +
                     '<td>' + d.日期 + '</td>' +
                     '<td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td>' +
                     '<td>' + progressText + '</td>' +
+                    '<td>' + 已执行金额.toFixed(2) + '</td>' +
+                    '<td>' + 未执行金额.toFixed(2) + '</td>' +
                     '<td>' + actionHtml + '</td>' +
                     '</tr>';
             }
@@ -1005,6 +1021,54 @@
             window._batchQueueIndex = 0;
             loadBatchItem();
             });
+        });
+
+        // ===== 导出到Excel =====
+        document.getElementById('exportBtn').addEventListener('click', function() {
+            var table = document.getElementById('dataTable');
+            if (!table) return;
+
+            // 表头（手动定义，不包含复选框和操作列）
+            var headers = ['门诊号', '姓名', '项目名称', '数量', '项目金额', '实收金额', '收费日期', '状态', '执行进度', '已执行金额', '未执行金额'];
+            var rows = [];
+
+            var tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            var trs = tbody.querySelectorAll('tr');
+            for (var i = 0; i < trs.length; i++) {
+                var tds = trs[i].querySelectorAll('td');
+                if (tds.length < 12) continue; // 跳过空行/提示行
+                var row = [];
+                // 跳过第0列（复选框）和最后一列（操作），取1-11
+                for (var c = 1; c <= 11; c++) {
+                    row.push(tds[c].innerText.trim());
+                }
+                rows.push(row);
+            }
+
+            if (rows.length === 0) {
+                customDialog.info('没有数据可导出', '提示');
+                return;
+            }
+
+            fetch('@Url.Action("ExportToExcel", "Export")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Headers: headers, Rows: rows })
+            })
+            .then(function(res) { return res.blob(); })
+            .then(function(blob) {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '医技登记与执行.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(function(err) { customDialog.error(err.message, '导出失败'); });
         });
 
         // 回车查询

@@ -31,21 +31,36 @@ namespace XYHMember.Controllers
 
             try
             {
-                var sql = @"SELECT a.结帐ID, a.门诊号, a.姓名, b.就诊ID, b.处方ID,
-                                   CONVERT(varchar, b.日期, 23) AS 日期,
-                                   CONVERT(varchar, b.时间, 8) AS 时间,
-                                   b.项目名称, b.单价, b.数量, b.金额,
-                                   r.登记ID, r.总次数,
-                                   (SELECT COUNT(*) FROM fghis5..医技执行记录表 e WHERE e.登记ID = r.登记ID AND e.delete_flag = 'f') AS 已执行次数
-                            FROM fghis5..门诊_收费发票表 a
-                            JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
-                            LEFT JOIN fghis5..医技登记表 r ON r.流水号 = CAST(a.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR)
-                                                 AND r.项目名称 = b.项目名称
-                            WHERE a.发票状态 = '2'
-                              AND b.项目类别 IN (6, 59)
-                              AND b.日期 BETWEEN @bdate AND @edate
-                              AND (@name = '' OR a.姓名 LIKE '%' + @name + '%' OR b.项目名称 LIKE '%' + @name + '%')
-                            ORDER BY b.日期 DESC, b.时间 DESC";
+                var sql = @"WITH 支付汇总 AS (
+                    SELECT 结帐ID, SUM(支付金额) AS 实收金额
+                    FROM fghis5..门诊_收费支付表
+                    WHERE 支付方式 != '6'
+                    GROUP BY 结帐ID
+                ),
+                执行汇总 AS (
+                    SELECT 登记ID, COUNT(*) AS 已执行次数
+                    FROM fghis5..医技执行记录表
+                    WHERE delete_flag = 'f'
+                    GROUP BY 登记ID
+                )
+                SELECT a.结帐ID, a.门诊号, a.姓名, b.就诊ID, b.处方ID,
+                       CONVERT(varchar, b.日期, 23) AS 日期,
+                       CONVERT(varchar, b.时间, 8) AS 时间,
+                       b.项目名称, b.单价, b.数量, b.金额,
+                       ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额, 0), 0) AS 实收金额,
+                       r.登记ID, r.总次数,
+                       ISNULL(e.已执行次数, 0) AS 已执行次数
+                FROM fghis5..门诊_收费发票表 a
+                JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
+                LEFT JOIN fghis5..医技登记表 r ON r.流水号 = CAST(a.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR)
+                    AND r.项目名称 = b.项目名称
+                LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
+                LEFT JOIN 执行汇总 e ON e.登记ID = r.登记ID
+                WHERE a.发票状态 = '2'
+                  AND b.项目类别 IN (6, 59)
+                  AND b.日期 BETWEEN @bdate AND @edate
+                  AND (@name = '' OR a.姓名 LIKE '%' + @name + '%' OR b.项目名称 LIKE '%' + @name + '%')
+                ORDER BY b.日期 DESC, b.时间 DESC";
 
                 var result = db.Database.SqlQuery<MedicalTechChargeItem>(sql,
                     new SqlParameter("@name", (name ?? "").Trim()),

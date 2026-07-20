@@ -433,6 +433,7 @@ namespace XYHMember.Context
         public decimal? 单价 { get; set; }
         public decimal? 数量 { get; set; }
         public decimal? 金额 { get; set; }
+        public decimal? 实收金额 { get; set; }
         public int? 登记ID { get; set; }
         public int? 总次数 { get; set; }
         public int? 已执行次数 { get; set; }
