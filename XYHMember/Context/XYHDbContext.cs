@@ -449,4 +449,21 @@ namespace XYHMember.Context
         public string json_data { get; set; }
         public DateTime? 查询时间 { get; set; }
     }
+
+    //医技执行记录查询
+    public class ExecutionRecordQuery
+    {
+        public int 执行ID { get; set; }
+        public int 登记ID { get; set; }
+        public int? 门诊号 { get; set; }
+        public string 病人姓名 { get; set; }
+        public string 项目名称 { get; set; }
+        public int 本次次数 { get; set; }
+        public int? 总次数 { get; set; }
+        public string 执行时间 { get; set; }
+        public string 执行人工号 { get; set; }
+        public string 执行人姓名 { get; set; }
+        public string 岗位 { get; set; }
+        public string 备注 { get; set; }
+    }
 }

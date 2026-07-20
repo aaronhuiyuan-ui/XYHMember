@@ -509,6 +509,55 @@ namespace XYHMember.Controllers
             }
         }
 
+        // ========== 医技执行记录查询 ==========
+
+        /// <summary>
+        /// 执行记录查询页面
+        /// </summary>
+        public ActionResult ExecutionRecords()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询执行记录
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetExecutionRecords(string bdate, string edate, string name)
+        {
+            if (string.IsNullOrEmpty(bdate))
+                bdate = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.IsNullOrEmpty(edate))
+                edate = DateTime.Today.ToString("yyyy-MM-dd");
+
+            try
+            {
+                var sql = @"SELECT e.执行ID, e.登记ID, r.门诊号, r.病人姓名, r.项目名称,
+                                   e.本次次数, r.总次数,
+                                   CONVERT(varchar, e.执行时间, 120) AS 执行时间,
+                                   e.执行人工号, e.执行人姓名, e.岗位, e.备注
+                            FROM fghis5..医技执行记录表 e
+                            JOIN fghis5..医技登记表 r ON e.登记ID = r.登记ID
+                            WHERE e.delete_flag = 'f'
+                              AND CONVERT(date, e.执行时间) BETWEEN @bdate AND @edate
+                              AND (@name = '' OR r.病人姓名 LIKE '%' + @name + '%' OR r.项目名称 LIKE '%' + @name + '%')
+                            ORDER BY e.执行时间 DESC";
+
+                var result = db.Database.SqlQuery<ExecutionRecordQuery>(sql,
+                    new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
+                    new SqlParameter("@edate", QueryHelper.ParseDate(edate)),
+                    new SqlParameter("@name", (name ?? "").Trim())).ToList();
+
+                return Json(result, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
         private string GetCurrentJobNumber()
         {
             var userId = ((int?)Session["UserId"]) ?? 1;

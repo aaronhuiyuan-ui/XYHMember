@@ -62,6 +62,7 @@
         .hdr-filter-opt:last-child { border-bottom: none; }
         .hdr-filter-opt:hover { background: #f5f5f5; color: #000; }
         .hdr-filter-opt.selected { background: #e6f2ff; color: #0e90d2; font-weight: bold; }
+        .summary-row td { font-weight: bold; border-top: 2px solid #999; }
         .table-wrapper {
             overflow: auto !important;
             max-width: calc(100vw - 40px) !important;
@@ -444,9 +445,42 @@
                     '<td>' + actionHtml + '</td>' +
                     '</tr>';
             }
+            // 计算合计
+            var sum项目金额 = 0, sum实收金额 = 0, sum已执行金额 = 0, sum未执行金额 = 0;
+            for (var i = 0; i < data.length; i++) {
+                var d = data[i];
+                var 项目金额 = d.金额 != null ? d.金额 : 0;
+                var 实收金额 = d.实收金额 != null ? d.实收金额 : 项目金额;
+                var 已执行金额 = 0;
+                if (d.登记ID != null && d.总次数 > 0 && d.已执行次数 > 0) {
+                    已执行金额 = 项目金额 / d.总次数 * d.已执行次数;
+                }
+                var 未执行金额 = 项目金额 - 已执行金额;
+                sum项目金额 += 项目金额;
+                sum实收金额 += 实收金额;
+                sum已执行金额 += 已执行金额;
+                sum未执行金额 += 未执行金额;
+            }
+
+            html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
+                '<td></td>' +
+                '<td>合计</td>' +
+                '<td></td>' +
+                '<td></td>' +
+                '<td></td>' +
+                '<td>' + sum项目金额.toFixed(2) + '</td>' +
+                '<td>' + sum实收金额.toFixed(2) + '</td>' +
+                '<td></td>' +
+                '<td></td>' +
+                '<td></td>' +
+                '<td>' + sum已执行金额.toFixed(2) + '</td>' +
+                '<td>' + sum未执行金额.toFixed(2) + '</td>' +
+                '<td></td>' +
+                '</tr>';
+
             tbody.innerHTML = html;
             window._queryData = data;
-            initTablePagination('dataTable');
+            initTablePagination('dataTable', { summaryRows: 1 });
         }
 
         function escapeHtml(str) {
@@ -1037,6 +1071,7 @@
 
             var trs = tbody.querySelectorAll('tr');
             for (var i = 0; i < trs.length; i++) {
+                if (trs[i].classList.contains('summary-row')) continue; // 跳过合计行
                 var tds = trs[i].querySelectorAll('td');
                 if (tds.length < 12) continue; // 跳过空行/提示行
                 var row = [];
