@@ -538,11 +538,11 @@ namespace XYHMember.Controllers
                     WHERE 支付方式 != '6'
                     GROUP BY 结帐ID
                 )
-                SELECT e.执行ID, e.登记ID, r.门诊号, r.病人姓名, r.项目名称,
-                       e.本次次数, r.总次数,
-                       ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额 * r.总次数, 0), 0) AS 已执行金额,
-                       CONVERT(varchar, e.执行时间, 120) AS 执行时间,
-                       e.执行人工号, e.执行人姓名, e.岗位, e.备注
+                SELECT CONVERT(varchar, MAX(e.执行时间), 20) AS 执行时间,
+                       r.病人姓名, r.项目名称,
+                       COUNT(*) AS 本次执行次数,
+                       SUM(ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额 * r.总次数, 0), 0)) AS 本次执行金额,
+                       r.总次数
                 FROM fghis5..医技执行记录表 e
                 JOIN fghis5..医技登记表 r ON e.登记ID = r.登记ID
                 LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
@@ -552,7 +552,8 @@ namespace XYHMember.Controllers
                 WHERE e.delete_flag = 'f'
                   AND CONVERT(date, e.执行时间) BETWEEN @bdate AND @edate
                   AND (@name = '' OR r.病人姓名 LIKE '%' + @name + '%' OR r.项目名称 LIKE '%' + @name + '%')
-                ORDER BY e.执行时间 DESC";
+                GROUP BY r.病人姓名, r.项目名称, r.总次数
+                ORDER BY MAX(e.执行时间) DESC";
 
                 var result = db.Database.SqlQuery<ExecutionRecordQuery>(sql,
                     new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
