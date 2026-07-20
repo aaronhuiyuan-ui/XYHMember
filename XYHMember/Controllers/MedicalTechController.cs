@@ -532,16 +532,27 @@ namespace XYHMember.Controllers
 
             try
             {
-                var sql = @"SELECT e.执行ID, e.登记ID, r.门诊号, r.病人姓名, r.项目名称,
-                                   e.本次次数, r.总次数,
-                                   CONVERT(varchar, e.执行时间, 120) AS 执行时间,
-                                   e.执行人工号, e.执行人姓名, e.岗位, e.备注
-                            FROM fghis5..医技执行记录表 e
-                            JOIN fghis5..医技登记表 r ON e.登记ID = r.登记ID
-                            WHERE e.delete_flag = 'f'
-                              AND CONVERT(date, e.执行时间) BETWEEN @bdate AND @edate
-                              AND (@name = '' OR r.病人姓名 LIKE '%' + @name + '%' OR r.项目名称 LIKE '%' + @name + '%')
-                            ORDER BY e.执行时间 DESC";
+                var sql = @"WITH 支付汇总 AS (
+                    SELECT 结帐ID, SUM(支付金额) AS 实收金额
+                    FROM fghis5..门诊_收费支付表
+                    WHERE 支付方式 != '6'
+                    GROUP BY 结帐ID
+                )
+                SELECT e.执行ID, e.登记ID, r.门诊号, r.病人姓名, r.项目名称,
+                       e.本次次数, r.总次数,
+                       ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额 * r.总次数, 0), 0) AS 已执行金额,
+                       CONVERT(varchar, e.执行时间, 120) AS 执行时间,
+                       e.执行人工号, e.执行人姓名, e.岗位, e.备注
+                FROM fghis5..医技执行记录表 e
+                JOIN fghis5..医技登记表 r ON e.登记ID = r.登记ID
+                LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
+                    AND b.项目名称 = r.项目名称
+                LEFT JOIN fghis5..门诊_收费发票表 a ON a.结帐ID = b.结帐ID
+                LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
+                WHERE e.delete_flag = 'f'
+                  AND CONVERT(date, e.执行时间) BETWEEN @bdate AND @edate
+                  AND (@name = '' OR r.病人姓名 LIKE '%' + @name + '%' OR r.项目名称 LIKE '%' + @name + '%')
+                ORDER BY e.执行时间 DESC";
 
                 var result = db.Database.SqlQuery<ExecutionRecordQuery>(sql,
                     new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),

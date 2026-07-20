@@ -364,7 +364,7 @@
     <script>
         flatpickr("#bdatepicker", { dateFormat: "Y-m-d", defaultDate: "@bdatepicker" });
         flatpickr("#edatepicker", { dateFormat: "Y-m-d", defaultDate: "@edatepicker" });
-        flatpickr("#exec_执行时间", { dateFormat: "Y-m-d H:i", enableTime: true, defaultDate: new Date() });
+        flatpickr("#exec_执行时间", { dateFormat: "Y-m-d H:i:S", enableTime: true, defaultDate: new Date() });
 
         // ===== 查询 =====
         function doSearch() {
@@ -648,7 +648,7 @@
             var pad = function(n) { return n < 10 ? '0' + n : n; };
             document.getElementById('exec_执行时间').value =
                 now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) +
-                ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+                ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
 
             document.getElementById('exec_工号').innerHTML = '<option value="">请选择</option>';
             document.getElementById('exec_姓名_').innerHTML = '<option value="">请选择</option>';
@@ -999,7 +999,7 @@
             var pad = function(n) { return n < 10 ? '0' + n : n; };
             document.getElementById('exec_执行时间').value =
                 now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) +
-                ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+                ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
             document.getElementById('exec_执行次数').value = 1;
             document.getElementById('exec_备注').value = '批量执行';
 

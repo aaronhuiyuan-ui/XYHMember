@@ -460,6 +460,7 @@ namespace XYHMember.Context
         public string 项目名称 { get; set; }
         public int 本次次数 { get; set; }
         public int? 总次数 { get; set; }
+        public decimal? 已执行金额 { get; set; }
         public string 执行时间 { get; set; }
         public string 执行人工号 { get; set; }
         public string 执行人姓名 { get; set; }
