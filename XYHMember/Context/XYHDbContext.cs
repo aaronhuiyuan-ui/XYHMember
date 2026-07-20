@@ -34,6 +34,7 @@ namespace XYHMember.Context
         public DbSet<MedicalTechExecution> MedicalTechExecutions { get; set; }
         public DbSet<MedicalTechStaff> MedicalTechStaffs { get; set; }
         public DbSet<MedicalTechDefaultCount> MedicalTechDefaultCounts { get; set; }
+        public DbSet<PrescriptionResultCache> PrescriptionResultCaches { get; set; }
 
     }
 
@@ -437,4 +438,14 @@ namespace XYHMember.Context
         public int? 已执行次数 { get; set; }
     }
 
+    //处方结果本地缓存
+    public class PrescriptionResultCache
+    {
+        [Key]
+        public int 序号 { get; set; }
+        public string outcfcode { get; set; }
+        public string billdate { get; set; }
+        public string json_data { get; set; }
+        public DateTime? 查询时间 { get; set; }
+    }
 }

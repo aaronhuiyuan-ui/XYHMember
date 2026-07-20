@@ -517,6 +517,33 @@ ORDER BY 发药时间 DESC";
                 if (!isSuccess)
                     return Json(new { success = false, msg = jResp["messageInfos"]?.ToString() ?? "查询失败", apiResponse = jResp.ToString() });
 
+                // 查询成功，缓存到本地表
+                var dataJson = jResp["data"]?.ToString(Formatting.None) ?? "{}";
+                try
+                {
+                    var checkSql = @"SELECT COUNT(*) FROM fghis5..处方结果本地表 WHERE outcfcode = @outcfcode";
+                    var exists = db.Database.SqlQuery<int>(checkSql,
+                        new SqlParameter("@outcfcode", outcfcode)).FirstOrDefault() > 0;
+
+                    if (exists)
+                    {
+                        var updSql = @"UPDATE fghis5..处方结果本地表 SET json_data = @json, billdate = @billdate, 查询时间 = GETDATE() WHERE outcfcode = @outcfcode";
+                        db.Database.ExecuteSqlCommand(updSql,
+                            new SqlParameter("@json", dataJson),
+                            new SqlParameter("@billdate", billdate ?? ""),
+                            new SqlParameter("@outcfcode", outcfcode));
+                    }
+                    else
+                    {
+                        var insSql = @"INSERT INTO fghis5..处方结果本地表 (outcfcode, billdate, json_data, 查询时间) VALUES (@outcfcode, @billdate, @json, GETDATE())";
+                        db.Database.ExecuteSqlCommand(insSql,
+                            new SqlParameter("@outcfcode", outcfcode),
+                            new SqlParameter("@billdate", billdate ?? ""),
+                            new SqlParameter("@json", dataJson));
+                    }
+                }
+                catch { /* 缓存失败不影响前端显示 */ }
+
                 var respObj = new { success = true, data = jResp["data"] };
                 return Content(JsonConvert.SerializeObject(respObj), "application/json");
             }
