@@ -589,18 +589,21 @@
             var d = window._queryData[idx];
             document.getElementById('reg_姓名').value = d.姓名;
             document.getElementById('reg_项目名称').value = d.项目名称;
-            document.getElementById('reg_总次数').value = '';
             document.getElementById('reg_结帐ID').value = d.结帐ID;
             document.getElementById('reg_处方ID').value = d.处方ID;
             document.getElementById('reg_就诊ID').value = d.就诊ID;
             document.getElementById('reg_门诊号').value = d.门诊号;
+
+            var qty = (d.数量 != null && d.数量 > 0) ? d.数量 : 1;
 
             // 根据项目名称查询默认次数
             fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?name=' + encodeURIComponent(d.项目名称))
                 .then(function(r) { return r.json(); })
                 .then(function(list) {
                     if (list && list.length > 0 && list[0].默认总次数) {
-                        document.getElementById('reg_总次数').value = list[0].默认总次数;
+                        document.getElementById('reg_总次数').value = list[0].默认总次数 * qty;
+                    } else {
+                        document.getElementById('reg_总次数').value = 1 * qty;
                     }
                 })
                 .catch(function() {});
