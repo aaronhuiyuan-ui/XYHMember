@@ -31,6 +31,43 @@
             display: table !important;
         }
         .summary-row td { font-weight: bold; border-top: 2px solid #999; }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 9999;
+        }
+        .modal-overlay.active { display: block; }
+        .modal-box {
+            background: #fff;
+            border-radius: 4px;
+            width: 420px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            position: absolute;
+            top: 50px;
+            left: 500px;
+        }
+        .modal-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e9e9e9;
+            font-size: 15px;
+            font-weight: bold;
+        }
+        .modal-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .modal-footer {
+            padding: 10px 16px;
+            border-top: 1px solid #e9e9e9;
+            text-align: right;
+        }
+        .modal-footer .am-btn { margin-left: 8px; }
     </style>
 </head>
 <body>
@@ -51,6 +88,7 @@
                             <span class="am-input-group-btn">
                                 <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
                                 <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:10px;">导出到Excel</button>
+                                <button class="am-btn am-btn-default" type="button" id="updateTotalBtn" style="margin-left:10px;">修改总次数</button>
                             </span>
                     </div>
                 </form>
@@ -63,11 +101,14 @@
                 <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
                     <thead>
                         <tr>
+                            <th style="width:30px;"><input type="checkbox" id="checkAll" onchange="toggleAllChecks(this)"></th>
                             <th>执行时间</th>
                             <th>病人姓名</th>
                             <th>项目名称</th>
                             <th>本次执行次数</th>
                             <th>本次执行金额</th>
+                            <th>数量</th>
+                            <th>默认次数</th>
                             <th>总次数</th>
                             <th>进度</th>
                             <th>执行人</th>
@@ -76,7 +117,7 @@
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="10" style="text-align:center;color:#999;">加载中...</td></tr>
+                        <tr><td colspan="13" style="text-align:center;color:#999;">加载中...</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -107,21 +148,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="13" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         renderTable(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="10" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="13" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999;">暂无执行记录</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#999;">暂无执行记录</td></tr>';
                 return;
             }
 
@@ -130,12 +171,15 @@
                 var d = data[i];
                 var execAmt = d.本次执行金额 != null ? d.本次执行金额 : 0;
 
-                html += '<tr>' +
+                html += '<tr data-id="' + d.登记ID + '">' +
+                    '<td><input type="checkbox" class="row-check" data-id="' + d.登记ID + '"></td>' +
                     '<td>' + escapeHtml(d.执行时间) + '</td>' +
                     '<td>' + escapeHtml(d.病人姓名) + '</td>' +
                     '<td>' + escapeHtml(d.项目名称) + '</td>' +
                     '<td>' + d.本次执行次数 + '次</td>' +
                     '<td>' + execAmt.toFixed(2) + '</td>' +
+                    '<td>' + (d.数量 != null ? d.数量 : '') + '</td>' +
+                    '<td>' + (d.默认次数 != null ? d.默认次数 : '') + '</td>' +
                     '<td>' + (d.总次数 != null ? d.总次数 : '-') + '</td>' +
                     '<td>' + d.最新本次次数 + '/' + (d.总次数 != null ? d.总次数 : '?') + '</td>' +
                     '<td>' + escapeHtml(d.执行人姓名) + '</td>' +
@@ -150,11 +194,14 @@
             }
 
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
+                '<td></td>' +
                 '<td>合计</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td>' + sum已执行金额.toFixed(2) + '</td>' +
+                '<td></td>' +
+                '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
@@ -172,17 +219,86 @@
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        // ===== 全选/取消全选 =====
+        function toggleAllChecks(cb) {
+            var checks = document.querySelectorAll('#dataTable tbody .row-check');
+            for (var i = 0; i < checks.length; i++) {
+                checks[i].checked = cb.checked;
+            }
+        }
+
+        // ===== 修改总次数 =====
+        document.getElementById('updateTotalBtn').addEventListener('click', function() {
+            var checked = document.querySelectorAll('#dataTable tbody .row-check:checked');
+            if (checked.length === 0) {
+                customDialog.info('请先勾选要修改的记录', '提示');
+                return;
+            }
+            var names = [];
+            var trs = document.querySelectorAll('#dataTable tbody tr');
+            for (var i = 0; i < trs.length; i++) {
+                if (trs[i].classList.contains('summary-row')) continue;
+                var cb = trs[i].querySelector('.row-check');
+                if (cb && cb.checked) {
+                    var tds = trs[i].querySelectorAll('td');
+                    names.push(tds[2].innerText.trim() + ' - ' + tds[3].innerText.trim());
+                }
+            }
+            document.getElementById('updateTotalInfo').innerText = '已选 ' + checked.length + ' 条记录：' + names.join('、');
+            document.getElementById('updateTotalInput').value = '';
+            openModal('updateTotalModal');
+        });
+
+        function submitUpdateTotal() {
+            var checked = document.querySelectorAll('#dataTable tbody .row-check:checked');
+            if (checked.length === 0) {
+                customDialog.info('请先勾选要修改的记录', '提示');
+                return;
+            }
+            var newVal = parseInt(document.getElementById('updateTotalInput').value);
+            if (!newVal || newVal <= 0) {
+                customDialog.info('请输入有效的总次数', '提示');
+                return;
+            }
+
+            var ids = [];
+            for (var i = 0; i < checked.length; i++) {
+                ids.push(parseInt(checked[i].getAttribute('data-id')));
+            }
+
+            fetch('@Url.Action("UpdateTotalCount", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 登记IDs: ids, 新总次数: newVal })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    customDialog.alert(res.msg, '提示', function() {
+                        closeModal('updateTotalModal');
+                        doSearch();
+                    });
+                } else {
+                    customDialog.error(res.msg, '修改失败');
+                }
+            })
+            .catch(function(err) { customDialog.error(err.message, '修改失败'); });
+        }
+
         // ===== 导出到Excel =====
         document.getElementById('exportBtn').addEventListener('click', function() {
-            var headers = ['执行时间', '病人姓名', '项目名称', '本次执行次数', '本次执行金额', '总次数', '进度', '执行人', '岗位', '备注'];
+            var headers = ['执行时间', '病人姓名', '项目名称', '本次执行次数', '本次执行金额', '数量', '默认次数', '总次数', '进度', '执行人', '岗位', '备注'];
             var rows = [];
             var trs = document.querySelectorAll('#dataTable tbody tr');
             for (var i = 0; i < trs.length; i++) {
                 if (trs[i].classList.contains('summary-row')) continue;
                 var tds = trs[i].querySelectorAll('td');
-                if (tds.length < 10) continue;
+                if (tds.length < 13) continue;
                 var row = [];
-                for (var c = 0; c < 10; c++) {
+                for (var c = 1; c < 13; c++) {  // 从1开始跳过复选框列
                     row.push(tds[c].innerText.trim());
                 }
                 rows.push(row);
@@ -222,6 +338,24 @@
         // 初始化加载
         doSearch();
     </script>
+
+    <!-- ===== 修改总次数弹窗 ===== -->
+    <div class="modal-overlay" id="updateTotalModal">
+        <div class="modal-box">
+            <div class="modal-header">修改总次数</div>
+            <div class="modal-body">
+                <p id="updateTotalInfo" style="margin:0 0 12px;color:#666;"></p>
+                <div class="field">
+                    <label>新总次数</label>
+                    <input type="number" id="updateTotalInput" min="1" max="999" value="" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;box-sizing:border-box;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="am-btn am-btn-default" onclick="closeModal('updateTotalModal')">取消</button>
+                <button class="am-btn am-btn-primary" onclick="submitUpdateTotal()">确定</button>
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>

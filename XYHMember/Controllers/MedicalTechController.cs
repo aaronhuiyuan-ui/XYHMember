@@ -538,10 +538,13 @@ namespace XYHMember.Controllers
                     WHERE 支付方式 != '6'
                     GROUP BY 结帐ID
                 )
-                SELECT CONVERT(varchar, MAX(e.执行时间), 20) AS 执行时间,
+                SELECT r.登记ID,
+                       CONVERT(varchar, MAX(e.执行时间), 20) AS 执行时间,
                        r.病人姓名, r.项目名称,
                        COUNT(*) AS 本次执行次数,
                        SUM(ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额 * r.总次数, 0), 0)) AS 本次执行金额,
+                       MAX(b.数量) AS 数量,
+                       ISNULL(MAX(dc.默认总次数), 1) AS 默认次数,
                        r.总次数,
                        MAX(e.本次次数) AS 最新本次次数,
                        MAX(e.执行人姓名) AS 执行人姓名,
@@ -553,10 +556,11 @@ namespace XYHMember.Controllers
                     AND b.项目名称 = r.项目名称
                 LEFT JOIN fghis5..门诊_收费发票表 a ON a.结帐ID = b.结帐ID
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
+                LEFT JOIN fghis5..医技项目默认次数表 dc ON dc.项目名称 = r.项目名称
                 WHERE e.delete_flag = 'f'
                   AND CONVERT(date, e.执行时间) BETWEEN @bdate AND @edate
                   AND (@name = '' OR r.病人姓名 LIKE '%' + @name + '%' OR r.项目名称 LIKE '%' + @name + '%')
-                GROUP BY r.病人姓名, r.项目名称, r.总次数
+                GROUP BY r.登记ID, r.病人姓名, r.项目名称, r.总次数
                 ORDER BY MAX(e.执行时间) DESC";
 
                 var result = db.Database.SqlQuery<ExecutionRecordQuery>(sql,
@@ -571,6 +575,37 @@ namespace XYHMember.Controllers
                 var inner = ex;
                 while (inner.InnerException != null) inner = inner.InnerException;
                 return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 修改总次数
+        /// </summary>
+        [HttpPost]
+        public ActionResult UpdateTotalCount(List<int> 登记IDs, int 新总次数)
+        {
+            try
+            {
+                if (登记IDs == null || 登记IDs.Count == 0)
+                    return Json(new { success = false, msg = "请选择要修改的记录" });
+                if (新总次数 <= 0)
+                    return Json(new { success = false, msg = "总次数必须大于0" });
+
+                var sql = @"UPDATE fghis5..医技登记表 SET 总次数 = @总次数 WHERE 登记ID = @登记ID";
+                foreach (var id in 登记IDs)
+                {
+                    db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@总次数", 新总次数),
+                        new SqlParameter("@登记ID", id));
+                }
+
+                return Json(new { success = true, msg = "修改成功，共修改 " + 登记IDs.Count + " 条记录" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
             }
         }
 
