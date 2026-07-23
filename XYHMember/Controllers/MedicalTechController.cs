@@ -609,6 +609,35 @@ namespace XYHMember.Controllers
             }
         }
 
+        /// <summary>
+        /// 修改备注
+        /// </summary>
+        [HttpPost]
+        public ActionResult UpdateRemark(List<int> 登记IDs, string 新备注)
+        {
+            try
+            {
+                if (登记IDs == null || 登记IDs.Count == 0)
+                    return Json(new { success = false, msg = "请选择要修改的记录" });
+
+                var sql = @"UPDATE fghis5..医技执行记录表 SET 备注 = @备注 WHERE 登记ID = @登记ID AND delete_flag = 'f'";
+                foreach (var id in 登记IDs)
+                {
+                    db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@备注", 新备注 ?? ""),
+                        new SqlParameter("@登记ID", id));
+                }
+
+                return Json(new { success = true, msg = "修改成功，共修改 " + 登记IDs.Count + " 条记录" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
         private string GetCurrentJobNumber()
         {
             var userId = ((int?)Session["UserId"]) ?? 1;

@@ -89,6 +89,7 @@
                                 <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
                                 <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:10px;">导出到Excel</button>
                                 <button class="am-btn am-btn-default" type="button" id="updateTotalBtn" style="margin-left:10px;">修改总次数</button>
+                                <button class="am-btn am-btn-default" type="button" id="updateRemarkBtn" style="margin-left:10px;">修改备注</button>
                             </span>
                     </div>
                 </form>
@@ -288,6 +289,60 @@
             .catch(function(err) { customDialog.error(err.message, '修改失败'); });
         }
 
+        // ===== 修改备注 =====
+        document.getElementById('updateRemarkBtn').addEventListener('click', function() {
+            var checked = document.querySelectorAll('#dataTable tbody .row-check:checked');
+            if (checked.length === 0) {
+                customDialog.info('请先勾选要修改的记录', '提示');
+                return;
+            }
+            var names = [];
+            var trs = document.querySelectorAll('#dataTable tbody tr');
+            for (var i = 0; i < trs.length; i++) {
+                if (trs[i].classList.contains('summary-row')) continue;
+                var cb = trs[i].querySelector('.row-check');
+                if (cb && cb.checked) {
+                    var tds = trs[i].querySelectorAll('td');
+                    names.push(tds[2].innerText.trim() + ' - ' + tds[3].innerText.trim());
+                }
+            }
+            document.getElementById('updateRemarkInfo').innerText = '已选 ' + checked.length + ' 条记录：' + names.join('、');
+            document.getElementById('updateRemarkInput').value = '';
+            openModal('updateRemarkModal');
+        });
+
+        function submitUpdateRemark() {
+            var checked = document.querySelectorAll('#dataTable tbody .row-check:checked');
+            if (checked.length === 0) {
+                customDialog.info('请先勾选要修改的记录', '提示');
+                return;
+            }
+            var newRemark = document.getElementById('updateRemarkInput').value.trim();
+
+            var ids = [];
+            for (var i = 0; i < checked.length; i++) {
+                ids.push(parseInt(checked[i].getAttribute('data-id')));
+            }
+
+            fetch('@Url.Action("UpdateRemark", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 登记IDs: ids, 新备注: newRemark })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    customDialog.alert(res.msg, '提示', function() {
+                        closeModal('updateRemarkModal');
+                        doSearch();
+                    });
+                } else {
+                    customDialog.error(res.msg, '修改失败');
+                }
+            })
+            .catch(function(err) { customDialog.error(err.message, '修改失败'); });
+        }
+
         // ===== 导出到Excel =====
         document.getElementById('exportBtn').addEventListener('click', function() {
             var headers = ['执行时间', '病人姓名', '项目名称', '本次执行次数', '本次执行金额', '数量', '默认次数', '总次数', '进度', '执行人', '岗位', '备注'];
@@ -353,6 +408,24 @@
             <div class="modal-footer">
                 <button class="am-btn am-btn-default" onclick="closeModal('updateTotalModal')">取消</button>
                 <button class="am-btn am-btn-primary" onclick="submitUpdateTotal()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 修改备注弹窗 ===== -->
+    <div class="modal-overlay" id="updateRemarkModal">
+        <div class="modal-box">
+            <div class="modal-header">修改备注</div>
+            <div class="modal-body">
+                <p id="updateRemarkInfo" style="margin:0 0 12px;color:#666;"></p>
+                <div class="field">
+                    <label>新备注</label>
+                    <textarea id="updateRemarkInput" rows="3" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="am-btn am-btn-default" onclick="closeModal('updateRemarkModal')">取消</button>
+                <button class="am-btn am-btn-primary" onclick="submitUpdateRemark()">确定</button>
             </div>
         </div>
     </div>
