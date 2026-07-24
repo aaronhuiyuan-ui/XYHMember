@@ -188,17 +188,25 @@
                     '</tr>';
             }
 
+            // 计算合计
+            var total次数 = 0, total数量 = 0, total金额 = 0;
+            for (var j = 0; j < data.length; j++) {
+                total次数 += data[j].本次执行次数 || 0;
+                total数量 += data[j].数量 || 0;
+                total金额 += data[j].本次执行金额 || 0;
+            }
+
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
                 '<td></td>' +
                 '<td>合计</td>' +
                 '<td></td>' +
                 '<td></td>' +
+                '<td>' + total次数 + '次</td>' +
+                '<td>' + total数量 + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
-                '<td></td>' +
-                '<td></td>' +
-                '<td></td>' +
+                '<td>' + total金额.toFixed(2) + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
