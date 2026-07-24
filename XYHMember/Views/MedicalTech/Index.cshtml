@@ -455,7 +455,7 @@
                 if (d.登记ID != null && d.总次数 > 0 && d.已执行次数 > 0) {
                     已执行金额 = 实收金额 / d.总次数 * d.已执行次数;
                 }
-                var 未执行金额 = 项目金额 - 已执行金额;
+                var 未执行金额 = 实收金额 - 已执行金额;
                 sum项目金额 += 项目金额;
                 sum实收金额 += 实收金额;
                 sum已执行金额 += 已执行金额;
@@ -951,9 +951,10 @@
                 fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?name=' + encodeURIComponent(d.项目名称))
                     .then(function(r) { return r.json(); })
                     .then(function(list) {
-                        var 总次数 = 6;
+                        var qty = (d.数量 != null && d.数量 > 0) ? d.数量 : 1;
+                        var 总次数 = 1 * qty;
                         if (list && list.length > 0 && list[0].默认总次数) {
-                            总次数 = list[0].默认总次数;
+                            总次数 = list[0].默认总次数 * qty;
                         }
                         return fetch('@Url.Action("Register", "MedicalTech")', {
                             method: 'POST',
@@ -1120,3 +1121,5 @@
 
 </body>
 </html>
+
+

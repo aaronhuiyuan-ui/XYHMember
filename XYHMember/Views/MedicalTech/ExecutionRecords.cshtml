@@ -107,11 +107,11 @@
                             <th>病人姓名</th>
                             <th>项目名称</th>
                             <th>本次执行次数</th>
-                            <th>本次执行金额</th>
                             <th>数量</th>
                             <th>默认次数</th>
                             <th>总次数</th>
                             <th>进度</th>
+                            <th>本次执行金额</th>
                             <th>执行人</th>
                             <th>岗位</th>
                             <th>备注</th>
@@ -170,7 +170,6 @@
             var html = '';
             for (var i = 0; i < data.length; i++) {
                 var d = data[i];
-                var execAmt = d.本次执行金额 != null ? d.本次执行金额 : 0;
 
                 html += '<tr data-id="' + d.登记ID + '">' +
                     '<td><input type="checkbox" class="row-check" data-id="' + d.登记ID + '"></td>' +
@@ -178,20 +177,15 @@
                     '<td>' + escapeHtml(d.病人姓名) + '</td>' +
                     '<td>' + escapeHtml(d.项目名称) + '</td>' +
                     '<td>' + d.本次执行次数 + '次</td>' +
-                    '<td>' + execAmt.toFixed(2) + '</td>' +
                     '<td>' + (d.数量 != null ? d.数量 : '') + '</td>' +
                     '<td>' + (d.默认次数 != null ? d.默认次数 : '') + '</td>' +
                     '<td>' + (d.总次数 != null ? d.总次数 : '-') + '</td>' +
                     '<td>' + d.最新本次次数 + '/' + (d.总次数 != null ? d.总次数 : '?') + '</td>' +
+                    '<td>' + (d.本次执行金额 != null ? Number(d.本次执行金额).toFixed(2) : '') + '</td>' +
                     '<td>' + escapeHtml(d.执行人姓名) + '</td>' +
                     '<td>' + escapeHtml(d.岗位) + '</td>' +
                     '<td>' + escapeHtml(d.备注) + '</td>' +
                     '</tr>';
-            }
-            // 合计（仅合计本次执行金额）
-            var sum已执行金额 = 0;
-            for (var i = 0; i < data.length; i++) {
-                sum已执行金额 += (data[i].本次执行金额 != null ? data[i].本次执行金额 : 0);
             }
 
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
@@ -200,7 +194,7 @@
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
-                '<td>' + sum已执行金额.toFixed(2) + '</td>' +
+                '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
@@ -345,7 +339,7 @@
 
         // ===== 导出到Excel =====
         document.getElementById('exportBtn').addEventListener('click', function() {
-            var headers = ['执行时间', '病人姓名', '项目名称', '本次执行次数', '本次执行金额', '数量', '默认次数', '总次数', '进度', '执行人', '岗位', '备注'];
+            var headers = ['执行时间', '病人姓名', '项目名称', '本次执行次数', '数量', '默认次数', '总次数', '进度', '本次执行金额', '执行人', '岗位', '备注'];
             var rows = [];
             var trs = document.querySelectorAll('#dataTable tbody tr');
             for (var i = 0; i < trs.length; i++) {

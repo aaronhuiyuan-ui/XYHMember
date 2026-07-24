@@ -458,11 +458,11 @@ namespace XYHMember.Context
         public string 病人姓名 { get; set; }
         public string 项目名称 { get; set; }
         public int 本次执行次数 { get; set; }
-        public decimal? 本次执行金额 { get; set; }
         public decimal? 数量 { get; set; }
         public int? 默认次数 { get; set; }
         public int? 总次数 { get; set; }
         public int 最新本次次数 { get; set; }
+        public decimal? 本次执行金额 { get; set; }
         public string 执行人姓名 { get; set; }
         public string 岗位 { get; set; }
         public string 备注 { get; set; }

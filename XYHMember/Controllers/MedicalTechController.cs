@@ -32,7 +32,7 @@ namespace XYHMember.Controllers
             try
             {
                 var sql = @"WITH 支付汇总 AS (
-                    SELECT 结帐ID, SUM(支付金额) AS 实收金额
+                    SELECT 结帐ID, CAST(SUM(支付金额) AS DECIMAL(28,10)) AS 实收金额
                     FROM fghis5..门诊_收费支付表
                     WHERE 支付方式 != '6'
                     GROUP BY 结帐ID
@@ -533,7 +533,7 @@ namespace XYHMember.Controllers
             try
             {
                 var sql = @"WITH 支付汇总 AS (
-                    SELECT 结帐ID, SUM(支付金额) AS 实收金额
+                    SELECT 结帐ID, CAST(SUM(支付金额) AS DECIMAL(28,10)) AS 实收金额
                     FROM fghis5..门诊_收费支付表
                     WHERE 支付方式 != '6'
                     GROUP BY 结帐ID
@@ -542,7 +542,7 @@ namespace XYHMember.Controllers
                        CONVERT(varchar, MAX(e.执行时间), 20) AS 执行时间,
                        r.病人姓名, r.项目名称,
                        COUNT(*) AS 本次执行次数,
-                       SUM(ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额 * r.总次数, 0), 0)) AS 本次执行金额,
+                       SUM(ISNULL(CAST(p.实收金额 AS DECIMAL(28,10)) * CAST(b.金额 AS DECIMAL(28,10)) / NULLIF(CAST(a.总金额 AS DECIMAL(28,10)) * r.总次数, 0), 0)) AS 本次执行金额,
                        MAX(b.数量) AS 数量,
                        ISNULL(MAX(dc.默认总次数), 1) AS 默认次数,
                        r.总次数,
@@ -560,7 +560,7 @@ namespace XYHMember.Controllers
                 WHERE e.delete_flag = 'f'
                   AND CONVERT(date, e.执行时间) BETWEEN @bdate AND @edate
                   AND (@name = '' OR r.病人姓名 LIKE '%' + @name + '%' OR r.项目名称 LIKE '%' + @name + '%')
-                GROUP BY r.登记ID, r.病人姓名, r.项目名称, r.总次数
+                GROUP BY r.登记ID,e.执行时间, r.病人姓名, r.项目名称, r.总次数
                 ORDER BY MAX(e.执行时间) DESC";
 
                 var result = db.Database.SqlQuery<ExecutionRecordQuery>(sql,
