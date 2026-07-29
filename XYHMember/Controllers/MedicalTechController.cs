@@ -384,7 +384,7 @@ namespace XYHMember.Controllers
             try
             {
                 var sql = @"SELECT * FROM fghis5..医技项目默认次数表
-                            WHERE @name = '' OR 项目名称 LIKE '%' + @name + '%'
+                            WHERE @name = '' OR 项目名称 = @name
                             ORDER BY 序号 ASC";
 
                 var result = db.Database.SqlQuery<MedicalTechDefaultCount>(sql,
