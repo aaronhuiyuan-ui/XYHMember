@@ -91,6 +91,17 @@ namespace XYHMember.Controllers
                 var 流水号 = 结帐ID + "_" + 处方ID;
                 var 登记人工号 = GetCurrentJobNumber();
 
+                // 检查是否已存在相同流水号+项目名称的记录
+                var checkSql = @"SELECT COUNT(*) FROM fghis5..医技登记表
+                                WHERE 流水号 = @流水号 AND 项目名称 = @项目名称";
+                var exists = db.Database.SqlQuery<int>(checkSql,
+                    new SqlParameter("@流水号", 流水号),
+                    new SqlParameter("@项目名称", 项目名称 ?? "")
+                ).FirstOrDefault() > 0;
+
+                if (exists)
+                    return Json(new { success = false, msg = "该项目已登记，请勿重复登记" });
+
                 var sql = @"INSERT INTO fghis5..医技登记表 (流水号, 门诊号, 就诊ID, 病人姓名, 项目名称, 总次数, 登记时间, 登记人工号)
                             VALUES (@流水号, @门诊号, @就诊ID, @病人姓名, @项目名称, @总次数, GETDATE(), @登记人工号);
                             SELECT CAST(SCOPE_IDENTITY() AS INT)";
