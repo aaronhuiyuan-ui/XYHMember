@@ -450,6 +450,64 @@ namespace XYHMember.Context
         public DateTime? 查询时间 { get; set; }
     }
 
+    //收费药品明细（用于核对）
+    public class BillingDrugItem
+    {
+        public int 处方ID { get; set; }
+        public string 日期 { get; set; }
+        public string 病人姓名 { get; set; }
+        public string 项目ID { get; set; }
+        public string 项目名称 { get; set; }
+        public decimal? 单价 { get; set; }
+        public decimal? 数量 { get; set; }
+        public decimal? 金额 { get; set; }
+    }
+
+    //发药信息表JSON记录（用于核对）
+    public class DispenseJsonRecord
+    {
+        public int 处方ID { get; set; }
+        public string content_json { get; set; }
+    }
+
+    //发药明细（JSON解析用）
+    public class DispenseDetailItem
+    {
+        public string goodsname { get; set; }
+        public string dosage { get; set; }
+        public string goodscode { get; set; }
+        public string goodsspec { get; set; }
+        public string goodsunit { get; set; }
+    }
+
+    //发药信息（JSON解析结果）
+    public class DispenseInfo
+    {
+        public string Patient { get; set; }
+        public int? Agentnum { get; set; }
+        public List<DispenseDetailItem> Items { get; set; }
+    }
+
+    //药品明细核对结果
+    public class DrugDetailCompareItem
+    {
+        public string 来源 { get; set; }         // "收费" 或 "发药"
+        public int 处方ID { get; set; }
+        public string 日期 { get; set; }
+        public string 病人姓名 { get; set; }
+        public string 项目ID { get; set; }
+        public string 项目名称 { get; set; }
+        public decimal? 单价 { get; set; }
+        public decimal? 收费数量 { get; set; }
+        public decimal? 金额 { get; set; }              // 收费: 单价×数量
+        public string 饮片名称 { get; set; }
+        public string 饮片用量 { get; set; }
+        public int? 剂数 { get; set; }
+        public decimal? 计算数量 { get; set; }           // 用量×剂数
+        public decimal? 处方金额 { get; set; }           // 单价×用量×剂数
+        public string 是否一致 { get; set; }
+    }
+
     //医技执行记录查询
     public class ExecutionRecordQuery
     {

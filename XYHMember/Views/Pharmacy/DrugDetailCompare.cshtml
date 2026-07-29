@@ -1,0 +1,195 @@
+@{
+    ViewBag.Title = "药品明细信息核对";
+}
+
+@using XYHMember.Context;
+@model List<DrugDetailCompareItem>
+
+@{
+    var bdatepicker = Request["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edatepicker = Request["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    @Styles.Render("~/Content/flatpickr")
+    <style>
+        #dataTable {
+            width: 100% !important;
+            min-width: 1100px !important;
+            table-layout: auto !important;
+        }
+        #dataTable th,
+        #dataTable td {
+            padding: 3px 8px !important;
+            white-space: nowrap;
+        }
+        .table-wrapper {
+            overflow: auto !important;
+            max-width: calc(100vw - 40px) !important;
+        }
+        .table-wrapper > table {
+            display: table !important;
+        }
+        .row-match { background-color: #dff0d8 !important; }
+        .row-mismatch { background-color: #f2dede !important; color: #a94442 !important; font-weight: bold !important; }
+        .row-warning { background-color: #fcf8e3 !important; color: #8a6d3b !important; }
+        .row-dispense-only { background-color: #e8f4fd !important; color: #31708f !important; }
+        .summary-bar {
+            display: flex;
+            gap: 20px;
+            padding: 10px 16px;
+            background: #f5f8fc;
+            border-radius: 4px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        .summary-bar span label { color: #888; margin-right: 3px; }
+        .summary-bar span .val { font-weight: 600; color: #333; }
+        .source-tag {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .source-billing { background: #337ab7; color: #fff; }
+        .source-dispense { background: #5bc0de; color: #fff; }
+    </style>
+</head>
+
+<body>
+    <div>
+        <div class="container">
+            <div style="margin-left:300px;">
+                <form action="@Url.Action("GetDrugDetailCompare", "Pharmacy")" method="post">
+                    <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;">
+                        <label style="margin:0 5px 0 10px;">收费日期</label>
+                        <input type="text" name="bdatepicker" id="bdatepicker"
+                               value="@bdatepicker" placeholder="开始日期" style="height:30px;">
+                        <label style="margin:0 5px;">—</label>
+                        <input type="text" name="edatepicker" id="edatepicker"
+                               value="@edatepicker" placeholder="结束日期" style="height:30px;">
+                        <span style="margin-left:40px;display:inline-flex;align-items:center;gap:6px;">
+                            <span class="am-input-group-btn">
+                                <button class="am-btn am-btn-default" type="submit">查询比对</button>
+                            </span>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        @if (Model != null && Model.Count > 0)
+        {
+            var matchCount = Model.Count(m => m.是否一致 == "一致");
+            var mismatchCount = Model.Count(m => m.是否一致 == "不一致");
+            var billingCount = Model.Count(m => m.来源 == "收费");
+            var dispenseCount = Model.Count(m => m.来源 == "发药");
+
+            <div class="summary-bar">
+                <span><label>收费明细：</label><span class="val total-count">@billingCount</span></span>
+                <span><label>发药明细：</label><span class="val total-count">@dispenseCount</span></span>
+                <span><label>一致：</label><span class="val match-count">@matchCount</span></span>
+                <span><label>不一致：</label><span class="val mismatch-count">@mismatchCount</span></span>
+                <span><label>仅收费无发药：</label><span class="val mismatch-count">@Model.Count(m => m.是否一致 == "无对应发药记录" || m.是否一致 == "无发药信息")</span></span>
+                <span><label>仅发药无收费：</label><span class="val mismatch-count">@Model.Count(m => m.是否一致 == "无对应收费记录")</span></span>
+            </div>
+        }
+
+        <div class="am-g">
+            <div class="am-u-sm-12">
+                <div class="table-wrapper" style="overflow:auto;">
+                <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>来源</th>
+                            <th>处方ID</th>
+                            <th>日期</th>
+                            <th>病人姓名</th>
+                            <th>项目ID</th>
+                            <th>项目名称</th>
+                            <th>单价</th>
+                            <th>收费数量</th>
+                            <th>金额</th>
+                            <th>发药饮片</th>
+                            <th>饮片用量(g)</th>
+                            <th>剂数</th>
+                            <th>计算总用量(用量×剂数)</th>
+                            <th>处方金额</th>
+                            <th>是否一致</th>
+                        </tr>
+                    </thead>
+                    @if (Model != null && Model.Count > 0)
+                    {
+                        <tbody>
+                            @foreach (var item in Model)
+                            {
+                                var rowClass = "";
+                                if (item.是否一致 == "一致") { rowClass = "row-match"; }
+                                else if (item.是否一致 == "不一致") { rowClass = "row-mismatch"; }
+                                else if (item.是否一致 == "无对应收费记录") { rowClass = "row-dispense-only"; }
+                                else if (item.是否一致 == "无对应发药记录" || item.是否一致 == "无发药信息" || item.是否一致 == "无法比对") { rowClass = "row-warning"; }
+
+                                var sourceTagClass = item.来源 == "收费" ? "source-billing" : "source-dispense";
+
+                                <tr class="@rowClass">
+                                    <td><span class="source-tag @sourceTagClass">@item.来源</span></td>
+                                    <td>@item.处方ID</td>
+                                    <td>@item.日期</td>
+                                    <td>@item.病人姓名</td>
+                                    <td>@item.项目ID</td>
+                                    <td>@item.项目名称</td>
+                                    <td>@(item.单价.HasValue ? item.单价.Value.ToString("F2") : "")</td>
+                                    <td>@item.收费数量</td>
+                                    <td>@(item.金额.HasValue ? item.金额.Value.ToString("F2") : "")</td>
+                                    <td>@item.饮片名称</td>
+                                    <td>@item.饮片用量</td>
+                                    <td>@item.剂数</td>
+                                    <td>@(item.计算数量.HasValue ? item.计算数量.Value.ToString("G29") : "")</td>
+                                    <td>@(item.处方金额.HasValue ? item.处方金额.Value.ToString("F2") : "")</td>
+                                    <td style="font-weight:bold;">@item.是否一致</td>
+                                </tr>
+                            }
+                        </tbody>
+                    }
+                </table>
+                </div>
+
+                @if (Model != null && Model.Count > 1)
+                {
+                    <div id="paginationContainer"></div>
+                }
+
+                @if (Model != null && Model.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#999;font-size:15px;">未查询到数据</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <script src="~/Scripts/pagination.js"></script>
+    <script src="~/Scripts/customDialog.js"></script>
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        flatpickr("#bdatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@bdatepicker"
+        });
+        flatpickr("#edatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@edatepicker"
+        });
+
+        initTablePagination('dataTable');
+    </script>
+
+</body>
+</html>

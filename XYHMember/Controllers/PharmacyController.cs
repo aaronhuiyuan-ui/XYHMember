@@ -567,6 +567,197 @@ ORDER BY 发药时间 DESC";
         }
 
         // =====================================================================
+        //  药品明细信息核对
+        // =====================================================================
+
+        /// <summary>
+        /// 药品明细信息核对页面（GET）
+        /// 比对系统结算的药品收费明细与处方结果中的发药明细
+        /// </summary>
+        public ActionResult DrugDetailCompare()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询核对数据（POST）
+        /// 获取收费明细 + 发药明细，双向完整展示并比对
+        /// </summary>
+        [HttpPost]
+        public ActionResult GetDrugDetailCompare()
+        {
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+            if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
+
+            try
+            {
+                // 1. 查询 HIS 收费明细（药品：项目类别='3'）
+                var billingSql = @"
+SELECT CAST(b.处方ID AS INT) AS 处方ID, CONVERT(varchar, b.日期, 23) AS 日期,
+       a.姓名 AS 病人姓名,
+       CAST(b.项目ID AS NVARCHAR(50)) AS 项目ID, b.项目名称, b.单价, b.数量, b.金额
+FROM fghis5..门诊_收费发票表 a
+JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
+WHERE a.发票状态 = '2'
+  AND b.项目类别 = 3
+  AND b.日期 BETWEEN @bdate AND @edate
+ORDER BY b.处方ID, b.项目名称";
+
+                var billingItems = db.Database.SqlQuery<BillingDrugItem>(billingSql,
+                    new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
+                    new SqlParameter("@edate", QueryHelper.ParseDate(edate))).ToList();
+
+                // 2. 查询已发药记录（含 content_json）
+                var dispenseSql = @"
+SELECT CAST(处方ID AS INT) AS 处方ID, content_json
+FROM fghis5..门诊_发药信息表
+WHERE 发药状态=3 AND delete_flag='0'
+  AND CONVERT(date, 发药时间) >= @bdate AND CONVERT(date, 发药时间) <= @edate
+ORDER BY 处方ID";
+
+                var dispenseRecords = db.Database.SqlQuery<DispenseJsonRecord>(dispenseSql,
+                    new SqlParameter("@bdate", bdate),
+                    new SqlParameter("@edate", edate)).ToList();
+
+                // 3. 构建发药明细字典：处方ID → {patient, agentnum, items[]}
+                var dispenseMap = new Dictionary<int, DispenseInfo>();
+                foreach (var rec in dispenseRecords)
+                {
+                    try
+                    {
+                        var json = JObject.Parse(rec.content_json ?? "{}");
+                        var patient = json["patient"]?.Value<string>() ?? "";
+                        var agentnum = json["agentnum"]?.Value<int?>();
+                        var mxList = json["hisSellKpMxList"] as JArray;
+
+                        var items = new List<DispenseDetailItem>();
+                        if (mxList != null)
+                        {
+                            foreach (var mx in mxList)
+                            {
+                                items.Add(new DispenseDetailItem
+                                {
+                                    goodsname = mx["goodsname"]?.Value<string>() ?? "",
+                                    dosage = mx["dosage"]?.Value<string>() ?? "",
+                                    goodscode = mx["goodscode"]?.Value<string>() ?? "",
+                                    goodsspec = mx["goodsspec"]?.Value<string>() ?? "",
+                                    goodsunit = mx["goodsunit"]?.Value<string>() ?? ""
+                                });
+                            }
+                        }
+
+                        dispenseMap[rec.处方ID] = new DispenseInfo
+                        {
+                            Patient = patient,
+                            Agentnum = agentnum,
+                            Items = items
+                        };
+                    }
+                    catch { /* 跳过JSON解析失败的记录 */ }
+                }
+
+                // 4. 双向比对
+                var result = new List<DrugDetailCompareItem>();
+                var matchedKeys = new HashSet<string>(); // 记录已匹配的 "处方ID_项目名称"
+
+                // 4a. 遍历收费明细，匹配发药数据
+                foreach (var bill in billingItems)
+                {
+                    var compare = new DrugDetailCompareItem
+                    {
+                        来源 = "收费",
+                        处方ID = bill.处方ID,
+                        日期 = bill.日期,
+                        病人姓名 = bill.病人姓名,
+                        项目ID = bill.项目ID,
+                        项目名称 = bill.项目名称,
+                        单价 = bill.单价,
+                        收费数量 = bill.数量,
+                        金额 = bill.金额
+                    };
+
+                    if (dispenseMap.TryGetValue(bill.处方ID, out var dispInfo))
+                    {
+                        compare.病人姓名 = compare.病人姓名 ?? dispInfo.Patient;
+                        compare.剂数 = dispInfo.Agentnum;
+                        // 按名称匹配饮片
+                        var match = dispInfo.Items.FirstOrDefault(i =>
+                            i.goodsname == bill.项目名称 || bill.项目名称.Contains(i.goodsname) || i.goodsname.Contains(bill.项目名称));
+                        if (match != null)
+                        {
+                            compare.饮片名称 = match.goodsname;
+                            compare.饮片用量 = match.dosage;
+                            matchedKeys.Add(bill.处方ID + "_" + bill.项目名称);
+
+                            decimal dosageVal;
+                            if (decimal.TryParse(match.dosage, out dosageVal) && dispInfo.Agentnum.HasValue)
+                            {
+                                compare.计算数量 = Math.Round(dosageVal * dispInfo.Agentnum.Value, 2);
+                                compare.处方金额 = bill.单价.HasValue ? Math.Round(bill.单价.Value * dosageVal * dispInfo.Agentnum.Value, 2) : (decimal?)null;
+                                compare.是否一致 = compare.收费数量 == compare.计算数量 ? "一致" : "不一致";
+                            }
+                            else
+                            {
+                                compare.是否一致 = "无法比对";
+                            }
+                        }
+                        else
+                        {
+                            compare.是否一致 = "无对应发药记录";
+                        }
+                    }
+                    else
+                    {
+                        compare.是否一致 = "无发药信息";
+                    }
+
+                    result.Add(compare);
+                }
+
+                // 4b. 遍历发药明细，补充收费中没有的条目
+                foreach (var kv in dispenseMap)
+                {
+                    var pid = kv.Key;
+                    var dispInfo = kv.Value;
+                    foreach (var item in dispInfo.Items)
+                    {
+                        var key = pid + "_" + item.goodsname;
+                        if (!matchedKeys.Contains(key))
+                        {
+                            result.Add(new DrugDetailCompareItem
+                            {
+                                来源 = "发药",
+                                处方ID = pid,
+                                病人姓名 = dispInfo.Patient ?? "",
+                                项目名称 = item.goodsname,
+                                饮片名称 = item.goodsname,
+                                饮片用量 = item.dosage,
+                                剂数 = dispInfo.Agentnum,
+                                是否一致 = "无对应收费记录"
+                            });
+                        }
+                    }
+                }
+
+                // 4c. 按处方ID、来源排序
+                result = result.OrderBy(r => r.处方ID)
+                               .ThenBy(r => r.来源 == "收费" ? 0 : 1)
+                               .ThenBy(r => r.项目名称)
+                               .ToList();
+
+                return View("DrugDetailCompare", result);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Content("获取数据失败：" + inner.Message, "text/html; charset=utf-8");
+            }
+        }
+
+        // =====================================================================
         //  私有方法（API调用、加密）
         // =====================================================================
 
