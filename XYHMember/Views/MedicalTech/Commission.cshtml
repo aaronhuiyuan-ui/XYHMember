@@ -1,0 +1,337 @@
+@{
+    Layout = null;
+    var name = Request["name"] ?? "";
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>医技项目操作人员提成维护</title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    <style>
+        #dataTable {
+            width: 65% !important;
+            min-width: 500px !important;
+            table-layout: auto !important;
+            white-space: nowrap;
+        }
+        #dataTable th,
+        #dataTable td {
+            padding: 2px 4px !important;
+        }
+        .table-wrapper {
+            overflow: auto !important;
+            max-width: calc(100vw - 40px) !important;
+        }
+        .table-wrapper > table {
+            display: table !important;
+        }
+        .btn-action {
+            padding: 2px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            border: 1px solid #d0d0d0;
+            background: #fff;
+            margin: 0 2px;
+        }
+        .btn-action.btn-edit { border-color: #0e90d2; color: #0e90d2; }
+        .btn-action.btn-edit:hover { background: #0e90d2; color: #fff; }
+        .btn-action.btn-del { border-color: #dd514c; color: #dd514c; }
+        .btn-action.btn-del:hover { background: #dd514c; color: #fff; }
+
+        /* 弹窗样式 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 9999;
+        }
+        .modal-overlay.active { display: block; }
+        .modal-box {
+            background: #fff;
+            border-radius: 4px;
+            width: 400px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            position: absolute;
+            top: 50px;
+            left: 500px;
+        }
+        .modal-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e9e9e9;
+            font-size: 15px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header .close {
+            cursor: pointer;
+            font-size: 20px;
+            color: #999;
+            line-height: 1;
+        }
+        .modal-header .close:hover { color: #333; }
+        .modal-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
+        .modal-body .field { margin-bottom: 12px; }
+        .modal-body label { display: block; margin-bottom: 3px; font-weight: 600; font-size: 13px; color: #555; }
+        .modal-body input,
+        .modal-body select {
+            width: 100%; padding: 6px 8px; border: 1px solid #d0d0d0;
+            border-radius: 3px; font-size: 13px; box-sizing: border-box;
+        }
+        .modal-body input:focus,
+        .modal-body select:focus { border-color: #0e90d2; outline: none; }
+        .modal-footer {
+            padding: 10px 16px;
+            border-top: 1px solid #e9e9e9;
+            text-align: right;
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+        .modal-footer button {
+            padding: 5px 16px; border-radius: 3px; cursor: pointer;
+            font-size: 13px; border: 1px solid #d0d0d0; background: #fff;
+        }
+        .modal-footer .btn-primary {
+            background: #0e90d2; color: #fff; border-color: #0e90d2;
+        }
+        .modal-footer .btn-primary:hover { background: #0a7ec4; }
+    </style>
+</head>
+<body>
+
+    <div class="admin-content-body">
+        <hr>
+
+        <div class="am-g">
+            <div class="am-u-sm-12 am-u-md-6">
+                <div class="am-btn-toolbar">
+                    <div class="am-btn-group am-btn-group-xs">
+                        <button type="button" class="am-btn am-btn-default" id="addButton">
+                            <span class="am-icon-plus"></span> 新增
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="am-u-sm-12 am-u-md-3" style="float:right;">
+                <div class="am-input-group am-input-group-sm">
+                    <input type="text" class="am-form-field" id="searchName" value="@name" placeholder="项目名称" />
+                    <span class="am-input-group-btn">
+                        <button class="am-btn am-btn-default" type="button" onclick="doSearch()">搜索</button>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="am-g">
+            <div class="am-u-sm-12">
+                <div class="table-wrapper">
+                    <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th style="width:60px;">序号</th>
+                                <th>项目名称</th>
+                                <th>岗位</th>
+                                <th>提成比例</th>
+                                <th style="width:120px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 新增/编辑弹窗 ========== -->
+    <div class="modal-overlay" id="dataModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span id="modalTitle">新增配置</span>
+                <span class="close" onclick="closeModal('dataModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="field">
+                    <label>项目名称 <span style="color:red;">*</span></label>
+                    <input type="text" id="f_项目名称" maxlength="200">
+                </div>
+                <div class="field">
+                    <label>岗位 <span style="color:red;">*</span></label>
+                    <select id="f_岗位">
+                        <option value="">请选择</option>
+                        <option value="护士">护士</option>
+                        <option value="理疗师">理疗师</option>
+                        <option value="医师">医师</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>提成比例(%) <span style="color:red;">*</span></label>
+                    <input type="number" id="f_提成比例" step="0.0001" min="0.0001" max="100" placeholder="如 5 表示 5%">
+                </div>
+                <input type="hidden" id="f_序号" value="">
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('dataModal')">取消</button>
+                <button class="btn-primary" onclick="submitSave()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function doSearch() {
+            var name = document.getElementById('searchName').value;
+            fetch('@Url.Action("GetCommissionList", "MedicalTech")?name=' + encodeURIComponent(name))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.success === false) {
+                        document.getElementById('tableBody').innerHTML =
+                            '<tr><td colspan="5" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                    } else {
+                        renderTable(data);
+                    }
+                })
+                .catch(function(err) {
+                    document.getElementById('tableBody').innerHTML =
+                        '<tr><td colspan="5" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                });
+        }
+
+        function renderTable(data) {
+            var tbody = document.getElementById('tableBody');
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">暂无数据</td></tr>';
+                return;
+            }
+
+            var html = '';
+            for (var i = 0; i < data.length; i++) {
+                var d = data[i];
+                html += '<tr>' +
+                    '<td>' + d.序号 + '</td>' +
+                    '<td>' + escapeHtml(d.项目名称) + '</td>' +
+                    '<td>' + escapeHtml(d.岗位 || '') + '</td>' +
+                    '<td>' + (d.提成比例 == null ? '' : d.提成比例 + '%') + '</td>' +
+                    '<td>' +
+                        '<button class="btn-action btn-edit" onclick="openEdit(' + d.序号 + ')">编辑</button>' +
+                        '<button class="btn-action btn-del" onclick="deleteItem(' + d.序号 + ')">删除</button>' +
+                    '</td>' +
+                    '</tr>';
+            }
+            tbody.innerHTML = html;
+            window._tableData = data;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // ===== 新增 =====
+        document.getElementById('addButton').addEventListener('click', function() {
+            document.getElementById('modalTitle').textContent = '新增配置';
+            document.getElementById('f_序号').value = '';
+            document.getElementById('f_项目名称').value = '';
+            document.getElementById('f_岗位').value = '';
+            document.getElementById('f_提成比例').value = '';
+            openModal('dataModal');
+        });
+
+        // ===== 编辑 =====
+        function openEdit(id) {
+            var rows = window._tableData || [];
+            var item = null;
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i].序号 === id) { item = rows[i]; break; }
+            }
+            if (!item) return;
+
+            document.getElementById('modalTitle').textContent = '编辑配置';
+            document.getElementById('f_序号').value = item.序号;
+            document.getElementById('f_项目名称').value = item.项目名称;
+            document.getElementById('f_岗位').value = item.岗位 || '';
+            document.getElementById('f_提成比例').value = item.提成比例 == null ? '' : item.提成比例;
+            openModal('dataModal');
+        }
+
+        // ===== 保存 =====
+        function submitSave() {
+            var data = {
+                序号: document.getElementById('f_序号').value ? parseInt(document.getElementById('f_序号').value) : null,
+                项目名称: document.getElementById('f_项目名称').value.trim(),
+                岗位: document.getElementById('f_岗位').value,
+                提成比例: parseFloat(document.getElementById('f_提成比例').value)
+            };
+
+            if (!data.项目名称) { alert('项目名称不能为空'); return; }
+            if (!data.岗位) { alert('请选择岗位'); return; }
+            if (isNaN(data.提成比例) || data.提成比例 <= 0) { alert('提成比例必须大于0'); return; }
+
+            fetch('@Url.Action("SaveCommission", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    closeModal('dataModal');
+                    doSearch();
+                } else {
+                    alert('保存失败：' + res.msg);
+                }
+            })
+            .catch(function(err) { alert('请求失败：' + err.message); });
+        }
+
+        // ===== 删除 =====
+        function deleteItem(id) {
+            if (!confirm('确定要删除该提成配置吗？')) return;
+
+            fetch('@Url.Action("DeleteCommission", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 序号: id })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    doSearch();
+                } else {
+                    alert('删除失败：' + res.msg);
+                }
+            })
+            .catch(function(err) { alert('请求失败：' + err.message); });
+        }
+
+        // ===== 弹窗控制 =====
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        document.querySelectorAll('.modal-overlay').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                if (e.target === this) this.classList.remove('active');
+            });
+        });
+
+        // 回车搜索
+        document.getElementById('searchName').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { doSearch(); e.preventDefault(); }
+        });
+
+        // 初始化
+        doSearch();
+    </script>
+
+</body>
+</html>

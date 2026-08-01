@@ -233,6 +233,7 @@
     <None Include="Properties\PublishProfiles\CustomProfile.pubxml" />
     <None Include="Scripts\jquery-3.3.1.intellisense.js" />
     <Content Include="Scripts\flatpickr.js" />
+    <Content Include="Scripts\flatpickr-locale-zh.js" />
     <Content Include="Scripts\jquery-1.11.3.min.js" />
     <Content Include="Scripts\jquery-3.3.1.js" />
     <Content Include="Scripts\jquery-3.3.1.min.js" />
@@ -295,6 +296,7 @@
     <Content Include="Views\MedicalTech\Index.cshtml" />
     <Content Include="Views\MedicalTech\StaffList.cshtml" />
     <Content Include="Views\MedicalTech\DefaultCount.cshtml" />
+    <Content Include="Views\MedicalTech\Commission.cshtml" />
     <Content Include="Views\MedicalTech\ExecutionRecords.cshtml" />
     <Content Include="Views\Pharmacy\DispensingQuery.cshtml" />
     <Content Include="Views\Pharmacy\DispensingConfirm.cshtml" />

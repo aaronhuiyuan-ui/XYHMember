@@ -382,6 +382,7 @@ namespace XYHMember.Context
         public int? 总次数 { get; set; }
         public DateTime? 登记时间 { get; set; }
         public string 登记人工号 { get; set; }
+        public decimal? 提成金额 { get; set; }
     }
 
     //医技执行记录
@@ -419,6 +420,16 @@ namespace XYHMember.Context
         public int 默认总次数 { get; set; }
     }
 
+    //医技项目操作人员提成
+    public class MedicalTechCommission
+    {
+        [Key]
+        public int 序号 { get; set; }
+        public string 项目名称 { get; set; }
+        public string 岗位 { get; set; }
+        public decimal? 提成比例 { get; set; }
+    }
+
     //HIS收费明细查询结果（医技登记页面用）
     public class MedicalTechChargeItem
     {
@@ -434,6 +445,7 @@ namespace XYHMember.Context
         public decimal? 数量 { get; set; }
         public decimal? 金额 { get; set; }
         public decimal? 实收金额 { get; set; }
+        public decimal? 提成金额 { get; set; }
         public int? 登记ID { get; set; }
         public int? 总次数 { get; set; }
         public int? 已执行次数 { get; set; }

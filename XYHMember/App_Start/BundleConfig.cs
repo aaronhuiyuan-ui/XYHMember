@@ -35,7 +35,8 @@ namespace XYHMember
           ));
 
             bundles.Add(new ScriptBundle("~/Scripts/flatpickrjs").Include(
-                      "~/Scripts/flatpickr.js"
+                      "~/Scripts/flatpickr.js",
+                      "~/Scripts/flatpickr-locale-zh.js"
                       ));
             bundles.Add(new ScriptBundle("~/Scripts/bootstrap").Include(
           "~/Scripts/bootstrap.js"

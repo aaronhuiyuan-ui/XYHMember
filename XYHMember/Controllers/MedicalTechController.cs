@@ -48,6 +48,10 @@ namespace XYHMember.Controllers
                        CONVERT(varchar, b.时间, 8) AS 时间,
                        b.项目名称, b.单价, b.数量, b.金额,
                        ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额, 0), 0) AS 实收金额,
+                       -- 提成金额：仅已完成的项目核算；优先取登记表已核算值（存储为0视为未正确核算，按当前比例实时补算）
+                       CASE WHEN r.登记ID IS NULL OR ISNULL(e.已执行次数, 0) < r.总次数 THEN NULL
+                            ELSE COALESCE(NULLIF(r.提成金额, 0), ROUND(ISNULL(b.金额, 0) * ISNULL(c.提成比例, 0) / 100.0, 2))
+                       END AS 提成金额,
                        r.登记ID, r.总次数,
                        ISNULL(e.已执行次数, 0) AS 已执行次数
                 FROM fghis5..门诊_收费发票表 a
@@ -56,6 +60,9 @@ namespace XYHMember.Controllers
                     AND r.项目名称 = b.项目名称
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
                 LEFT JOIN 执行汇总 e ON e.登记ID = r.登记ID
+                LEFT JOIN (SELECT 项目名称, MAX(提成比例) AS 提成比例
+                           FROM fghis5..医技项目操作人员提成表
+                           GROUP BY 项目名称) c ON c.项目名称 = b.项目名称
                 WHERE a.发票状态 = '2'
                   AND b.项目类别 IN (6, 59)
                   AND b.日期 BETWEEN @bdate AND @edate
@@ -185,6 +192,30 @@ namespace XYHMember.Controllers
 
                 var isCompleted = (maxCount + 执行次数) >= 总次数;
 
+                // 项目全部执行完成后才核算提成金额（整单：项目收费金额 × 提成比例）
+                decimal 提成金额 = 0;
+                if (isCompleted)
+                {
+                    var 金额 = db.Database.SqlQuery<decimal?>(
+                        @"SELECT TOP 1 b.金额
+                          FROM fghis5..医技登记表 r
+                          JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
+                              AND b.项目名称 = r.项目名称
+                          WHERE r.登记ID = @登记ID",
+                        new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
+
+                    var 比例 = db.Database.SqlQuery<decimal?>(
+                        @"SELECT TOP 1 提成比例 FROM fghis5..医技项目操作人员提成表
+                          WHERE 项目名称 = (SELECT 项目名称 FROM fghis5..医技登记表 WHERE 登记ID = @登记ID)",
+                        new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
+
+                    提成金额 = Math.Round((金额 ?? 0) * (比例 ?? 0) / 100m, 2);
+
+                    db.Database.ExecuteSqlCommand(@"UPDATE fghis5..医技登记表 SET 提成金额 = @提成金额 WHERE 登记ID = @登记ID",
+                        new SqlParameter("@提成金额", 提成金额),
+                        new SqlParameter("@登记ID", 登记ID));
+                }
+
                 return Json(new
                 {
                     success = true,
@@ -192,7 +223,8 @@ namespace XYHMember.Controllers
                     本次执行次数 = 执行次数,
                     当前最大次数 = maxCount + 执行次数,
                     总次数 = 总次数,
-                    已完成 = isCompleted
+                    已完成 = isCompleted,
+                    提成金额 = isCompleted ? 提成金额 : (decimal?)null
                 });
             }
             catch (Exception ex)
@@ -473,6 +505,119 @@ namespace XYHMember.Controllers
             }
         }
 
+        // ========== 医技项目操作人员提成维护 ==========
+
+        /// <summary>
+        /// 医技项目操作人员提成维护页面
+        /// </summary>
+        public ActionResult Commission()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询提成配置列表
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetCommissionList(string name)
+        {
+            try
+            {
+                var sql = @"SELECT * FROM fghis5..医技项目操作人员提成表
+                            WHERE @name = '' OR 项目名称 LIKE '%' + @name + '%'
+                            ORDER BY 序号 ASC";
+
+                var result = db.Database.SqlQuery<MedicalTechCommission>(sql,
+                    new SqlParameter("@name", (name ?? "").Trim())).ToList();
+
+                return Json(result, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 新增/修改提成配置
+        /// </summary>
+        [HttpPost]
+        public ActionResult SaveCommission(int? 序号, string 项目名称, string 岗位, decimal 提成比例)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(项目名称))
+                    return Json(new { success = false, msg = "项目名称不能为空" });
+                if (string.IsNullOrEmpty(岗位))
+                    return Json(new { success = false, msg = "岗位不能为空" });
+                if (提成比例 <= 0)
+                    return Json(new { success = false, msg = "提成比例必须大于0" });
+
+                // 查重：同一项目名称 + 岗位不允许重复（排除自身）
+                var checkSql = @"SELECT COUNT(*) FROM fghis5..医技项目操作人员提成表
+                                WHERE 项目名称 = @项目名称 AND 岗位 = @岗位 AND (@序号 IS NULL OR 序号 != @序号)";
+                var exists = db.Database.SqlQuery<int>(checkSql,
+                    new SqlParameter("@项目名称", 项目名称 ?? ""),
+                    new SqlParameter("@岗位", 岗位 ?? ""),
+                    new SqlParameter("@序号", (object)序号 ?? DBNull.Value)
+                ).FirstOrDefault() > 0;
+
+                if (exists)
+                    return Json(new { success = false, msg = "该项目在该岗位下已配置提成比例，请勿重复" });
+
+                if (序号.HasValue)
+                {
+                    var sql = @"UPDATE fghis5..医技项目操作人员提成表
+                                SET 项目名称 = @项目名称, 岗位 = @岗位, 提成比例 = @提成比例
+                                WHERE 序号 = @序号";
+                    db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@序号", 序号.Value),
+                        new SqlParameter("@项目名称", 项目名称 ?? ""),
+                        new SqlParameter("@岗位", 岗位 ?? ""),
+                        new SqlParameter("@提成比例", 提成比例));
+                }
+                else
+                {
+                    var sql = @"INSERT INTO fghis5..医技项目操作人员提成表 (项目名称, 岗位, 提成比例)
+                                VALUES (@项目名称, @岗位, @提成比例)";
+                    db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@项目名称", 项目名称 ?? ""),
+                        new SqlParameter("@岗位", 岗位 ?? ""),
+                        new SqlParameter("@提成比例", 提成比例));
+                }
+
+                return Json(new { success = true, msg = "保存成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 删除提成配置
+        /// </summary>
+        [HttpPost]
+        public ActionResult DeleteCommission(int 序号)
+        {
+            try
+            {
+                var sql = @"DELETE FROM fghis5..医技项目操作人员提成表 WHERE 序号 = @序号";
+                db.Database.ExecuteSqlCommand(sql, new SqlParameter("@序号", 序号));
+                return Json(new { success = true, msg = "删除成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
         // ========== 取消执行 ==========
 
         /// <summary>
@@ -509,6 +654,22 @@ namespace XYHMember.Controllers
 
                 if (affected <= 0)
                     return Json(new { success = false, msg = "取消失败，记录不存在或已被取消" });
+
+                // 若取消后项目不再完成，清除已核算的提成金额
+                var regTotalSql = @"SELECT 总次数 FROM fghis5..医技登记表 WHERE 登记ID = @登记ID";
+                var 总次数 = db.Database.SqlQuery<int?>(regTotalSql,
+                    new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
+
+                var remSql = @"SELECT ISNULL(MAX(本次次数), 0) FROM fghis5..医技执行记录表
+                               WHERE 登记ID = @登记ID AND delete_flag = 'f'";
+                var remaining = db.Database.SqlQuery<int>(remSql,
+                    new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
+
+                if (总次数.HasValue && remaining < 总次数.Value)
+                {
+                    db.Database.ExecuteSqlCommand(@"UPDATE fghis5..医技登记表 SET 提成金额 = NULL WHERE 登记ID = @登记ID",
+                        new SqlParameter("@登记ID", 登记ID));
+                }
 
                 return Json(new { success = true, msg = "取消成功" });
             }

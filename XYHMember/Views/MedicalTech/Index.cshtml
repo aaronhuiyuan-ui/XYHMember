@@ -231,11 +231,12 @@
                             <th>执行进度</th>
                             <th>已执行金额</th>
                             <th>未执行金额</th>
+                            <th>操作人员提成</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="13" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
+                        <tr><td colspan="14" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -378,7 +379,7 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="13" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="14" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         window._queryDataFull = data;
                         applyHdrFilters();
@@ -386,14 +387,14 @@
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="13" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="14" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#999;">未找到数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#999;">未找到数据</td></tr>';
                 return;
             }
 
@@ -442,11 +443,12 @@
                     '<td>' + progressText + '</td>' +
                     '<td>' + 已执行金额.toFixed(2) + '</td>' +
                     '<td>' + 未执行金额.toFixed(2) + '</td>' +
+                    '<td>' + (d.提成金额 != null ? d.提成金额.toFixed(2) : '0.00') + '</td>' +
                     '<td>' + actionHtml + '</td>' +
                     '</tr>';
             }
             // 计算合计
-            var sum项目金额 = 0, sum实收金额 = 0, sum已执行金额 = 0, sum未执行金额 = 0;
+            var sum项目金额 = 0, sum实收金额 = 0, sum已执行金额 = 0, sum未执行金额 = 0, sum提成金额 = 0;
             for (var i = 0; i < data.length; i++) {
                 var d = data[i];
                 var 项目金额 = d.金额 != null ? d.金额 : 0;
@@ -460,6 +462,7 @@
                 sum实收金额 += 实收金额;
                 sum已执行金额 += 已执行金额;
                 sum未执行金额 += 未执行金额;
+                sum提成金额 += (d.提成金额 != null ? d.提成金额 : 0);
             }
 
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
@@ -475,6 +478,7 @@
                 '<td></td>' +
                 '<td>' + sum已执行金额.toFixed(2) + '</td>' +
                 '<td>' + sum未执行金额.toFixed(2) + '</td>' +
+                '<td>' + sum提成金额.toFixed(2) + '</td>' +
                 '<td></td>' +
                 '</tr>';
 
