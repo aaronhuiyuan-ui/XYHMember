@@ -68,6 +68,12 @@ namespace XYHMember.Controllers
                             cell.Value = "'" + value;  // ← 加前置单引号，Excel 会当做纯文本
                             cell.SetDataType(XLDataType.Text);
                         }
+                        // 进度等 "数字/数字" 形式会被 Excel 识别为日期（如 4/5 → 2026/4/5），强制按文本写入
+                        else if (System.Text.RegularExpressions.Regex.IsMatch(value, @"^\d+\s*/\s*\d+$"))
+                        {
+                            cell.Value = "'" + value;
+                            cell.SetDataType(XLDataType.Text);
+                        }
                         else
                         {
                             cell.Value = value;

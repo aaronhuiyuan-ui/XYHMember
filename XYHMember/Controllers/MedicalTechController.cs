@@ -42,16 +42,26 @@ namespace XYHMember.Controllers
                     FROM fghis5..医技执行记录表
                     WHERE delete_flag = 'f'
                     GROUP BY 登记ID
+                ),
+                执行人汇总 AS (
+                    SELECT e.登记ID,
+                           STUFF((SELECT DISTINCT ';' + e2.执行人姓名
+                                  FROM fghis5..医技执行记录表 e2
+                                  WHERE e2.登记ID = e.登记ID AND e2.delete_flag = 'f'
+                                  FOR XML PATH('')), 1, 1, '') AS 执行人
+                    FROM fghis5..医技执行记录表 e
+                    WHERE e.delete_flag = 'f'
+                    GROUP BY e.登记ID
                 )
                 SELECT a.结帐ID, a.门诊号, a.姓名, b.就诊ID, b.处方ID,
                        CONVERT(varchar, b.日期, 23) AS 日期,
                        CONVERT(varchar, b.时间, 8) AS 时间,
                        b.项目名称, b.单价, b.数量, b.金额,
                        ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额, 0), 0) AS 实收金额,
-                       -- 提成金额：仅已完成的项目核算；优先取登记表已核算值（存储为0视为未正确核算，按当前比例实时补算）
-                       CASE WHEN r.登记ID IS NULL OR ISNULL(e.已执行次数, 0) < r.总次数 THEN NULL
-                            ELSE COALESCE(NULLIF(r.提成金额, 0), ROUND(ISNULL(b.金额, 0) * ISNULL(c.提成比例, 0) / 100.0, 2))
-                       END AS 提成金额,
+                       -- 执行人：同一登记下的去重执行人，多个用分号隔开
+                       ISNULL(pe.执行人, '') AS 执行人,
+                       -- 提成金额：项目金额 × 提成比例（不依赖登记与完成状态，实时按当前比例计算）
+                       ROUND(ISNULL(b.金额, 0) * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额,
                        r.登记ID, r.总次数,
                        ISNULL(e.已执行次数, 0) AS 已执行次数
                 FROM fghis5..门诊_收费发票表 a
@@ -60,6 +70,7 @@ namespace XYHMember.Controllers
                     AND r.项目名称 = b.项目名称
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
                 LEFT JOIN 执行汇总 e ON e.登记ID = r.登记ID
+                LEFT JOIN 执行人汇总 pe ON pe.登记ID = r.登记ID
                 LEFT JOIN (SELECT 项目名称, MAX(提成比例) AS 提成比例
                            FROM fghis5..医技项目操作人员提成表
                            GROUP BY 项目名称) c ON c.项目名称 = b.项目名称
@@ -109,8 +120,22 @@ namespace XYHMember.Controllers
                 if (exists)
                     return Json(new { success = false, msg = "该项目已登记，请勿重复登记" });
 
-                var sql = @"INSERT INTO fghis5..医技登记表 (流水号, 门诊号, 就诊ID, 病人姓名, 项目名称, 总次数, 登记时间, 登记人工号)
-                            VALUES (@流水号, @门诊号, @就诊ID, @病人姓名, @项目名称, @总次数, GETDATE(), @登记人工号);
+                // 提成金额 = 项目收费金额 × 提成比例（不依赖完成状态，登记时即核算）
+                var 金额 = db.Database.SqlQuery<decimal?>(
+                    @"SELECT TOP 1 b.金额 FROM fghis5..门诊_收费明细表 b
+                      WHERE b.结帐ID = @结帐ID AND b.处方ID = @处方ID AND b.项目名称 = @项目名称",
+                    new SqlParameter("@结帐ID", 结帐ID),
+                    new SqlParameter("@处方ID", 处方ID),
+                    new SqlParameter("@项目名称", 项目名称 ?? "")).FirstOrDefault();
+
+                var 比例 = db.Database.SqlQuery<decimal?>(
+                    @"SELECT TOP 1 提成比例 FROM fghis5..医技项目操作人员提成表 WHERE 项目名称 = @项目名称",
+                    new SqlParameter("@项目名称", 项目名称 ?? "")).FirstOrDefault();
+
+                var 提成金额 = Math.Round((金额 ?? 0) * (比例 ?? 0) / 100m, 2);
+
+                var sql = @"INSERT INTO fghis5..医技登记表 (流水号, 门诊号, 就诊ID, 病人姓名, 项目名称, 总次数, 登记时间, 登记人工号, 提成金额)
+                            VALUES (@流水号, @门诊号, @就诊ID, @病人姓名, @项目名称, @总次数, GETDATE(), @登记人工号, @提成金额);
                             SELECT CAST(SCOPE_IDENTITY() AS INT)";
 
                 var 登记ID = db.Database.SqlQuery<int>(sql,
@@ -120,7 +145,8 @@ namespace XYHMember.Controllers
                     new SqlParameter("@病人姓名", 病人姓名 ?? ""),
                     new SqlParameter("@项目名称", 项目名称 ?? ""),
                     new SqlParameter("@总次数", 总次数),
-                    new SqlParameter("@登记人工号", 登记人工号 ?? "")
+                    new SqlParameter("@登记人工号", 登记人工号 ?? ""),
+                    new SqlParameter("@提成金额", 提成金额)
                 ).FirstOrDefault();
 
                 return Json(new { success = true, msg = "登记成功", 登记ID = 登记ID });
@@ -192,29 +218,7 @@ namespace XYHMember.Controllers
 
                 var isCompleted = (maxCount + 执行次数) >= 总次数;
 
-                // 项目全部执行完成后才核算提成金额（整单：项目收费金额 × 提成比例）
-                decimal 提成金额 = 0;
-                if (isCompleted)
-                {
-                    var 金额 = db.Database.SqlQuery<decimal?>(
-                        @"SELECT TOP 1 b.金额
-                          FROM fghis5..医技登记表 r
-                          JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
-                              AND b.项目名称 = r.项目名称
-                          WHERE r.登记ID = @登记ID",
-                        new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
-
-                    var 比例 = db.Database.SqlQuery<decimal?>(
-                        @"SELECT TOP 1 提成比例 FROM fghis5..医技项目操作人员提成表
-                          WHERE 项目名称 = (SELECT 项目名称 FROM fghis5..医技登记表 WHERE 登记ID = @登记ID)",
-                        new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
-
-                    提成金额 = Math.Round((金额 ?? 0) * (比例 ?? 0) / 100m, 2);
-
-                    db.Database.ExecuteSqlCommand(@"UPDATE fghis5..医技登记表 SET 提成金额 = @提成金额 WHERE 登记ID = @登记ID",
-                        new SqlParameter("@提成金额", 提成金额),
-                        new SqlParameter("@登记ID", 登记ID));
-                }
+                // 提成金额在登记时已按「项目金额 × 提成比例」核算，执行阶段不再处理
 
                 return Json(new
                 {
@@ -223,8 +227,7 @@ namespace XYHMember.Controllers
                     本次执行次数 = 执行次数,
                     当前最大次数 = maxCount + 执行次数,
                     总次数 = 总次数,
-                    已完成 = isCompleted,
-                    提成金额 = isCompleted ? 提成金额 : (decimal?)null
+                    已完成 = isCompleted
                 });
             }
             catch (Exception ex)
@@ -243,8 +246,15 @@ namespace XYHMember.Controllers
         {
             try
             {
-                var regSql = @"SELECT 登记ID, 流水号, 门诊号, 就诊ID, 病人姓名, 项目名称, 总次数, 登记时间, 登记人工号
-                                FROM fghis5..医技登记表 WHERE 登记ID = @登记ID";
+                var regSql = @"SELECT r.登记ID, r.流水号, r.门诊号, r.就诊ID, r.病人姓名, r.项目名称, r.总次数, r.登记时间, r.登记人工号,
+                                       ROUND(ISNULL(b.金额, 0) * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额
+                                FROM fghis5..医技登记表 r
+                                LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
+                                    AND b.项目名称 = r.项目名称
+                                LEFT JOIN (SELECT 项目名称, MAX(提成比例) AS 提成比例
+                                           FROM fghis5..医技项目操作人员提成表
+                                           GROUP BY 项目名称) c ON c.项目名称 = r.项目名称
+                                WHERE r.登记ID = @登记ID";
                 var reg = db.Database.SqlQuery<MedicalTechRegistration>(regSql,
                     new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
 
@@ -279,6 +289,7 @@ namespace XYHMember.Controllers
                     项目名称 = reg.项目名称,
                     总次数 = reg.总次数,
                     已执行次数 = records.Count,
+                    提成金额 = reg.提成金额,
                     records = formattedRecords
                 }, JsonRequestBehavior.AllowGet);
             }
@@ -655,21 +666,7 @@ namespace XYHMember.Controllers
                 if (affected <= 0)
                     return Json(new { success = false, msg = "取消失败，记录不存在或已被取消" });
 
-                // 若取消后项目不再完成，清除已核算的提成金额
-                var regTotalSql = @"SELECT 总次数 FROM fghis5..医技登记表 WHERE 登记ID = @登记ID";
-                var 总次数 = db.Database.SqlQuery<int?>(regTotalSql,
-                    new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
-
-                var remSql = @"SELECT ISNULL(MAX(本次次数), 0) FROM fghis5..医技执行记录表
-                               WHERE 登记ID = @登记ID AND delete_flag = 'f'";
-                var remaining = db.Database.SqlQuery<int>(remSql,
-                    new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
-
-                if (总次数.HasValue && remaining < 总次数.Value)
-                {
-                    db.Database.ExecuteSqlCommand(@"UPDATE fghis5..医技登记表 SET 提成金额 = NULL WHERE 登记ID = @登记ID",
-                        new SqlParameter("@登记ID", 登记ID));
-                }
+                // 提成金额不依赖完成状态（登记时已按「项目金额 × 提成比例」核算），取消执行不影响提成
 
                 return Json(new { success = true, msg = "取消成功" });
             }

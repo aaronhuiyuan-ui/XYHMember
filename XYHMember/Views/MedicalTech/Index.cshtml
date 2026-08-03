@@ -231,12 +231,13 @@
                             <th>执行进度</th>
                             <th>已执行金额</th>
                             <th>未执行金额</th>
+                            <th>执行人</th>
                             <th>操作人员提成</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="14" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
+                        <tr><td colspan="15" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -379,7 +380,7 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="14" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="15" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         window._queryDataFull = data;
                         applyHdrFilters();
@@ -387,14 +388,14 @@
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="14" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="15" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#999;">未找到数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:#999;">未找到数据</td></tr>';
                 return;
             }
 
@@ -443,6 +444,7 @@
                     '<td>' + progressText + '</td>' +
                     '<td>' + 已执行金额.toFixed(2) + '</td>' +
                     '<td>' + 未执行金额.toFixed(2) + '</td>' +
+                    '<td>' + escapeHtml(d.执行人) + '</td>' +
                     '<td>' + (d.提成金额 != null ? d.提成金额.toFixed(2) : '0.00') + '</td>' +
                     '<td>' + actionHtml + '</td>' +
                     '</tr>';
@@ -478,6 +480,7 @@
                 '<td></td>' +
                 '<td>' + sum已执行金额.toFixed(2) + '</td>' +
                 '<td>' + sum未执行金额.toFixed(2) + '</td>' +
+                '<td></td>' +
                 '<td>' + sum提成金额.toFixed(2) + '</td>' +
                 '<td></td>' +
                 '</tr>';
@@ -812,7 +815,8 @@
                     if (!res.success) { customDialog.error(res.msg, '查询失败'); return; }
                     document.getElementById('historySummary').innerHTML =
                         '病人：' + res.病人姓名 + ' ｜ 项目：' + res.项目名称 +
-                        ' ｜ 进度：' + res.已执行次数 + '/' + res.总次数 + '次';
+                        ' ｜ 进度：' + res.已执行次数 + '/' + res.总次数 + '次' +
+                        ' ｜ 提成：' + (res.提成金额 != null ? res.提成金额.toFixed(2) : '0.00') + '元';
 
                     var html = '';
                     if (res.records && res.records.length > 0) {
@@ -1071,7 +1075,7 @@
             if (!table) return;
 
             // 表头（手动定义，不包含复选框和操作列）
-            var headers = ['门诊号', '姓名', '项目名称', '数量', '项目金额', '实收金额', '收费日期', '状态', '执行进度', '已执行金额', '未执行金额'];
+            var headers = ['门诊号', '姓名', '项目名称', '数量', '项目金额', '实收金额', '收费日期', '状态', '执行进度', '已执行金额', '未执行金额', '执行人', '操作人员提成'];
             var rows = [];
 
             var tbody = table.querySelector('tbody');
@@ -1081,10 +1085,10 @@
             for (var i = 0; i < trs.length; i++) {
                 if (trs[i].classList.contains('summary-row')) continue; // 跳过合计行
                 var tds = trs[i].querySelectorAll('td');
-                if (tds.length < 12) continue; // 跳过空行/提示行
+                if (tds.length < 15) continue; // 跳过空行/提示行
                 var row = [];
-                // 跳过第0列（复选框）和最后一列（操作），取1-11
-                for (var c = 1; c <= 11; c++) {
+                // 跳过第0列（复选框）和最后一列（操作），取1-13（含执行人、操作人员提成）
+                for (var c = 1; c <= 13; c++) {
                     row.push(tds[c].innerText.trim());
                 }
                 rows.push(row);
