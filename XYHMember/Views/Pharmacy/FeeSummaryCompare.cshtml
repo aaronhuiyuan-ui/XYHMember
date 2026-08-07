@@ -82,14 +82,10 @@
         @if (Model != null && Model.Count > 0)
         {
             var total处方数 = Model.Sum(m => m.处方数);
-            var total一致 = Model.Sum(m => m.一致数);
-            var total不一致 = Model.Sum(m => m.不一致数);
 
             <div class="summary-bar">
                 <span><label>加工方式：</label><span class="val total-count">@Model.Count</span></span>
                 <span><label>处方数：</label><span class="val total-count">@total处方数</span></span>
-                <span><label>一致：</label><span class="val match-count">@total一致</span></span>
-                <span><label>不一致：</label><span class="val mismatch-count">@total不一致</span></span>
             </div>
         }
 
@@ -101,8 +97,6 @@
                         <tr>
                             <th>加工方式</th>
                             <th>处方数</th>
-                            <th>一致</th>
-                            <th>不一致</th>
                             <th>总用量(g)</th>
                             <th>免费重量(g)</th>
                             <th>收费加工费</th>
@@ -116,14 +110,12 @@
                     {
                         <tbody>
                             @{
-                                int sum处方数 = 0, sum一致 = 0, sum不一致 = 0, sum免邮 = 0;
+                                int sum处方数 = 0, sum免邮 = 0;
                                 decimal sum总用量 = 0m, sum免费重量 = 0m, sum收费加工费 = 0m, sum应收加工费 = 0m, sum收费快递费 = 0m, sum应收快递费 = 0m;
                             }
                             @foreach (var item in Model)
                             {
                                 sum处方数 += item.处方数;
-                                sum一致 += item.一致数;
-                                sum不一致 += item.不一致数;
                                 sum免邮 += item.免邮数;
                                 sum总用量 += item.总用量 ?? 0m;
                                 sum免费重量 += item.免费重量 ?? 0m;
@@ -135,8 +127,6 @@
                                 <tr>
                                     <td>@item.加工方式</td>
                                     <td>@item.处方数</td>
-                                    <td>@item.一致数</td>
-                                    <td>@item.不一致数</td>
                                     <td>@(item.总用量.HasValue ? item.总用量.Value.ToString("F2") : "")</td>
                                     <td>@(item.免费重量.HasValue ? item.免费重量.Value.ToString("F2") : "")</td>
                                     <td>@(item.收费加工费.HasValue ? item.收费加工费.Value.ToString("F2") : "")</td>
@@ -149,8 +139,6 @@
                             <tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">
                                 <td>合计</td>
                                 <td>@sum处方数</td>
-                                <td>@sum一致</td>
-                                <td>@sum不一致</td>
                                 <td>@(sum总用量.ToString("F2"))</td>
                                 <td>@(sum免费重量.ToString("F2"))</td>
                                 <td>@(sum收费加工费.ToString("F2"))</td>

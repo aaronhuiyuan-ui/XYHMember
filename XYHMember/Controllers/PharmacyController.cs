@@ -1191,8 +1191,6 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
                          {
                              加工方式 = g.Key,
                              处方数 = g.Count(),
-                             一致数 = g.Count(x => x.是否一致 == "一致"),
-                             不一致数 = g.Count(x => x.是否一致 != "一致"),
                              总用量 = g.Sum(x => x.饮片重量 ?? 0m),
                              免费重量 = g.Sum(x => x.免费重量 ?? 0m),
                              收费加工费 = g.Sum(x => x.收费加工费 ?? 0m),

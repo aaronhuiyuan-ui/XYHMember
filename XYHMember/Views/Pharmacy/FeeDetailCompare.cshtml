@@ -81,13 +81,8 @@
 
         @if (Model != null && Model.Count > 0)
         {
-            var matchCount = Model.Count(m => m.是否一致 == "一致");
-            var mismatchCount = Model.Count(m => m.是否一致 != "一致");
-
             <div class="summary-bar">
                 <span><label>处方数：</label><span class="val total-count">@Model.Count</span></span>
-                <span><label>一致：</label><span class="val match-count">@matchCount</span></span>
-                <span><label>不一致：</label><span class="val mismatch-count">@mismatchCount</span></span>
             </div>
         }
 

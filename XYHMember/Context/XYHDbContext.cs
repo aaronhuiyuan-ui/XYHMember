@@ -565,8 +565,6 @@ namespace XYHMember.Context
     {
         public string 加工方式 { get; set; }
         public int 处方数 { get; set; }
-        public int 一致数 { get; set; }
-        public int 不一致数 { get; set; }         // 含"无发药信息"
         public decimal? 总用量 { get; set; }       // Σ 饮片重量(g)
         public decimal? 免费重量 { get; set; }     // Σ 免费重量(g)
         public decimal? 收费加工费 { get; set; }  // Σ(类别99 金额)
