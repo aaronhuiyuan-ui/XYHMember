@@ -898,6 +898,313 @@ WHERE outcfcode IS NOT NULL
         }
 
         // =====================================================================
+        //  加工费及快递费明细信息核对
+        // =====================================================================
+
+        /// <summary>
+        /// 加工费及快递费明细信息核对页面（GET）
+        /// 收费侧（项目类别 99 加工费 / 91 辨证论治费=快递费） vs 发药侧规则应收
+        /// </summary>
+        public ActionResult FeeDetailCompare()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询加工费/快递费核对数据（POST）
+        /// </summary>
+        [HttpPost]
+        public ActionResult GetFeeDetailCompare()
+        {
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+            if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
+
+            try
+            {
+                var result = BuildFeeDetailCompare(bdate, edate);
+                return View("FeeDetailCompare", result);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Content("获取数据失败：" + inner.Message, "text/html; charset=utf-8");
+            }
+        }
+
+        /// <summary>
+        /// 构建加工费/快递费核对数据
+        /// 收费侧：门诊_收费明细表 项目类别99(加工费)/91(快递费)
+        /// 发药侧（应收）：按加工方式/剂数/整方重量/快递数规则计算
+        /// </summary>
+        private List<FeeDetailCompareItem> BuildFeeDetailCompare(string bdate, string edate)
+        {
+            // 1. 收费侧 + 处方侧（医生_处方明细 聚合，避免 JOIN 扇出）
+            var sql = @"
+SELECT a.处方ID,
+       CONVERT(varchar(10), CONVERT(date, a.日期), 23) AS 日期,
+       a.病人姓名,
+       CASE d.途径
+           WHEN '煎药' THEN '代煎' WHEN '浓缩' THEN '浓汤' WHEN '合煎' THEN '合煎颗粒'
+           WHEN '丸剂' THEN '浓缩蜜丸' WHEN '粉剂' THEN '打粉' WHEN '膏方' THEN '膏方'
+           WHEN '草药' THEN '代配' ELSE '其他'
+       END AS 加工方式,
+       d.剂数, d.饮片重量, d.免费重量,
+       a.收费加工费, a.收费快递费
+FROM (
+    SELECT b.处方ID,
+           MAX(b.日期) AS 日期,
+           MAX(f.姓名) AS 病人姓名,
+           SUM(CASE WHEN b.项目类别 = 99 THEN b.金额 ELSE 0 END) AS 收费加工费,
+           SUM(CASE WHEN b.项目类别 = 91 THEN b.金额 ELSE 0 END) AS 收费快递费
+    FROM fghis5..门诊_收费明细表 b
+    JOIN fghis5..门诊_收费发票表 f ON f.结帐ID = b.结帐ID
+    WHERE b.项目类别 IN (99, 91)
+      AND f.发票状态 = '2'
+      AND b.日期 BETWEEN @bdate AND @edate
+    GROUP BY b.处方ID
+) a
+OUTER APPLY (
+    SELECT MAX(d.途径) AS 途径,
+           MAX(d.草药帖数) AS 剂数,
+           CAST(SUM(CAST(d.数量 AS NUMERIC(18,2)) * CAST(d.草药帖数 AS NUMERIC(18,2))) AS NUMERIC(18,2)) AS 饮片重量,
+           CAST(SUM(CASE WHEN d.项目名称 LIKE N'%川贝母%' OR d.项目名称 LIKE N'%三七%'
+                         THEN CAST(d.数量 AS NUMERIC(18,2)) * CAST(d.草药帖数 AS NUMERIC(18,2)) ELSE 0 END) AS NUMERIC(18,2)) AS 免费重量
+    FROM fghis5..医生_处方明细 d
+    WHERE d.处方ID = a.处方ID
+) d
+ORDER BY a.处方ID";
+
+            var rows = db.Database.SqlQuery<FeeDetailCompareItem>(sql,
+                new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
+                new SqlParameter("@edate", QueryHelper.ParseDate(edate))).ToList();
+
+            // 2. 处方结果本地表 → 发药侧（JSON）：
+            //    快递判断（expressnumber 非空即有快递）+ 剂数(agentnum) + 每味用量(sellKpMxVos[].dosage)
+            var hasExpress = new Dictionary<int, bool>();
+            var dispenseMap = new Dictionary<int, DispenseInfo>();
+            var freeShip = new HashSet<int>();  // 快递地址含"前滩国际" → 免邮
+            if (rows.Count > 0)
+            {
+                var pids = new HashSet<int>(rows.Select(r => r.处方ID));
+                var pidIn = string.Join(",", pids.Select(p => p.ToString()));
+                var resultSql = @"SELECT CAST(outcfcode AS INT) AS 处方ID, json_data AS content_json
+FROM fghis5..处方结果本地表
+WHERE outcfcode IS NOT NULL
+  AND CAST(outcfcode AS INT) IN (" + pidIn + ")";
+                var records = db.Database.SqlQuery<DispenseJsonRecord>(resultSql).ToList();
+                foreach (var rec in records)
+                {
+                    try
+                    {
+                        var json = JObject.Parse(rec.content_json ?? "{}");
+                        var expr = json["expressnumber"]?.Value<string>() ?? "";
+                        hasExpress[rec.处方ID] = !string.IsNullOrEmpty(expr);
+
+                        var agentnum = json["agentnum"]?.Value<int?>();
+                        var mxList = json["sellKpMxVos"] as JArray;
+                        var items = new List<DispenseDetailItem>();
+                        if (mxList != null)
+                        {
+                            foreach (var mx in mxList)
+                            {
+                                items.Add(new DispenseDetailItem
+                                {
+                                    goodsname = mx["goodsname"]?.Value<string>() ?? "",
+                                    dosage = mx["dosage"]?.Value<string>() ?? "",
+                                    goodscode = mx["goodscode"]?.Value<string>() ?? ""
+                                });
+                            }
+                        }
+                        dispenseMap[rec.处方ID] = new DispenseInfo
+                        {
+                            Patient = json["patient"]?.Value<string>() ?? "",
+                            Agentnum = agentnum,
+                            Items = items
+                        };
+                    }
+                    catch { /* 跳过JSON解析失败的记录 */ }
+                }
+
+                // 门诊_发药信息表 → deliveryaddr（快递地址含"前滩国际" → 免邮）
+                var addrSql = @"SELECT CAST(处方ID AS INT) AS 处方ID, content_json
+FROM fghis5..门诊_发药信息表
+WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
+                var addrRecords = db.Database.SqlQuery<DispenseJsonRecord>(addrSql).ToList();
+                foreach (var rec in addrRecords)
+                {
+                    try
+                    {
+                        var json = JObject.Parse(rec.content_json ?? "{}");
+                        var addr = json["deliveryaddr"]?.Value<string>() ?? "";
+                        if (addr.Contains("前滩国际"))
+                            freeShip.Add(rec.处方ID);
+                    }
+                    catch { /* 跳过JSON解析失败的记录 */ }
+                }
+            }
+
+            // 3. 逐行计算应收
+            //    剂数/饮片重量/免费重量：优先取发药侧JSON（dosage×agentnum，含小数，与药品明细核对"总用量"口径一致），
+            //    无JSON的处方回退用医生_处方明细的SQL值
+            foreach (var row in rows)
+            {
+                if (dispenseMap.TryGetValue(row.处方ID, out var disp))
+                {
+                    ApplyDispenseWeights(row, disp);
+                }
+
+                row.应收加工费 = CalcProcessFee(row.加工方式, row.剂数, row.饮片重量, row.免费重量);
+
+                // 快递费：地址含"前滩国际"→免邮(0)；否则有快递单号→10；无快递单号→0
+                var hasInfo = hasExpress.ContainsKey(row.处方ID) || freeShip.Contains(row.处方ID);
+                if (hasInfo)
+                {
+                    if (freeShip.Contains(row.处方ID))
+                    {
+                        row.应收快递费 = 0m;
+                        row.免邮 = true;
+                    }
+                    else if (hasExpress.TryGetValue(row.处方ID, out var expr))
+                    {
+                        row.应收快递费 = expr ? 10m : 0m;
+                    }
+                    else
+                    {
+                        row.应收快递费 = 0m;
+                    }
+                    row.是否一致 = (row.收费加工费 == row.应收加工费 && row.收费快递费 == row.应收快递费) ? "一致" : "不一致";
+                }
+                else
+                {
+                    row.应收快递费 = null;
+                    row.是否一致 = "无发药信息";
+                }
+            }
+
+            return rows;
+        }
+
+        /// <summary>
+        /// 按发药侧JSON计算 剂数/饮片重量(总用量)/免费重量
+        /// 饮片重量 = Σ(每味每贴用量 dosage × 剂数 agentnum)，保留2位小数（与药品明细核对的"总用量"口径一致）
+        /// 免费重量 = 其中 川贝母/三七 的重量（打粉计费用）
+        /// </summary>
+        private void ApplyDispenseWeights(FeeDetailCompareItem row, DispenseInfo disp)
+        {
+            if (disp == null || !disp.Agentnum.HasValue || disp.Agentnum.Value <= 0)
+                return;
+            var agentnum = disp.Agentnum.Value;
+            decimal total = 0m, free = 0m;
+            if (disp.Items != null)
+            {
+                foreach (var it in disp.Items)
+                {
+                    decimal d;
+                    if (!decimal.TryParse(it.dosage, out d)) continue;
+                    total += d * agentnum;
+                    var name = it.goodsname ?? "";
+                    if (name.Contains("川贝母") || name.Contains("三七"))
+                        free += d * agentnum;
+                }
+            }
+            row.剂数 = agentnum;
+            row.饮片重量 = Math.Round(total, 2);
+            row.免费重量 = Math.Round(free, 2);
+        }
+
+        /// <summary>
+        /// 按加工方式计算应收加工费
+        /// </summary>
+        private decimal? CalcProcessFee(string jyyq, int? 剂数, decimal? 饮片重量G, decimal? 免费重量G)
+        {
+            switch (jyyq)
+            {
+                case "代煎": return Math.Round((剂数 ?? 0) * 2.5m, 2);
+                case "浓汤": return Math.Round((剂数 ?? 0) * 5m, 2);
+                case "合煎颗粒": return Math.Round((剂数 ?? 0) * 25m, 2);
+                case "膏方": return 250m;
+                case "水蜜丸": return Math.Round((饮片重量G ?? 0m) * 0.06m, 2);
+                case "浓缩蜜丸":
+                case "浓缩丸":
+                case "浓缩水丸": return Math.Round((饮片重量G ?? 0m) * 0.1m, 2);
+                case "打粉":
+                    {
+                        // 川贝母/三七 免费；其余按实际克数比例计价：非免费重量 ÷ 1000 × 60（不设500g起做、不向上取整）
+                        var 计费 = (饮片重量G ?? 0m) - (免费重量G ?? 0m);
+                        if (计费 <= 0m) return 0m;
+                        return Math.Round(计费 / 1000m * 60m, 2);
+                    }
+                default: return 0m; // 代配/其他 无加工费
+            }
+        }
+
+        // =====================================================================
+        //  加工费及快递费汇总信息查询（按加工方式汇总）
+        // =====================================================================
+
+        /// <summary>
+        /// 加工费及快递费汇总信息查询页面（GET）
+        /// </summary>
+        public ActionResult FeeSummaryCompare()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询加工费/快递费汇总数据（POST）
+        /// 复用 BuildFeeDetailCompare 得到明细，再按加工方式汇总
+        /// </summary>
+        [HttpPost]
+        public ActionResult GetFeeSummaryCompare()
+        {
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+            if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
+
+            try
+            {
+                var detail = BuildFeeDetailCompare(bdate, edate);
+                var summary = BuildFeeSummary(detail);
+                return View("FeeSummaryCompare", summary);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Content("获取数据失败：" + inner.Message, "text/html; charset=utf-8");
+            }
+        }
+
+        /// <summary>
+        /// 按加工方式汇总加工费/快递费核对明细
+        /// 一致 = 该加工方式下"一致"处方数；不一致含"无发药信息"
+        /// </summary>
+        private List<FeeSummaryCompareItem> BuildFeeSummary(List<FeeDetailCompareItem> detail)
+        {
+            return detail.GroupBy(d => d.加工方式)
+                         .OrderBy(g => g.Key)
+                         .Select(g => new FeeSummaryCompareItem
+                         {
+                             加工方式 = g.Key,
+                             处方数 = g.Count(),
+                             一致数 = g.Count(x => x.是否一致 == "一致"),
+                             不一致数 = g.Count(x => x.是否一致 != "一致"),
+                             总用量 = g.Sum(x => x.饮片重量 ?? 0m),
+                             免费重量 = g.Sum(x => x.免费重量 ?? 0m),
+                             收费加工费 = g.Sum(x => x.收费加工费 ?? 0m),
+                             应收加工费 = g.Sum(x => x.应收加工费 ?? 0m),
+                             收费快递费 = g.Sum(x => x.收费快递费 ?? 0m),
+                             应收快递费 = g.Sum(x => x.应收快递费 ?? 0m),
+                             免邮数 = g.Count(x => x.免邮)
+                         })
+                         .ToList();
+        }
+
+        // =====================================================================
         //  批量查询处方结果（药品明细信息核对用）
         // =====================================================================
 

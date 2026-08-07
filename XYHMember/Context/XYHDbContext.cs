@@ -542,6 +542,40 @@ namespace XYHMember.Context
         public string 一致 { get; set; }                 // 收费数量==发药总用量 ? 一致 : 不一致
     }
 
+    //加工费及快递费核对结果（一行一个处方）
+    public class FeeDetailCompareItem
+    {
+        public int 处方ID { get; set; }
+        public string 日期 { get; set; }          // yyyy-MM-dd
+        public string 病人姓名 { get; set; }
+        public string 加工方式 { get; set; }       // 途径→CASE jyyq
+        public int? 剂数 { get; set; }            // 医生_处方明细.草药帖数
+        public decimal? 饮片重量 { get; set; }    // 整方总量 g = Σ(数量×帖数)
+        public decimal? 免费重量 { get; set; }    // 川贝母/三七 重量 g（打粉用）
+        public decimal? 收费加工费 { get; set; }  // Σ(类别99 金额)
+        public decimal? 应收加工费 { get; set; }  // 按规则算
+        public decimal? 收费快递费 { get; set; }  // Σ(类别91 金额) = 辨证论治费
+        public decimal? 应收快递费 { get; set; }  // 10 × 快递数（免邮=0）
+        public bool 免邮 { get; set; }            // 快递地址含"前滩国际" → 免邮
+        public string 是否一致 { get; set; }
+    }
+
+    //加工费及快递费汇总核对结果（一行一个加工方式）
+    public class FeeSummaryCompareItem
+    {
+        public string 加工方式 { get; set; }
+        public int 处方数 { get; set; }
+        public int 一致数 { get; set; }
+        public int 不一致数 { get; set; }         // 含"无发药信息"
+        public decimal? 总用量 { get; set; }       // Σ 饮片重量(g)
+        public decimal? 免费重量 { get; set; }     // Σ 免费重量(g)
+        public decimal? 收费加工费 { get; set; }  // Σ(类别99 金额)
+        public decimal? 应收加工费 { get; set; }  // Σ 应收加工费
+        public decimal? 收费快递费 { get; set; }  // Σ(类别91 金额)
+        public decimal? 应收快递费 { get; set; }  // Σ 应收快递费（免邮=0）
+        public int 免邮数 { get; set; }            // 免邮处方数
+    }
+
     //医技执行记录查询
     public class ExecutionRecordQuery
     {

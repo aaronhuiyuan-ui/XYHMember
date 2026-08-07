@@ -1,0 +1,245 @@
+@{
+    ViewBag.Title = "加工费及快递费明细信息核对";
+}
+
+@using XYHMember.Context;
+@model List<FeeDetailCompareItem>
+
+@{
+    var bdatepicker = Request["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edatepicker = Request["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    @Styles.Render("~/Content/flatpickr")
+    <style>
+        #dataTable {
+            width: 100% !important;
+            min-width: 900px !important;
+            table-layout: auto !important;
+        }
+        #dataTable th,
+        #dataTable td {
+            padding: 3px 8px !important;
+            white-space: nowrap;
+        }
+        #dataTable thead th {
+            background: #f0f0f0 !important;
+            color: #333 !important;
+            font-weight: 600;
+        }
+        .table-wrapper {
+            overflow: auto !important;
+            width: 80% !important;
+            max-width: 80% !important;
+        }
+        .table-wrapper > table {
+            display: table !important;
+        }
+        .summary-bar {
+            display: flex;
+            gap: 20px;
+            padding: 10px 16px;
+            background: #f2f2f2;
+            border-radius: 4px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        .summary-bar span label { color: #666; margin-right: 3px; }
+        .summary-bar span .val { font-weight: 600; color: #333; }
+    </style>
+</head>
+
+<body>
+    <div>
+        <div class="container">
+            <div>
+                <form action="@Url.Action("GetFeeDetailCompare", "Pharmacy")" method="post">
+                    <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;">
+                        <label style="margin:0 5px 0 10px;">收费日期</label>
+                        <input type="text" name="bdatepicker" id="bdatepicker"
+                               value="@bdatepicker" placeholder="开始日期" style="height:30px;">
+                        <label style="margin:0 5px;">—</label>
+                        <input type="text" name="edatepicker" id="edatepicker"
+                               value="@edatepicker" placeholder="结束日期" style="height:30px;">
+                        <span style="margin-left:40px;display:inline-flex;align-items:center;gap:6px;">
+                            <span class="am-input-group-btn">
+                                <button class="am-btn am-btn-default" type="submit">查询</button>
+                            </span>
+                        </span>
+                        <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:15px;">导出到Excel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        @if (Model != null && Model.Count > 0)
+        {
+            var matchCount = Model.Count(m => m.是否一致 == "一致");
+            var mismatchCount = Model.Count(m => m.是否一致 != "一致");
+
+            <div class="summary-bar">
+                <span><label>处方数：</label><span class="val total-count">@Model.Count</span></span>
+                <span><label>一致：</label><span class="val match-count">@matchCount</span></span>
+                <span><label>不一致：</label><span class="val mismatch-count">@mismatchCount</span></span>
+            </div>
+        }
+
+        <div class="am-g">
+            <div class="am-u-sm-12">
+                <div class="table-wrapper" style="overflow:auto;">
+                <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>序号</th>
+                            <th>处方ID</th>
+                            <th>日期</th>
+                            <th>病人姓名</th>
+                            <th>加工方式</th>
+                            <th>剂数</th>
+                            <th>总用量(g)</th>
+                            <th>免费重量(g)</th>
+                            <th>收费加工费</th>
+                            <th>应收加工费</th>
+                            <th>收费快递费(辨证论治费)</th>
+                            <th>应收快递费</th>
+                        </tr>
+                    </thead>
+                    @if (Model != null && Model.Count > 0)
+                    {
+                        <tbody>
+                            @{
+                                decimal sum收费加工费 = 0m, sum应收加工费 = 0m, sum收费快递费 = 0m, sum应收快递费 = 0m;
+                                int seq = 1;
+                            }
+                            @foreach (var item in Model)
+                            {
+                                sum收费加工费 += item.收费加工费 ?? 0m;
+                                sum应收加工费 += item.应收加工费 ?? 0m;
+                                sum收费快递费 += item.收费快递费 ?? 0m;
+                                sum应收快递费 += item.应收快递费 ?? 0m;
+
+                                <tr>
+                                    <td>@(seq++)</td>
+                                    <td>@item.处方ID</td>
+                                    <td>@item.日期</td>
+                                    <td>@item.病人姓名</td>
+                                    <td>@item.加工方式</td>
+                                    <td>@(item.剂数.HasValue ? item.剂数.Value.ToString() : "")</td>
+                                    <td>@(item.饮片重量.HasValue ? item.饮片重量.Value.ToString("F2") : "")</td>
+                                    <td>@(item.免费重量.HasValue ? item.免费重量.Value.ToString("F2") : "")</td>
+                                    <td>@(item.收费加工费.HasValue ? item.收费加工费.Value.ToString("F2") : "")</td>
+                                    <td>@(item.应收加工费.HasValue ? item.应收加工费.Value.ToString("F2") : "")</td>
+                                    <td>@(item.收费快递费.HasValue ? item.收费快递费.Value.ToString("F2") : "")</td>
+                                    <td>
+                                        @if (item.免邮)
+                                        {
+                                            @:免邮
+                                        }
+                                        else
+                                        {
+                                            @(item.应收快递费.HasValue ? item.应收快递费.Value.ToString("F2") : "—")
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            <tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">
+                                <td></td>
+                                <td colspan="5">合计</td>
+                                <td></td>
+                                <td></td>
+                                <td>@(sum收费加工费.ToString("F2"))</td>
+                                <td>@(sum应收加工费.ToString("F2"))</td>
+                                <td>@(sum收费快递费.ToString("F2"))</td>
+                                <td>@(sum应收快递费.ToString("F2"))</td>
+                            </tr>
+                        </tbody>
+                    }
+                </table>
+                </div>
+
+                @if (Model != null && Model.Count > 1)
+                {
+                    <div id="paginationContainer"></div>
+                }
+
+                @if (Model != null && Model.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#999;font-size:15px;">未查询到数据</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <script src="~/Scripts/pagination.js"></script>
+    <script src="~/Scripts/customDialog.js"></script>
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        flatpickr("#bdatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@bdatepicker"
+        });
+        flatpickr("#edatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@edatepicker"
+        });
+
+        initTablePagination('dataTable');
+
+        // 导出到Excel：把当前表格（含全部数据行和合计行）导出
+        var exportBtn = document.getElementById('exportBtn');
+        exportBtn.addEventListener('click', function () {
+            var table = document.getElementById('dataTable');
+            if (!table) return;
+            var tbody = table.querySelector('tbody');
+            if (!tbody || tbody.querySelectorAll('tr').length === 0) {
+                customDialog.alert('没有可导出的数据');
+                return;
+            }
+
+            var headers = Array.from(table.querySelectorAll('thead th')).map(function (th) { return th.innerText.trim(); });
+            var rows = Array.from(tbody.querySelectorAll('tr')).map(function (tr) {
+                return Array.from(tr.children).map(function (td) { return td.innerText.trim(); });
+            });
+
+            exportBtn.disabled = true;
+            exportBtn.innerText = '导出中...';
+
+            fetch('@Url.Action("ExportToExcel", "Export")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Headers: headers, Rows: rows })
+            })
+            .then(function (response) {
+                if (!response.ok) throw new Error('导出失败 HTTP ' + response.status);
+                return response.blob();
+            })
+            .then(function (blob) {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '加工费及快递费明细信息核对.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                exportBtn.disabled = false;
+                exportBtn.innerText = '导出到Excel';
+            })
+            .catch(function (err) {
+                exportBtn.disabled = false;
+                exportBtn.innerText = '导出到Excel';
+                customDialog.error('导出失败：' + err.message);
+            });
+        });
+    </script>
+
+</body>
+</html>
