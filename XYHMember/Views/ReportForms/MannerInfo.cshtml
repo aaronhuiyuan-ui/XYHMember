@@ -1,4 +1,4 @@
-﻿
+
 @{
     ViewBag.Title = "MannerInfo";
 }
@@ -75,7 +75,7 @@
                                     {
                                         <tr>
                                             <td>@id</td> <!-- 添加自增ID列 -->
-                                            <td>@result.项目名称</td>
+                                            <td>@((result.项目名称 ?? "").Trim() == "辨证论治费" ? "辨证论治费（快递费）" : result.项目名称)</td>
                                             <td>@result.单价</td>
                                             <td>@result.数量</td>
                                             <td>@result.金额</td>                                           

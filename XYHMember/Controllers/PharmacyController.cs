@@ -39,6 +39,8 @@ namespace XYHMember.Controllers
         private static string CheckCodeRaw { get { return ConfigurationManager.AppSettings["ApiCheckCode"]; } }
         /// <summary>校验码MD5值（由CheckCodeRaw动态计算）</summary>
         private static string CheckCodeMd5 { get { return ComputeMD5(CheckCodeRaw); } }
+        /// <summary>药品明细核对：结算折扣率（固定0.6）</summary>
+        private const decimal DiscountRate = 0.6m;
 
         // =====================================================================
         //  待发药查询
@@ -529,7 +531,7 @@ ORDER BY 发药时间 DESC";
                     {
                         var updSql = @"UPDATE fghis5..处方结果本地表 SET json_data = @json, billdate = @billdate, 查询时间 = GETDATE() WHERE outcfcode = @outcfcode";
                         db.Database.ExecuteSqlCommand(updSql,
-                            new SqlParameter("@json", dataJson),
+                            new SqlParameter("@json", SqlDbType.NVarChar, -1) { Value = dataJson },
                             new SqlParameter("@billdate", billdate ?? ""),
                             new SqlParameter("@outcfcode", outcfcode));
                     }
@@ -593,57 +595,120 @@ ORDER BY 发药时间 DESC";
 
             try
             {
-                // 1. 查询 HIS 收费明细（药品：项目类别='3'）
-                var billingSql = @"
+                var result = BuildDrugDetailCompare(bdate, edate);
+                return View("DrugDetailCompare", result);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Content("获取数据失败：" + inner.Message, "text/html; charset=utf-8");
+            }
+        }
+
+        /// <summary>
+        /// 药品汇总信息核对页面（GET）
+        /// 按药品编码汇总收费/发药合计，一行一个药品
+        /// </summary>
+        public ActionResult DrugSummaryCompare()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 查询汇总核对数据（POST）
+        /// 复用 BuildDrugDetailCompare 得到明细，再按药品编码汇总
+        /// </summary>
+        [HttpPost]
+        public ActionResult GetDrugSummaryCompare()
+        {
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+            if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
+
+            try
+            {
+                var detail = BuildDrugDetailCompare(bdate, edate);
+                var summary = BuildDrugSummary(detail);
+                return View("DrugSummaryCompare", summary);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Content("获取数据失败：" + inner.Message, "text/html; charset=utf-8");
+            }
+        }
+
+        /// <summary>
+        /// 构建药品明细核对数据（收费侧 门诊_收费明细表 + 发药侧 处方结果本地表 双向比对）
+        /// </summary>
+        private List<DrugDetailCompareItem> BuildDrugDetailCompare(string bdate, string edate)
+        {
+            // 1. 查询 HIS 收费明细（药品：项目类别='3'）
+            var billingSql = @"
 SELECT CAST(b.处方ID AS INT) AS 处方ID, CONVERT(varchar, b.日期, 23) AS 日期,
        a.姓名 AS 病人姓名,
-       CAST(b.项目ID AS NVARCHAR(50)) AS 项目ID, b.项目名称, b.单价, b.数量, b.金额
+       CAST(b.项目ID AS NVARCHAR(50)) AS 项目ID, b.项目名称, b.单价, b.数量, b.金额,
+       c.注册商标 AS 药品编码
 FROM fghis5..门诊_收费发票表 a
 JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
+LEFT JOIN fghis5..代码_药品基本信息表 c ON c.药品ID = b.项目ID
 WHERE a.发票状态 = '2'
   AND b.项目类别 = 3
   AND b.日期 BETWEEN @bdate AND @edate
 ORDER BY b.处方ID, b.项目名称";
 
-                var billingItems = db.Database.SqlQuery<BillingDrugItem>(billingSql,
-                    new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
-                    new SqlParameter("@edate", QueryHelper.ParseDate(edate))).ToList();
+            var billingItems = db.Database.SqlQuery<BillingDrugItem>(billingSql,
+                new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
+                new SqlParameter("@edate", QueryHelper.ParseDate(edate))).ToList();
 
-                // 2. 查询已发药记录（含 content_json）
-                var dispenseSql = @"
-SELECT CAST(处方ID AS INT) AS 处方ID, content_json
-FROM fghis5..门诊_发药信息表
-WHERE 发药状态=3 AND delete_flag='0'
-  AND CONVERT(date, 发药时间) >= @bdate AND CONVERT(date, 发药时间) <= @edate
-ORDER BY 处方ID";
-
-                var dispenseRecords = db.Database.SqlQuery<DispenseJsonRecord>(dispenseSql,
-                    new SqlParameter("@bdate", bdate),
-                    new SqlParameter("@edate", edate)).ToList();
-
-                // 3. 构建发药明细字典：处方ID → {patient, agentnum, items[]}
-                var dispenseMap = new Dictionary<int, DispenseInfo>();
-                foreach (var rec in dispenseRecords)
+            // 2. 查询处方结果本地表（HIS处方结果接口数据），作为发药侧
+            // 说明：该表由「已发药查询 → 处方结果」写入，存的是 getPrescriptionInfo 返回的 data；
+            //       只加载本次收费日期范围内有收费明细的处方ID，避免带入范围外的数据
+            var billingPids = new HashSet<int>(billingItems.Select(b => b.处方ID));
+            var dispenseMap = new Dictionary<int, DispenseInfo>();
+            if (billingPids.Count > 0)
+            {
+                var pidIn = string.Join(",", billingPids.Select(p => p.ToString()));
+                var resultSql = @"SELECT CAST(outcfcode AS INT) AS 处方ID, json_data AS content_json
+FROM fghis5..处方结果本地表
+WHERE outcfcode IS NOT NULL
+  AND CAST(outcfcode AS INT) IN (" + pidIn + ")";
+                var resultRecords = db.Database.SqlQuery<DispenseJsonRecord>(resultSql).ToList();
+                foreach (var rec in resultRecords)
                 {
                     try
                     {
                         var json = JObject.Parse(rec.content_json ?? "{}");
                         var patient = json["patient"]?.Value<string>() ?? "";
                         var agentnum = json["agentnum"]?.Value<int?>();
-                        var mxList = json["hisSellKpMxList"] as JArray;
+                        var mxList = json["sellKpMxVos"] as JArray;
 
                         var items = new List<DispenseDetailItem>();
                         if (mxList != null)
                         {
                             foreach (var mx in mxList)
                             {
+                                // 发药单价：sellKpMxVos[].price（兼容 sellprice/goodssprice）
+                                decimal? priceVal = null;
+                                var priceToken = mx["price"] ?? mx["sellprice"] ?? mx["goodssprice"];
+                                if (priceToken != null)
+                                {
+                                    decimal pv;
+                                    if (decimal.TryParse(priceToken.ToString(), out pv)) priceVal = pv;
+                                }
+
                                 items.Add(new DispenseDetailItem
                                 {
                                     goodsname = mx["goodsname"]?.Value<string>() ?? "",
                                     dosage = mx["dosage"]?.Value<string>() ?? "",
+                                    goodsid = mx["goodsid"]?.Value<string>() ?? "",
                                     goodscode = mx["goodscode"]?.Value<string>() ?? "",
                                     goodsspec = mx["goodsspec"]?.Value<string>() ?? "",
-                                    goodsunit = mx["goodsunit"]?.Value<string>() ?? ""
+                                    goodsunit = mx["goodsunit"]?.Value<string>() ?? "",
+                                    price = priceVal
                                 });
                             }
                         }
@@ -657,103 +722,265 @@ ORDER BY 处方ID";
                     }
                     catch { /* 跳过JSON解析失败的记录 */ }
                 }
+            }
 
-                // 4. 双向比对
-                var result = new List<DrugDetailCompareItem>();
-                var matchedKeys = new HashSet<string>(); // 记录已匹配的 "处方ID_项目名称"
+            // 4. 双向比对
+            var result = new List<DrugDetailCompareItem>();
+            var matchedKeys = new HashSet<string>(); // 记录已匹配的 "处方ID_项目名称"
 
-                // 4a. 遍历收费明细，匹配发药数据
-                foreach (var bill in billingItems)
+            // 4a. 遍历收费明细，匹配发药数据
+            foreach (var bill in billingItems)
+            {
+                var compare = new DrugDetailCompareItem
                 {
-                    var compare = new DrugDetailCompareItem
-                    {
-                        来源 = "收费",
-                        处方ID = bill.处方ID,
-                        日期 = bill.日期,
-                        病人姓名 = bill.病人姓名,
-                        项目ID = bill.项目ID,
-                        项目名称 = bill.项目名称,
-                        单价 = bill.单价,
-                        收费数量 = bill.数量,
-                        金额 = bill.金额
-                    };
+                    来源 = "收费",
+                    处方ID = bill.处方ID,
+                    日期 = bill.日期,
+                    病人姓名 = bill.病人姓名,
+                    项目ID = bill.项目ID,
+                    收费药品编码 = bill.药品编码,
+                    项目名称 = bill.项目名称,
+                    单价 = bill.单价,
+                    收费数量 = bill.数量,
+                    金额 = bill.金额
+                };
 
-                    if (dispenseMap.TryGetValue(bill.处方ID, out var dispInfo))
+                if (dispenseMap.TryGetValue(bill.处方ID, out var dispInfo))
+                {
+                    compare.病人姓名 = compare.病人姓名 ?? dispInfo.Patient;
+                    compare.剂数 = dispInfo.Agentnum;
+                    // 按编码匹配饮片（收费侧 代码_药品基本信息表.注册商标 = 发药侧 goodscode）
+                    var billCode = bill.药品编码?.Trim();
+                    var match = dispInfo.Items.FirstOrDefault(i =>
+                        !string.IsNullOrEmpty(billCode) &&
+                        !string.IsNullOrEmpty(i.goodscode) && i.goodscode.Trim() == billCode);
+                    if (match != null)
                     {
-                        compare.病人姓名 = compare.病人姓名 ?? dispInfo.Patient;
-                        compare.剂数 = dispInfo.Agentnum;
-                        // 按名称匹配饮片
-                        var match = dispInfo.Items.FirstOrDefault(i =>
-                            i.goodsname == bill.项目名称 || bill.项目名称.Contains(i.goodsname) || i.goodsname.Contains(bill.项目名称));
-                        if (match != null)
+                        compare.饮片名称 = match.goodsname;
+                        compare.饮片用量 = match.dosage;
+                        compare.发药药品编码 = match.goodscode;
+                        // 发药单价：取处方结果本地表 sellKpMxVos[].price
+                        compare.发药单价 = match.price;
+                        matchedKeys.Add(bill.处方ID + "_" + bill.药品编码);
+
+                        decimal dosageVal;
+                        if (decimal.TryParse(match.dosage, out dosageVal) && dispInfo.Agentnum.HasValue)
                         {
-                            compare.饮片名称 = match.goodsname;
-                            compare.饮片用量 = match.dosage;
-                            matchedKeys.Add(bill.处方ID + "_" + bill.项目名称);
-
-                            decimal dosageVal;
-                            if (decimal.TryParse(match.dosage, out dosageVal) && dispInfo.Agentnum.HasValue)
-                            {
-                                compare.计算数量 = Math.Round(dosageVal * dispInfo.Agentnum.Value, 2);
-                                compare.处方金额 = bill.单价.HasValue ? Math.Round(bill.单价.Value * dosageVal * dispInfo.Agentnum.Value, 2) : (decimal?)null;
-                                compare.是否一致 = compare.收费数量 == compare.计算数量 ? "一致" : "不一致";
-                            }
-                            else
-                            {
-                                compare.是否一致 = "无法比对";
-                            }
+                            compare.计算数量 = Math.Round(dosageVal * dispInfo.Agentnum.Value, 2);
+                            // 处方金额 = 发药单价 × 计算总用量（用量×剂数），保留3位小数、远离零舍入
+                            compare.处方金额 = match.price.HasValue ? Math.Round(match.price.Value * compare.计算数量.Value, 3, MidpointRounding.AwayFromZero) : (decimal?)null;
+                            // 折扣固定0.6；结算金额 = 发药金额 × 折扣
+                            compare.折扣 = DiscountRate;
+                            compare.结算金额 = compare.处方金额.HasValue ? Math.Round(compare.处方金额.Value * DiscountRate, 3, MidpointRounding.AwayFromZero) : (decimal?)null;
+                            compare.是否一致 = compare.收费数量 == compare.计算数量 ? "一致" : "不一致";
                         }
                         else
                         {
-                            compare.是否一致 = "无对应发药记录";
+                            compare.是否一致 = "无法比对";
                         }
                     }
                     else
                     {
-                        compare.是否一致 = "无发药信息";
+                        compare.是否一致 = "无对应发药记录";
                     }
-
-                    result.Add(compare);
                 }
-
-                // 4b. 遍历发药明细，补充收费中没有的条目
-                foreach (var kv in dispenseMap)
+                else
                 {
-                    var pid = kv.Key;
-                    var dispInfo = kv.Value;
-                    foreach (var item in dispInfo.Items)
+                    compare.是否一致 = "无发药信息";
+                }
+
+                result.Add(compare);
+            }
+
+            // 4b. 遍历发药明细，补充收费中没有的条目
+            foreach (var kv in dispenseMap)
+            {
+                var pid = kv.Key;
+                var dispInfo = kv.Value;
+                foreach (var item in dispInfo.Items)
+                {
+                    // 按编码判断是否已被收费侧匹配（goodscode）
+                    var keyGcode = pid + "_" + (item.goodscode ?? "");
+                    if (matchedKeys.Contains(keyGcode)) continue;
+
+                    // 计算总用量 = 用量 × 剂数；处方金额 = 发药单价 × 计算总用量
+                    decimal? dispQty = null;
+                    decimal qtyVal;
+                    if (decimal.TryParse(item.dosage, out qtyVal) && dispInfo.Agentnum.HasValue)
                     {
-                        var key = pid + "_" + item.goodsname;
-                        if (!matchedKeys.Contains(key))
+                        dispQty = Math.Round(qtyVal * dispInfo.Agentnum.Value, 2);
+                    }
+                    decimal? dispAmt = (dispQty.HasValue && item.price.HasValue)
+                        ? Math.Round(item.price.Value * dispQty.Value, 3, MidpointRounding.AwayFromZero)
+                        : (decimal?)null;
+                    // 折扣固定0.6；结算金额 = 发药金额 × 折扣
+                    decimal? dispSettle = dispAmt.HasValue
+                        ? Math.Round(dispAmt.Value * DiscountRate, 3, MidpointRounding.AwayFromZero)
+                        : (decimal?)null;
+
+                    result.Add(new DrugDetailCompareItem
+                    {
+                        来源 = "发药",
+                        处方ID = pid,
+                        病人姓名 = dispInfo.Patient ?? "",
+                        项目ID = !string.IsNullOrEmpty(item.goodsid) ? item.goodsid : item.goodscode,
+                        收费药品编码 = "",
+                        发药药品编码 = item.goodscode,
+                        项目名称 = item.goodsname,
+                        饮片名称 = item.goodsname,
+                        饮片用量 = item.dosage,
+                        剂数 = dispInfo.Agentnum,
+                        发药单价 = item.price,
+                        计算数量 = dispQty,
+                        处方金额 = dispAmt,
+                        折扣 = DiscountRate,
+                        结算金额 = dispSettle,
+                        是否一致 = "无对应收费记录"
+                    });
+                }
+            }
+
+            // 4c. 按处方ID、来源排序
+            return result.OrderBy(r => r.处方ID)
+                         .ThenBy(r => r.来源 == "收费" ? 0 : 1)
+                         .ThenBy(r => r.项目名称)
+                         .ToList();
+        }
+
+        /// <summary>
+        /// 按药品编码汇总明细（一行一个药品）
+        /// 一致 = 收费数量合计 == 发药总用量合计
+        /// </summary>
+        private List<DrugSummaryCompareItem> BuildDrugSummary(List<DrugDetailCompareItem> detail)
+        {
+            var map = new Dictionary<string, DrugSummaryCompareItem>();
+            foreach (var row in detail)
+            {
+                // 取药品编码：优先收费编码，其次发药编码
+                var code = string.IsNullOrEmpty(row.收费药品编码) ? row.发药药品编码 : row.收费药品编码;
+                code = (code ?? "").Trim();
+                if (string.IsNullOrEmpty(code)) continue;
+
+                if (!map.TryGetValue(code, out var s))
+                {
+                    s = new DrugSummaryCompareItem
+                    {
+                        药品编码 = code,
+                        收费数量 = 0m,
+                        收费金额 = 0m,
+                        发药总用量 = 0m,
+                        发药金额 = 0m,
+                        结算金额 = 0m
+                    };
+                    map[code] = s;
+                }
+                if (string.IsNullOrEmpty(s.药品名称) && !string.IsNullOrEmpty(row.项目名称))
+                    s.药品名称 = row.项目名称;
+
+                s.收费数量 += row.收费数量 ?? 0m;
+                s.收费金额 += row.金额 ?? 0m;
+                s.发药总用量 += row.计算数量 ?? 0m;
+                s.发药金额 += row.处方金额 ?? 0m;
+                s.结算金额 += row.结算金额 ?? 0m;
+            }
+
+            foreach (var s in map.Values)
+            {
+                s.收费数量 = Math.Round(s.收费数量 ?? 0m, 3, MidpointRounding.AwayFromZero);
+                s.收费金额 = Math.Round(s.收费金额 ?? 0m, 3, MidpointRounding.AwayFromZero);
+                s.发药总用量 = Math.Round(s.发药总用量 ?? 0m, 3, MidpointRounding.AwayFromZero);
+                s.发药金额 = Math.Round(s.发药金额 ?? 0m, 3, MidpointRounding.AwayFromZero);
+                s.结算金额 = Math.Round(s.结算金额 ?? 0m, 3, MidpointRounding.AwayFromZero);
+                s.一致 = s.收费数量 == s.发药总用量 ? "一致" : "不一致";
+            }
+
+            return map.Values.OrderBy(s => s.药品编码).ToList();
+        }
+
+        // =====================================================================
+        //  批量查询处方结果（药品明细信息核对用）
+        // =====================================================================
+
+        /// <summary>
+        /// 按日期范围批量调用处方结果接口（getPrescriptionInfo），更新处方结果本地表（POST）
+        /// 前端「批量查询处方结果」按钮调用
+        /// </summary>
+        [HttpPost]
+        public ActionResult BatchQueryPrescriptionResult()
+        {
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+            if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
+            if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
+
+            try
+            {
+                // 1. 取日期范围内收费的处方ID（与核对页收费侧同口径）
+                var pidSql = @"
+SELECT DISTINCT CAST(b.处方ID AS INT) AS 处方ID,
+       CONVERT(varchar, MIN(b.日期), 23) AS 日期
+FROM fghis5..门诊_收费发票表 a
+JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
+WHERE a.发票状态 = '2' AND b.项目类别 = 3
+  AND b.日期 BETWEEN @bdate AND @edate
+GROUP BY b.处方ID";
+                var pidRows = db.Database.SqlQuery<BillingDrugItem>(pidSql,
+                    new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
+                    new SqlParameter("@edate", QueryHelper.ParseDate(edate))).ToList();
+
+                int successCount = 0, failCount = 0;
+                var failList = new List<string>();
+                foreach (var row in pidRows)
+                {
+                    var outcfcode = row.处方ID.ToString();
+                    try
+                    {
+                        var result = QueryPrescriptionResultData(outcfcode);
+                        if (result.Item1 == null)
                         {
-                            result.Add(new DrugDetailCompareItem
-                            {
-                                来源 = "发药",
-                                处方ID = pid,
-                                病人姓名 = dispInfo.Patient ?? "",
-                                项目名称 = item.goodsname,
-                                饮片名称 = item.goodsname,
-                                饮片用量 = item.dosage,
-                                剂数 = dispInfo.Agentnum,
-                                是否一致 = "无对应收费记录"
-                            });
+                            failCount++;
+                            if (failList.Count < 20) failList.Add(outcfcode + "：" + (result.Item2 ?? "接口无数据"));
+                            continue;
                         }
+                        var dataJson = result.Item1;
+                        // 业务日期：优先取接口返回的 billdate，取不到用收费日期
+                        var billdate = row.日期 ?? "";
+                        try
+                        {
+                            var jData = JObject.Parse(dataJson);
+                            billdate = jData["billdate"]?.Value<string>() ?? billdate;
+                        }
+                        catch { /* 保持收费日期 */ }
+
+                        UpsertPrescriptionResultCache(outcfcode, billdate, dataJson);
+                        successCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        failCount++;
+                        if (failList.Count < 20) failList.Add(outcfcode + "：" + ex.Message);
+                    }
+                    finally
+                    {
+                        // 每次调用之间留间隔，避免触发外部接口限流
+                        System.Threading.Thread.Sleep(300);
                     }
                 }
 
-                // 4c. 按处方ID、来源排序
-                result = result.OrderBy(r => r.处方ID)
-                               .ThenBy(r => r.来源 == "收费" ? 0 : 1)
-                               .ThenBy(r => r.项目名称)
-                               .ToList();
-
-                return View("DrugDetailCompare", result);
+                return Json(new
+                {
+                    success = true,
+                    total = pidRows.Count,
+                    successCount,
+                    failCount,
+                    failList = failList.Take(10).ToList()
+                });
             }
             catch (Exception ex)
             {
                 var inner = ex;
                 while (inner.InnerException != null) inner = inner.InnerException;
-                return Content("获取数据失败：" + inner.Message, "text/html; charset=utf-8");
+                return Json(new { success = false, msg = inner.Message });
             }
         }
 
@@ -810,6 +1037,118 @@ ORDER BY 处方ID";
                 if (ex.InnerException != null)
                     detail += " | Inner: " + ex.InnerException.Message;
                 return Tuple.Create(false, detail, "");
+            }
+        }
+
+        /// <summary>
+        /// 调用处方结果查询接口（POST /api/v2/prescription/getPrescriptionInfo）
+        /// 返回 Tuple(数据JSON, 失败原因)；Item1 不为 null 表示成功，Item2 为失败原因（成功时为 null）
+        /// </summary>
+        private Tuple<string, string> QueryPrescriptionResultData(string outcfcode)
+        {
+            const int maxAttempts = 3; // 首次 + 2 次重试
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                var result = CallGetPrescriptionInfo(outcfcode);
+                if (result.Item1 != null) return result; // 成功
+
+                // 仅对"接口访问太频繁"限流做重试，其他失败直接返回
+                var reason = result.Item2 ?? "";
+                var isRateLimit = reason.Contains("频繁") || reason.Contains("稍后再试") || reason.Contains("限流");
+                if (isRateLimit && attempt < maxAttempts)
+                {
+                    System.Threading.Thread.Sleep(1000 * attempt); // 指数退避：1s、2s
+                    continue;
+                }
+                return result;
+            }
+            return Tuple.Create((string)null, "重试3次后仍被限流");
+        }
+
+        /// <summary>
+        /// 单次调用处方结果查询接口（不重试）
+        /// </summary>
+        private Tuple<string, string> CallGetPrescriptionInfo(string outcfcode)
+        {
+            try
+            {
+                var requestBody = new JObject
+                {
+                    ["customercode"] = CustomerCode,
+                    ["outcfcode"] = outcfcode,
+                    ["checkcode"] = CheckCodeMd5
+                };
+                var jsonBody = requestBody.ToString(Formatting.None);
+
+                var timestamp = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+                var sign = ComputeSign(jsonBody, timestamp, AppSecret);
+
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+
+                var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiBaseUrl}/api/v2/prescription/getPrescriptionInfo");
+                httpRequest.Headers.Add("appId", AppId);
+                httpRequest.Headers.Add("timestamp", timestamp.ToString());
+                httpRequest.Headers.Add("sign", sign);
+                httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+                using (var httpClient = new HttpClient())
+                {
+                    httpClient.Timeout = TimeSpan.FromSeconds(30); // 与单条处方结果查询(GetPrescriptionDetail)一致
+                    var response = httpClient.SendAsync(httpRequest).ConfigureAwait(false).GetAwaiter().GetResult();
+                    var responseBody = response.Content.ReadAsStringAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+                    var jResp = JObject.Parse(responseBody);
+
+                    var isSuccess = jResp["isSuccess"]?.Value<bool>() ?? false;
+                    if (!isSuccess)
+                    {
+                        var msg = jResp["messageInfos"]?.ToString()
+                                  ?? jResp["msg"]?.ToString()
+                                  ?? "接口返回失败";
+                        return Tuple.Create((string)null, msg);
+                    }
+                    var data = jResp["data"]?.ToString(Formatting.None);
+                    if (string.IsNullOrEmpty(data))
+                        return Tuple.Create((string)null, "接口返回成功但 data 为空");
+                    return Tuple.Create(data, (string)null);
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                return Tuple.Create((string)null, "请求超时(30秒)");
+            }
+            catch (Exception ex)
+            {
+                var detail = ex.Message;
+                if (ex.InnerException != null)
+                    detail += " | " + ex.InnerException.Message;
+                return Tuple.Create((string)null, "调用异常: " + detail);
+            }
+        }
+
+        /// <summary>
+        /// 写入/更新处方结果本地表（按 outcfcode 存在则UPDATE，否则INSERT）
+        /// </summary>
+        private void UpsertPrescriptionResultCache(string outcfcode, string billdate, string dataJson)
+        {
+            var checkSql = @"SELECT COUNT(*) FROM fghis5..处方结果本地表 WHERE outcfcode = @outcfcode";
+            var exists = db.Database.SqlQuery<int>(checkSql,
+                new SqlParameter("@outcfcode", outcfcode)).FirstOrDefault() > 0;
+
+            if (exists)
+            {
+                var updSql = @"UPDATE fghis5..处方结果本地表 SET json_data = @json, billdate = @billdate, 查询时间 = GETDATE() WHERE outcfcode = @outcfcode";
+                db.Database.ExecuteSqlCommand(updSql,
+                    new SqlParameter("@json", SqlDbType.NVarChar, -1) { Value = dataJson },
+                    new SqlParameter("@billdate", billdate ?? ""),
+                    new SqlParameter("@outcfcode", outcfcode));
+            }
+            else
+            {
+                var insSql = @"INSERT INTO fghis5..处方结果本地表 (outcfcode, billdate, json_data, 查询时间) VALUES (@outcfcode, @billdate, @json, GETDATE())";
+                db.Database.ExecuteSqlCommand(insSql,
+                    new SqlParameter("@outcfcode", outcfcode),
+                    new SqlParameter("@billdate", billdate ?? ""),
+                    new SqlParameter("@json", dataJson));
             }
         }
 

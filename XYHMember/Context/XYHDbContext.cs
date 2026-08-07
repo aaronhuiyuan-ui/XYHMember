@@ -470,6 +470,7 @@ namespace XYHMember.Context
         public string 日期 { get; set; }
         public string 病人姓名 { get; set; }
         public string 项目ID { get; set; }
+        public string 药品编码 { get; set; }
         public string 项目名称 { get; set; }
         public decimal? 单价 { get; set; }
         public decimal? 数量 { get; set; }
@@ -488,9 +489,11 @@ namespace XYHMember.Context
     {
         public string goodsname { get; set; }
         public string dosage { get; set; }
+        public string goodsid { get; set; }
         public string goodscode { get; set; }
         public string goodsspec { get; set; }
         public string goodsunit { get; set; }
+        public decimal? price { get; set; }
     }
 
     //发药信息（JSON解析结果）
@@ -509,16 +512,34 @@ namespace XYHMember.Context
         public string 日期 { get; set; }
         public string 病人姓名 { get; set; }
         public string 项目ID { get; set; }
+        public string 收费药品编码 { get; set; }          // 代码_药品基本信息表.注册商标
         public string 项目名称 { get; set; }
         public decimal? 单价 { get; set; }
         public decimal? 收费数量 { get; set; }
         public decimal? 金额 { get; set; }              // 收费: 单价×数量
+        public string 发药药品编码 { get; set; }          // 发药 sellKpMxVos[].goodscode
         public string 饮片名称 { get; set; }
         public string 饮片用量 { get; set; }
         public int? 剂数 { get; set; }
+        public decimal? 发药单价 { get; set; }           // 发药JSON里的价格
         public decimal? 计算数量 { get; set; }           // 用量×剂数
         public decimal? 处方金额 { get; set; }           // 单价×用量×剂数
+        public decimal? 折扣 { get; set; }               // 固定折扣率（如 0.6）
+        public decimal? 结算金额 { get; set; }           // 发药金额×折扣
         public string 是否一致 { get; set; }
+    }
+
+    //药品汇总信息核对（按药品编码汇总，一行一个药品）
+    public class DrugSummaryCompareItem
+    {
+        public string 药品编码 { get; set; }
+        public string 药品名称 { get; set; }
+        public decimal? 收费数量 { get; set; }           // 收费数量合计
+        public decimal? 收费金额 { get; set; }           // 收费金额合计
+        public decimal? 发药总用量 { get; set; }          // 发药总用量合计（用量×剂数）
+        public decimal? 发药金额 { get; set; }           // 发药金额合计
+        public decimal? 结算金额 { get; set; }           // 结算金额合计
+        public string 一致 { get; set; }                 // 收费数量==发药总用量 ? 一致 : 不一致
     }
 
     //医技执行记录查询

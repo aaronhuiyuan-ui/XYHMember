@@ -31,7 +31,8 @@
         }
         .table-wrapper {
             overflow: auto !important;
-            max-width: calc(100vw - 40px) !important;
+            width: 80% !important;
+            max-width: 80% !important;
         }
         .table-wrapper > table {
             display: table !important;
@@ -80,6 +81,8 @@
                                 <button class="am-btn am-btn-default" type="submit">查询比对</button>
                             </span>
                         </span>
+                        <button class="am-btn am-btn-primary" type="button" id="batchQueryBtn" style="margin-left:15px;background:#5cb85c!important;border-color:#4cae4c!important;color:#fff!important;">批量查询处方结果</button>
+                        <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:15px;">导出到Excel</button>
                     </div>
                 </form>
             </div>
@@ -113,23 +116,37 @@
                             <th>日期</th>
                             <th>病人姓名</th>
                             <th>项目ID</th>
+                            <th>收费药品编码</th>
                             <th>项目名称</th>
-                            <th>单价</th>
+                            <th>收费单价</th>
                             <th>收费数量</th>
-                            <th>金额</th>
+                            <th>收费金额</th>
+                            <th>发药药品编码</th>
                             <th>发药饮片</th>
                             <th>饮片用量(g)</th>
                             <th>剂数</th>
-                            <th>计算总用量(用量×剂数)</th>
-                            <th>处方金额</th>
+                            <th>发药单价</th>
+                            <th>总用量</th>
+                            <th>发药金额</th>
+                            <th>折扣</th>
+                            <th>结算金额</th>
                             <th>是否一致</th>
                         </tr>
                     </thead>
                     @if (Model != null && Model.Count > 0)
                     {
                         <tbody>
+                            @{
+                                decimal sum收费数量 = 0m, sum金额 = 0m, sum计算数量 = 0m, sum处方金额 = 0m, sum结算金额 = 0m;
+                            }
                             @foreach (var item in Model)
                             {
+                                sum收费数量 += item.收费数量 ?? 0m;
+                                sum金额 += item.金额 ?? 0m;
+                                sum计算数量 += item.计算数量 ?? 0m;
+                                sum处方金额 += item.处方金额 ?? 0m;
+                                sum结算金额 += item.结算金额 ?? 0m;
+
                                 var rowClass = "";
                                 if (item.是否一致 == "一致") { rowClass = "row-match"; }
                                 else if (item.是否一致 == "不一致") { rowClass = "row-mismatch"; }
@@ -144,18 +161,45 @@
                                     <td>@item.日期</td>
                                     <td>@item.病人姓名</td>
                                     <td>@item.项目ID</td>
+                                    <td>@item.收费药品编码</td>
                                     <td>@item.项目名称</td>
-                                    <td>@(item.单价.HasValue ? item.单价.Value.ToString("F2") : "")</td>
+                                    <td>@(item.单价.HasValue ? item.单价.Value.ToString("F3") : "")</td>
                                     <td>@item.收费数量</td>
-                                    <td>@(item.金额.HasValue ? item.金额.Value.ToString("F2") : "")</td>
+                                    <td>@(item.金额.HasValue ? item.金额.Value.ToString("F3") : "")</td>
+                                    <td>@item.发药药品编码</td>
                                     <td>@item.饮片名称</td>
                                     <td>@item.饮片用量</td>
                                     <td>@item.剂数</td>
+                                    <td>@(item.发药单价.HasValue ? item.发药单价.Value.ToString("F3") : "")</td>
                                     <td>@(item.计算数量.HasValue ? item.计算数量.Value.ToString("G29") : "")</td>
-                                    <td>@(item.处方金额.HasValue ? item.处方金额.Value.ToString("F2") : "")</td>
+                                    <td>@(item.处方金额.HasValue ? item.处方金额.Value.ToString("F3") : "")</td>
+                                    <td>@(item.折扣.HasValue ? item.折扣.Value.ToString("G29") : "")</td>
+                                    <td>@(item.结算金额.HasValue ? item.结算金额.Value.ToString("F3") : "")</td>
                                     <td style="font-weight:bold;">@item.是否一致</td>
                                 </tr>
                             }
+                            <tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td>合计</td>
+                                <td></td>
+                                <td>@(sum收费数量.ToString("G29"))</td>
+                                <td>@(sum金额.ToString("F3"))</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td>@(sum计算数量.ToString("G29"))</td>
+                                <td>@(sum处方金额.ToString("F3"))</td>
+                                <td></td>
+                                <td>@(sum结算金额.ToString("F3"))</td>
+                                <td></td>
+                            </tr>
                         </tbody>
                     }
                 </table>
@@ -189,6 +233,98 @@
         });
 
         initTablePagination('dataTable');
+
+        // 批量查询处方结果：按日期批量调用 getPrescriptionInfo 并更新处方结果本地表
+        var batchQueryBtn = document.getElementById('batchQueryBtn');
+        batchQueryBtn.addEventListener('click', function () {
+            var bdate = document.getElementById('bdatepicker').value;
+            var edate = document.getElementById('edatepicker').value;
+            if (!bdate || !edate) {
+                customDialog.alert('请先选择日期范围');
+                return;
+            }
+
+            customDialog.confirm('将按收费日期 [' + bdate + ' ~ ' + edate + '] 批量调用处方结果接口，' +
+                '更新处方结果本地表。\n为避免接口限流，每条处方间隔约0.3秒并自动重试限流失败项，\n处方较多时可能需要几分钟，确定继续吗？', '批量查询确认', function () {
+                    var btn = batchQueryBtn;
+                    btn.disabled = true;
+                    btn.innerText = '批量查询中...';
+
+                    fetch('@Url.Action("BatchQueryPrescriptionResult", "Pharmacy")', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                        body: 'bdatepicker=' + encodeURIComponent(bdate) + '&edatepicker=' + encodeURIComponent(edate)
+                    })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerText = '批量查询处方结果';
+                        if (data.success) {
+                            var msg = '共 ' + data.total + ' 张处方\n成功 ' + data.successCount + '，失败 ' + data.failCount;
+                            if (data.failList && data.failList.length > 0) {
+                                msg += '\n\n失败示例：\n' + data.failList.join('\n');
+                            }
+                            customDialog.success(msg + '\n\n点击确定后自动重新查询比对。', '批量查询结果', function () {
+                                document.querySelector('form').submit();
+                            });
+                        } else {
+                            customDialog.error('批量查询失败：' + data.msg);
+                        }
+                    })
+                    .catch(function (err) {
+                        btn.disabled = false;
+                        btn.innerText = '批量查询处方结果';
+                        customDialog.error('批量查询出错：' + err);
+                    });
+                });
+        });
+
+        // 导出到Excel：把当前表格（含全部数据行和合计行）导出
+        var exportBtn = document.getElementById('exportBtn');
+        exportBtn.addEventListener('click', function () {
+            var table = document.getElementById('dataTable');
+            if (!table) return;
+            var tbody = table.querySelector('tbody');
+            if (!tbody || tbody.querySelectorAll('tr').length === 0) {
+                customDialog.alert('没有可导出的数据');
+                return;
+            }
+
+            var headers = Array.from(table.querySelectorAll('thead th')).map(function (th) { return th.innerText.trim(); });
+            var rows = Array.from(tbody.querySelectorAll('tr')).map(function (tr) {
+                return Array.from(tr.children).map(function (td) { return td.innerText.trim(); });
+            });
+
+            exportBtn.disabled = true;
+            exportBtn.innerText = '导出中...';
+
+            fetch('@Url.Action("ExportToExcel", "Export")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Headers: headers, Rows: rows })
+            })
+            .then(function (response) {
+                if (!response.ok) throw new Error('导出失败 HTTP ' + response.status);
+                return response.blob();
+            })
+            .then(function (blob) {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '药品明细信息核对.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                exportBtn.disabled = false;
+                exportBtn.innerText = '导出到Excel';
+            })
+            .catch(function (err) {
+                exportBtn.disabled = false;
+                exportBtn.innerText = '导出到Excel';
+                customDialog.error('导出失败：' + err.message);
+            });
+        });
     </script>
 
 </body>

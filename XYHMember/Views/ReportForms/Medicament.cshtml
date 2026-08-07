@@ -81,10 +81,15 @@
                                 <tbody>
                                     @{
                                         int id = 1; // 初始化自增ID
+                                        decimal sum数量 = 0m, sum总售价 = 0m, sum总批发价 = 0m, sum总成本 = 0m;
                                     }
 
                                     @foreach (var result in Model)
                                     {
+                                        sum数量 += result.数量 ?? 0m;
+                                        sum总售价 += result.总售价 ?? 0m;
+                                        sum总批发价 += result.总批发价 ?? 0m;
+                                        sum总成本 += result.总成本 ?? 0m;
                                     <tr>
                                         <td>@id</td> <!-- 添加自增ID列 -->
                                         <td>@result.药品ID</td>
@@ -106,6 +111,23 @@
                                         id++; // 每次迭代增加自增ID
 
                                     }
+                                    <tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">
+                                        <td>合计</td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td>@(sum数量.ToString("G29"))</td>
+                                        <td>@(sum总售价.ToString("F2"))</td>
+                                        <td>@(sum总批发价.ToString("F2"))</td>
+                                        <td>@(sum总成本.ToString("F2"))</td>
+                                    </tr>
 
                                 </tbody>
                             }
