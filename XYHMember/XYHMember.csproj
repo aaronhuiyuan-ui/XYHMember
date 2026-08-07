@@ -302,12 +302,17 @@
     <Content Include="Views\Pharmacy\DispensingConfirm.cshtml" />
     <Content Include="Views\Pharmacy\DispensedQuery.cshtml" />
     <Content Include="Views\Pharmacy\CancelledQuery.cshtml" />
+    <Content Include="Views\Pharmacy\DrugDetailCompare.cshtml" />
+    <Content Include="Views\Pharmacy\DrugSummaryCompare.cshtml" />
+    <Content Include="Views\Pharmacy\FeeDetailCompare.cshtml" />
+    <Content Include="Views\Pharmacy\FeeSummaryCompare.cshtml" />
     <Content Include="Views\ReportForms\Reception.cshtml" />
     <Content Include="Views\ReportForms\DailyReport.cshtml" />
     <Content Include="Views\ReportForms\Department.cshtml" />
     <Content Include="Views\ReportForms\DoctorInfo.cshtml" />
     <Content Include="Views\ReportForms\Medicament.cshtml" />
     <Content Include="Views\ReportForms\MannerInfo.cshtml" />
+    <Content Include="Views\ReportForms\Manner.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="App_Data\" />
