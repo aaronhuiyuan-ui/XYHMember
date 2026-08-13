@@ -74,6 +74,7 @@
                             </span>
                         </span>
                         <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:15px;">导出到Excel</button>
+                        <button class="am-btn am-btn-default" type="button" id="importOaBtn" style="margin-left:15px;">导入到OA</button>
                     </div>
                 </form>
             </div>
@@ -96,7 +97,9 @@
                     <thead>
                         <tr>
                             <th>加工方式</th>
+                            <th>煎药要求</th>
                             <th>处方数</th>
+                            <th>贴数</th>
                             <th>总用量(g)</th>
                             <th>免费重量(g)</th>
                             <th>收费加工费</th>
@@ -110,12 +113,13 @@
                     {
                         <tbody>
                             @{
-                                int sum处方数 = 0, sum免邮 = 0;
+                                int sum处方数 = 0, sum贴数 = 0, sum免邮 = 0;
                                 decimal sum总用量 = 0m, sum免费重量 = 0m, sum收费加工费 = 0m, sum收费快递费 = 0m, sum应付加工费 = 0m, sum应付快递费 = 0m;
                             }
                             @foreach (var item in Model)
                             {
                                 sum处方数 += item.处方数;
+                                sum贴数 += item.贴数;
                                 sum免邮 += item.免邮数;
                                 sum总用量 += item.总用量 ?? 0m;
                                 sum免费重量 += item.免费重量 ?? 0m;
@@ -126,7 +130,9 @@
 
                                 <tr>
                                     <td>@item.加工方式</td>
+                                    <td>@item.煎药要求</td>
                                     <td>@item.处方数</td>
+                                    <td>@item.贴数</td>
                                     <td>@(item.总用量.HasValue ? item.总用量.Value.ToString("F2") : "")</td>
                                     <td>@(item.免费重量.HasValue ? item.免费重量.Value.ToString("F2") : "")</td>
                                     <td>@(item.收费加工费.HasValue ? item.收费加工费.Value.ToString("F2") : "")</td>
@@ -137,8 +143,9 @@
                                 </tr>
                             }
                             <tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">
-                                <td>合计</td>
+                                <td colspan="2">合计</td>
                                 <td>@sum处方数</td>
+                                <td>@sum贴数</td>
                                 <td>@(sum总用量.ToString("F2"))</td>
                                 <td>@(sum免费重量.ToString("F2"))</td>
                                 <td>@(sum收费加工费.ToString("F2"))</td>
@@ -172,10 +179,12 @@
     <script>
         flatpickr("#bdatepicker", {
             dateFormat: "Y-m-d",
+            minDate: "2026-07-01",
             defaultDate: "@bdatepicker"
         });
         flatpickr("#edatepicker", {
             dateFormat: "Y-m-d",
+            minDate: "2026-07-01",
             defaultDate: "@edatepicker"
         });
 
@@ -225,6 +234,36 @@
                 exportBtn.disabled = false;
                 exportBtn.innerText = '导出到Excel';
                 customDialog.error('导出失败：' + err.message);
+            });
+        });
+
+        // 导入到OA：校验足月后，将当月应付加工费/应付快递费写入 上海真仁堂统计汇总
+        var importOaBtn = document.getElementById('importOaBtn');
+        importOaBtn.addEventListener('click', function () {
+            customDialog.confirm('确认将当前足月查询的汇总数据导入到OA吗？', '导入确认', function () {
+                importOaBtn.disabled = true;
+                importOaBtn.innerText = '导入中...';
+
+                var bd = document.getElementById('bdatepicker').value;
+                var ed = document.getElementById('edatepicker').value;
+
+                fetch('@Url.Action("ImportToOA", "Pharmacy")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'bdatepicker=' + encodeURIComponent(bd) + '&edatepicker=' + encodeURIComponent(ed)
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    importOaBtn.disabled = false;
+                    importOaBtn.innerText = '导入到OA';
+                    if (data.success) customDialog.success(data.msg);
+                    else customDialog.error(data.msg);
+                })
+                .catch(function (err) {
+                    importOaBtn.disabled = false;
+                    importOaBtn.innerText = '导入到OA';
+                    customDialog.error('导入失败：' + err.message);
+                });
             });
         });
     </script>

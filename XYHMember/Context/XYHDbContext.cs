@@ -548,7 +548,8 @@ namespace XYHMember.Context
         public int 处方ID { get; set; }
         public string 日期 { get; set; }          // yyyy-MM-dd
         public string 病人姓名 { get; set; }
-        public string 加工方式 { get; set; }       // 途径→CASE jyyq
+        public string 煎药要求 { get; set; }        // 原始途径（煎药/浓缩/合煎/丸剂/粉剂/膏方/草药/其他）
+        public string 加工方式 { get; set; }       // 由 煎药要求 映射：代煎/浓汤/合煎颗粒/浓缩蜜丸/打粉/膏方/代配/其他
         public int? 剂数 { get; set; }            // 医生_处方明细.草药帖数
         public decimal? 饮片重量 { get; set; }    // 整方总量 g = Σ(数量×帖数)
         public decimal? 免费重量 { get; set; }    // 川贝母/三七 重量 g（打粉用）
@@ -563,8 +564,10 @@ namespace XYHMember.Context
     //加工费及快递费汇总核对结果（一行一个加工方式）
     public class FeeSummaryCompareItem
     {
-        public string 加工方式 { get; set; }
+        public string 加工方式 { get; set; }   // 由 煎药要求 映射
+        public string 煎药要求 { get; set; }    // 原始途径
         public int 处方数 { get; set; }
+        public int 贴数 { get; set; }              // Σ 剂数
         public decimal? 总用量 { get; set; }       // Σ 饮片重量(g)
         public decimal? 免费重量 { get; set; }     // Σ 免费重量(g)
         public decimal? 收费加工费 { get; set; }  // Σ(类别99 金额)
@@ -572,6 +575,16 @@ namespace XYHMember.Context
         public decimal? 收费快递费 { get; set; }  // Σ(类别91 金额)
         public decimal? 应收快递费 { get; set; }  // Σ 应收快递费（免邮=0）
         public int 免邮数 { get; set; }            // 免邮处方数
+    }
+
+    //上海真仁堂统计汇总（导入到OA用，表在 fghis5）
+    public class ZhenRenTangStat
+    {
+        public int 序号 { get; set; }
+        public string 月份 { get; set; }        // yyyy-MM
+        public decimal 应付加工费 { get; set; }
+        public decimal 应付快递费 { get; set; }
+        public DateTime? 导入时间 { get; set; }
     }
 
     //医技执行记录查询

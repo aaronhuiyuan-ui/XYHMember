@@ -148,6 +148,7 @@
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\OutpatientController.cs" />
     <Compile Include="Controllers\MedicalTechController.cs" />
+    <Compile Include="Controllers\OaApiController.cs" />
     <Compile Include="Controllers\PharmacyController.cs" />
     <Compile Include="Filters\AuthFilter.cs" />
     <Compile Include="Helpers\PasswordHelper.cs" />

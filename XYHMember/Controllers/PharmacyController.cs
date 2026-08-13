@@ -946,6 +946,7 @@ WHERE outcfcode IS NOT NULL
 SELECT a.处方ID,
        CONVERT(varchar(10), CONVERT(date, a.日期), 23) AS 日期,
        a.病人姓名,
+       d.途径 AS 煎药要求,
        CASE d.途径
            WHEN '煎药' THEN '代煎' WHEN '浓缩' THEN '浓汤' WHEN '合煎' THEN '合煎颗粒'
            WHEN '丸剂' THEN '浓缩蜜丸' WHEN '粉剂' THEN '打粉' WHEN '膏方' THEN '膏方'
@@ -1180,17 +1181,78 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
         }
 
         /// <summary>
+        /// 导入到OA（POST）：仅允许足月查询（整月且不超过一个月），
+        /// 将当月汇总的应付加工费/应付快递费写入 fghis5..上海真仁堂统计汇总
+        /// </summary>
+        [HttpPost]
+        public ActionResult ImportToOA()
+        {
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+            DateTime b, e;
+            if (!DateTime.TryParse(bdate, out b) || !DateTime.TryParse(edate, out e))
+                return Json(new { success = false, msg = "日期格式不正确" });
+
+            // 足月校验：同月 && 起始=1号 && 结束=月末
+            var isSameMonth = b.Year == e.Year && b.Month == e.Month;
+            var isFullMonth = isSameMonth && b.Day == 1 && e.Day == DateTime.DaysInMonth(b.Year, b.Month);
+            if (!isFullMonth)
+            {
+                var msg = isSameMonth ? "不是足月查询（需查询整月：1日~月末），无法导入"
+                                      : "查询跨度超过一个月，无法导入";
+                return Json(new { success = false, msg });
+            }
+
+            var 月份 = b.ToString("yyyy-MM");
+
+            try
+            {
+                // 重复校验：同一月份已导入则拒绝
+                var exists = db.Database.SqlQuery<int>(
+                    "SELECT COUNT(*) FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
+                    new SqlParameter("@month", 月份)).FirstOrDefault();
+                if (exists > 0)
+                    return Json(new { success = false, msg = "该月份(" + 月份 + ")已导入，如需更新请先删除原数据" });
+
+                // 汇总金额（复用现有明细/汇总构建逻辑）
+                var detail = BuildFeeDetailCompare(bdate, edate);
+                if (detail.Count == 0)
+                    return Json(new { success = false, msg = "该月份无数据，无法导入" });
+                var summary = BuildFeeSummary(detail);
+                decimal 应付加工费 = summary.Sum(s => s.应收加工费 ?? 0m);
+                decimal 应付快递费 = summary.Sum(s => s.应收快递费 ?? 0m);
+
+                db.Database.ExecuteSqlCommand(
+                    @"INSERT INTO fghis5..上海真仁堂统计汇总 (月份, 应付加工费, 应付快递费)
+                      VALUES (@month, @jgf, @kdf)",
+                    new SqlParameter("@month", 月份),
+                    new SqlParameter("@jgf", 应付加工费),
+                    new SqlParameter("@kdf", 应付快递费));
+
+                return Json(new { success = true, msg = "导入成功：" + 月份 +
+                    " 应付加工费=" + 应付加工费.ToString("F2") + " 应付快递费=" + 应付快递费.ToString("F2") });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = "导入失败：" + inner.Message });
+            }
+        }
+
+        /// <summary>
         /// 按加工方式汇总加工费/快递费核对明细
         /// 一致 = 该加工方式下"一致"处方数；不一致含"无发药信息"
         /// </summary>
         private List<FeeSummaryCompareItem> BuildFeeSummary(List<FeeDetailCompareItem> detail)
         {
-            return detail.GroupBy(d => d.加工方式)
-                         .OrderBy(g => g.Key)
+            return detail.GroupBy(d => d.煎药要求 ?? "")
                          .Select(g => new FeeSummaryCompareItem
                          {
-                             加工方式 = g.Key,
+                             煎药要求 = g.Key,
+                             加工方式 = MapJiYaoYaoQiu(g.Key),
                              处方数 = g.Count(),
+                             贴数 = g.Sum(x => x.剂数 ?? 0),
                              总用量 = g.Sum(x => x.饮片重量 ?? 0m),
                              免费重量 = g.Sum(x => x.免费重量 ?? 0m),
                              收费加工费 = g.Sum(x => x.收费加工费 ?? 0m),
@@ -1199,7 +1261,33 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
                              应收快递费 = g.Sum(x => x.应收快递费 ?? 0m),
                              免邮数 = g.Count(x => x.免邮)
                          })
+                         .OrderBy(s => JyyqIndex(s.煎药要求))
                          .ToList();
+        }
+
+        // 加工方式固定顺序：煎药→浓缩→合煎→丸剂→粉剂→膏方→草药→其他
+        private static readonly string[] JyyqOrder = { "煎药", "浓缩", "合煎", "丸剂", "粉剂", "膏方", "草药", "其他" };
+
+        private static int JyyqIndex(string jyyq)
+        {
+            var idx = Array.IndexOf(JyyqOrder, jyyq);
+            return idx < 0 ? JyyqOrder.Length - 1 : idx;  // 未知值排到"其他"位置（最后）
+        }
+
+        // 煎药要求 → 加工方式 一一对应映射
+        private static string MapJiYaoYaoQiu(string 途径)
+        {
+            switch (途径)
+            {
+                case "煎药": return "代煎";
+                case "浓缩": return "浓汤";
+                case "合煎": return "合煎颗粒";
+                case "丸剂": return "浓缩蜜丸";
+                case "粉剂": return "打粉";
+                case "膏方": return "膏方";
+                case "草药": return "代配";
+                default: return "其他";
+            }
         }
 
         // =====================================================================
