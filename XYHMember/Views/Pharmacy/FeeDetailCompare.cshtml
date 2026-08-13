@@ -1,5 +1,5 @@
 @{
-    ViewBag.Title = "加工费及快递费明细信息核对";
+    ViewBag.Title = "加工费及快递费明细";
 }
 
 @using XYHMember.Context;
@@ -101,9 +101,9 @@
                             <th>总用量(g)</th>
                             <th>免费重量(g)</th>
                             <th>收费加工费</th>
-                            <th>应收加工费</th>
                             <th>收费快递费(辨证论治费)</th>
-                            <th>应收快递费</th>
+                            <th>应付加工费</th>
+                            <th>应付快递费</th>
                         </tr>
                     </thead>
                     @if (Model != null && Model.Count > 0)
@@ -130,8 +130,8 @@
                                     <td>@(item.饮片重量.HasValue ? item.饮片重量.Value.ToString("F2") : "")</td>
                                     <td>@(item.免费重量.HasValue ? item.免费重量.Value.ToString("F2") : "")</td>
                                     <td>@(item.收费加工费.HasValue ? item.收费加工费.Value.ToString("F2") : "")</td>
-                                    <td>@(item.应收加工费.HasValue ? item.应收加工费.Value.ToString("F2") : "")</td>
                                     <td>@(item.收费快递费.HasValue ? item.收费快递费.Value.ToString("F2") : "")</td>
+                                    <td>@(item.应收加工费.HasValue ? item.应收加工费.Value.ToString("F2") : "")</td>
                                     <td>
                                         @if (item.免邮)
                                         {
@@ -150,8 +150,8 @@
                                 <td></td>
                                 <td></td>
                                 <td>@(sum收费加工费.ToString("F2"))</td>
-                                <td>@(sum应收加工费.ToString("F2"))</td>
                                 <td>@(sum收费快递费.ToString("F2"))</td>
+                                <td>@(sum应收加工费.ToString("F2"))</td>
                                 <td>@(sum应收快递费.ToString("F2"))</td>
                             </tr>
                         </tbody>
@@ -220,7 +220,7 @@
                 var url = window.URL.createObjectURL(blob);
                 var a = document.createElement('a');
                 a.href = url;
-                a.download = '加工费及快递费明细信息核对.xlsx';
+                a.download = '加工费及快递费明细.xlsx';
                 document.body.appendChild(a);
                 a.click();
                 a.remove();

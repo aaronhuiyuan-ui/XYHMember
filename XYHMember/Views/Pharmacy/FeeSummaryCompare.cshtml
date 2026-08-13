@@ -1,5 +1,5 @@
 @{
-    ViewBag.Title = "加工费及快递费汇总信息查询";
+    ViewBag.Title = "加工费及快递费汇总";
 }
 
 @using XYHMember.Context;
@@ -100,9 +100,9 @@
                             <th>总用量(g)</th>
                             <th>免费重量(g)</th>
                             <th>收费加工费</th>
-                            <th>应收加工费</th>
                             <th>收费快递费</th>
-                            <th>应收快递费</th>
+                            <th>应付加工费</th>
+                            <th>应付快递费</th>
                             <th>免邮</th>
                         </tr>
                     </thead>
@@ -111,7 +111,7 @@
                         <tbody>
                             @{
                                 int sum处方数 = 0, sum免邮 = 0;
-                                decimal sum总用量 = 0m, sum免费重量 = 0m, sum收费加工费 = 0m, sum应收加工费 = 0m, sum收费快递费 = 0m, sum应收快递费 = 0m;
+                                decimal sum总用量 = 0m, sum免费重量 = 0m, sum收费加工费 = 0m, sum收费快递费 = 0m, sum应付加工费 = 0m, sum应付快递费 = 0m;
                             }
                             @foreach (var item in Model)
                             {
@@ -120,9 +120,9 @@
                                 sum总用量 += item.总用量 ?? 0m;
                                 sum免费重量 += item.免费重量 ?? 0m;
                                 sum收费加工费 += item.收费加工费 ?? 0m;
-                                sum应收加工费 += item.应收加工费 ?? 0m;
                                 sum收费快递费 += item.收费快递费 ?? 0m;
-                                sum应收快递费 += item.应收快递费 ?? 0m;
+                                sum应付加工费 += item.应收加工费 ?? 0m;
+                                sum应付快递费 += item.应收快递费 ?? 0m;
 
                                 <tr>
                                     <td>@item.加工方式</td>
@@ -130,8 +130,8 @@
                                     <td>@(item.总用量.HasValue ? item.总用量.Value.ToString("F2") : "")</td>
                                     <td>@(item.免费重量.HasValue ? item.免费重量.Value.ToString("F2") : "")</td>
                                     <td>@(item.收费加工费.HasValue ? item.收费加工费.Value.ToString("F2") : "")</td>
-                                    <td>@(item.应收加工费.HasValue ? item.应收加工费.Value.ToString("F2") : "")</td>
                                     <td>@(item.收费快递费.HasValue ? item.收费快递费.Value.ToString("F2") : "")</td>
+                                    <td>@(item.应收加工费.HasValue ? item.应收加工费.Value.ToString("F2") : "")</td>
                                     <td>@(item.应收快递费.HasValue ? item.应收快递费.Value.ToString("F2") : "")</td>
                                     <td>@item.免邮数</td>
                                 </tr>
@@ -142,9 +142,9 @@
                                 <td>@(sum总用量.ToString("F2"))</td>
                                 <td>@(sum免费重量.ToString("F2"))</td>
                                 <td>@(sum收费加工费.ToString("F2"))</td>
-                                <td>@(sum应收加工费.ToString("F2"))</td>
                                 <td>@(sum收费快递费.ToString("F2"))</td>
-                                <td>@(sum应收快递费.ToString("F2"))</td>
+                                <td>@(sum应付加工费.ToString("F2"))</td>
+                                <td>@(sum应付快递费.ToString("F2"))</td>
                                 <td>@sum免邮</td>
                             </tr>
                         </tbody>
@@ -213,7 +213,7 @@
                 var url = window.URL.createObjectURL(blob);
                 var a = document.createElement('a');
                 a.href = url;
-                a.download = '加工费及快递费汇总信息查询.xlsx';
+                a.download = '加工费及快递费汇总.xlsx';
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
