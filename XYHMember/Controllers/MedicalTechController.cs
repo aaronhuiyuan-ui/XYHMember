@@ -1,6 +1,8 @@
+using ClosedXML.Excel;
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
+using System.IO;
 using System.Linq;
 using System.Web.Mvc;
 using XYHMember.Context;
@@ -24,14 +26,30 @@ namespace XYHMember.Controllers
         [HttpGet]
         public ActionResult GetQuery(string name, string bdate, string edate)
         {
+            try
+            {
+                var result = QueryChargeItems(name, bdate, edate);
+                return Json(result, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 查询 HIS 已收费的诊疗项目（含登记/执行汇总），供页面查询与导出复用
+        /// </summary>
+        private List<MedicalTechChargeItem> QueryChargeItems(string name, string bdate, string edate)
+        {
             if (string.IsNullOrEmpty(bdate))
                 bdate = DateTime.Today.ToString("yyyy-MM-dd");
             if (string.IsNullOrEmpty(edate))
                 edate = DateTime.Today.ToString("yyyy-MM-dd");
 
-            try
-            {
-                var sql = @"WITH 支付汇总 AS (
+            var sql = @"WITH 支付汇总 AS (
                     SELECT 结帐ID, CAST(SUM(支付金额) AS DECIMAL(28,10)) AS 实收金额
                     FROM fghis5..门诊_收费支付表
                     WHERE 支付方式 != '6'
@@ -80,19 +98,160 @@ namespace XYHMember.Controllers
                   AND (@name = '' OR a.姓名 LIKE '%' + @name + '%' OR b.项目名称 LIKE '%' + @name + '%')
                 ORDER BY b.日期 DESC, b.时间 DESC";
 
-                var result = db.Database.SqlQuery<MedicalTechChargeItem>(sql,
-                    new SqlParameter("@name", (name ?? "").Trim()),
-                    new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
-                    new SqlParameter("@edate", QueryHelper.ParseDate(edate))).ToList();
+            return db.Database.SqlQuery<MedicalTechChargeItem>(sql,
+                new SqlParameter("@name", (name ?? "").Trim()),
+                new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),
+                new SqlParameter("@edate", QueryHelper.ParseDate(edate))).ToList();
+        }
 
-                return Json(result, JsonRequestBehavior.AllowGet);
+        /// <summary>
+        /// 导出医技登记与执行（含执行明细，一对多：主行 + 明细子行）
+        /// POST /MedicalTech/ExportToExcel
+        /// </summary>
+        [HttpPost]
+        public ActionResult ExportToExcel(string bdate, string edate, string name, string 项目名称, string 状态)
+        {
+            try
+            {
+                var items = QueryChargeItems(name, bdate, edate);
+
+                // 应用表头筛选（与页面筛选一致）
+                if (!string.IsNullOrEmpty(项目名称))
+                    items = items.Where(i => i.项目名称 == 项目名称).ToList();
+                if (!string.IsNullOrEmpty(状态))
+                    items = items.Where(i => GetStatus(i) == 状态).ToList();
+
+                // 批量取执行明细（一次性查所有已登记项）
+                var regIds = items.Where(i => i.登记ID.HasValue).Select(i => i.登记ID.Value).Distinct().ToList();
+                var execMap = new Dictionary<int, List<MedicalTechExecution>>();
+                if (regIds.Count > 0)
+                {
+                    var idList = string.Join(",", regIds);
+                    var execSql = @"SELECT 执行ID, 登记ID, 本次次数, 执行时间, 执行人工号, 执行人姓名, 岗位, 备注, delete_flag
+                                    FROM fghis5..医技执行记录表
+                                    WHERE delete_flag = 'f' AND 登记ID IN (" + idList + @")
+                                    ORDER BY 登记ID, 本次次数";
+                    var execs = db.Database.SqlQuery<MedicalTechExecution>(execSql).ToList();
+                    execMap = execs.GroupBy(e => e.登记ID).ToDictionary(g => g.Key, g => g.ToList());
+                }
+
+                // 表头：主列13 + 执行明细列6
+                var headers = new List<string>
+                {
+                    "门诊号", "姓名", "项目名称", "数量", "项目金额", "实收金额", "收费日期",
+                    "状态", "执行进度", "已执行金额", "未执行金额", "执行人", "操作人员提成",
+                    "执行次数", "执行时间", "执行人工号", "执行人姓名", "岗位", "备注"
+                };
+                int mainCols = 13;
+
+                var rows = new List<List<string>>();
+                foreach (var d in items)
+                {
+                    var 项目金额 = d.金额 ?? 0m;
+                    var 实收金额 = d.实收金额 ?? 项目金额;
+                    var 已执行金额 = 0m;
+                    if (d.登记ID.HasValue && (d.总次数 ?? 0) > 0 && (d.已执行次数 ?? 0) > 0)
+                        已执行金额 = Math.Round(实收金额 / d.总次数.Value * d.已执行次数.Value, 2);
+                    var 未执行金额 = 实收金额 - 已执行金额;
+
+                    var progress = d.登记ID.HasValue ? (d.已执行次数 + "/" + d.总次数 + "次") : "-";
+
+                    // 主行（补足执行明细列，保持与表头同宽 19 列）
+                    var mainRow = new List<string>
+                    {
+                        d.门诊号?.ToString() ?? "",
+                        d.姓名 ?? "",
+                        d.项目名称 ?? "",
+                        d.数量?.ToString("G29") ?? "",
+                        d.金额?.ToString("F2") ?? "",
+                        实收金额.ToString("F2"),
+                        d.日期 ?? "",
+                        GetStatus(d),
+                        progress,
+                        已执行金额.ToString("F2"),
+                        未执行金额.ToString("F2"),
+                        d.执行人 ?? "",
+                        d.提成金额?.ToString("F2") ?? "0.00"
+                    };
+                    while (mainRow.Count < headers.Count) mainRow.Add(""); // 执行次数/执行时间/执行人工号/执行人姓名/岗位/备注 留空
+                    rows.Add(mainRow);
+
+                    // 明细子行（主列留空，只填执行明细列）
+                    List<MedicalTechExecution> execs;
+                    if (d.登记ID.HasValue && execMap.TryGetValue(d.登记ID.Value, out execs))
+                    {
+                        foreach (var e in execs)
+                        {
+                            var subRow = new List<string>();
+                            for (int i = 0; i < mainCols; i++) subRow.Add("");
+                            subRow.Add("第" + e.本次次数 + "次");
+                            subRow.Add(e.执行时间?.ToString("yyyy-MM-dd HH:mm") ?? "");
+                            subRow.Add(e.执行人工号 ?? "");
+                            subRow.Add(e.执行人姓名 ?? "");
+                            subRow.Add(e.岗位 ?? "");
+                            subRow.Add(e.备注 ?? "");
+                            rows.Add(subRow);
+                        }
+                    }
+                }
+
+                if (rows.Count == 0)
+                    return Json(new { success = false, msg = "没有数据可导出" });
+
+                using (var workbook = new XLWorkbook())
+                {
+                    var ws = workbook.Worksheets.Add("Sheet1");
+
+                    // 表头
+                    for (int i = 0; i < headers.Count; i++)
+                        ws.Cell(1, i + 1).Value = headers[i];
+                    var hdrRange = ws.Range(1, 1, 1, headers.Count);
+                    hdrRange.Style.Font.Bold = true;
+                    hdrRange.Style.Font.FontColor = XLColor.White;
+                    hdrRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#2E74B5");
+                    hdrRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                    // 数据
+                    for (int r = 0; r < rows.Count; r++)
+                    {
+                        var isSub = !string.IsNullOrEmpty(rows[r][mainCols]); // 第14列非空 = 明细子行
+                        for (int c = 0; c < rows[r].Count; c++)
+                        {
+                            var cell = ws.Cell(r + 2, c + 1);
+                            cell.Value = rows[r][c];
+                        }
+                        if (isSub)
+                        {
+                            for (int c = 0; c < headers.Count; c++)
+                                ws.Cell(r + 2, c + 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#F2F7FB");
+                        }
+                    }
+
+                    ws.Columns().AdjustToContents();
+                    using (var ms = new MemoryStream())
+                    {
+                        workbook.SaveAs(ms);
+                        return File(ms.ToArray(),
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            "医技登记与执行.xlsx");
+                    }
+                }
             }
             catch (Exception ex)
             {
                 var inner = ex;
                 while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+                return Json(new { success = false, msg = inner.Message });
             }
+        }
+
+        /// <summary>
+        /// 计算项目当前状态（与页面一致）
+        /// </summary>
+        private string GetStatus(MedicalTechChargeItem d)
+        {
+            if (!d.登记ID.HasValue) return "未登记";
+            return (d.已执行次数 ?? 0) < (d.总次数 ?? 0) ? "进行中" : "已完成";
         }
 
         /// <summary>

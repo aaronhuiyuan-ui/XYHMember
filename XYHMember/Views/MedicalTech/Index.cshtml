@@ -1069,42 +1069,37 @@
             });
         });
 
-        // ===== 导出到Excel =====
+        // ===== 导出到Excel（服务端导出，含执行明细一对多；导出全部结果而非仅当前页） =====
         document.getElementById('exportBtn').addEventListener('click', function() {
-            var table = document.getElementById('dataTable');
-            if (!table) return;
+            var exportBtn = this;
+            var bdate = document.getElementById('bdatepicker').value;
+            var edate = document.getElementById('edatepicker').value;
+            var name = document.querySelector('#searchForm input[name="name"]').value;
+            var 项目名称 = window._hdrFilter['项目名称'] || '';
+            var 状态 = window._hdrFilter['状态'] || '';
 
-            // 表头（手动定义，不包含复选框和操作列）
-            var headers = ['门诊号', '姓名', '项目名称', '数量', '项目金额', '实收金额', '收费日期', '状态', '执行进度', '已执行金额', '未执行金额', '执行人', '操作人员提成'];
-            var rows = [];
+            exportBtn.disabled = true;
+            exportBtn.innerText = '导出中...';
 
-            var tbody = table.querySelector('tbody');
-            if (!tbody) return;
-
-            var trs = tbody.querySelectorAll('tr');
-            for (var i = 0; i < trs.length; i++) {
-                if (trs[i].classList.contains('summary-row')) continue; // 跳过合计行
-                var tds = trs[i].querySelectorAll('td');
-                if (tds.length < 15) continue; // 跳过空行/提示行
-                var row = [];
-                // 跳过第0列（复选框）和最后一列（操作），取1-13（含执行人、操作人员提成）
-                for (var c = 1; c <= 13; c++) {
-                    row.push(tds[c].innerText.trim());
-                }
-                rows.push(row);
-            }
-
-            if (rows.length === 0) {
-                customDialog.info('没有数据可导出', '提示');
-                return;
-            }
-
-            fetch('@Url.Action("ExportToExcel", "Export")', {
+            fetch('@Url.Action("ExportToExcel", "MedicalTech")', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ Headers: headers, Rows: rows })
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'bdate=' + encodeURIComponent(bdate) +
+                      '&edate=' + encodeURIComponent(edate) +
+                      '&name=' + encodeURIComponent(name) +
+                      '&项目名称=' + encodeURIComponent(项目名称) +
+                      '&状态=' + encodeURIComponent(状态)
             })
-            .then(function(res) { return res.blob(); })
+            .then(function(res) {
+                // 若返回 JSON（错误提示），抛出其中的 msg
+                var ct = res.headers.get('Content-Type') || '';
+                if (ct.indexOf('application/json') >= 0) {
+                    return res.json().then(function(e) {
+                        throw new Error((e && e.msg) || '导出失败');
+                    });
+                }
+                return res.blob();
+            })
             .then(function(blob) {
                 var url = window.URL.createObjectURL(blob);
                 var a = document.createElement('a');
@@ -1114,8 +1109,14 @@
                 a.click();
                 a.remove();
                 window.URL.revokeObjectURL(url);
+                exportBtn.disabled = false;
+                exportBtn.innerText = '导出到Excel';
             })
-            .catch(function(err) { customDialog.error(err.message, '导出失败'); });
+            .catch(function(err) {
+                exportBtn.disabled = false;
+                exportBtn.innerText = '导出到Excel';
+                customDialog.error(err.message, '导出失败');
+            });
         });
 
         // 回车查询
