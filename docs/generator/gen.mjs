@@ -219,11 +219,13 @@ content.push(note("⚠️ 端口为 8080，非 80。"));
 
 // ---- 二、鉴权说明 ----
 content.push(h1("二、鉴权说明"));
-content.push(new Paragraph({ spacing: { after: 80 }, children: [tr("调用方必须携带访问密钥，以下两种传法任选其一：", { size: 21 })] }));
+content.push(new Paragraph({ spacing: { after: 80 }, children: [tr("调用方必须携带访问密钥，以下三种传法任选其一：", { size: 21 })] }));
 content.push(new Paragraph({ spacing: { before: 80, after: 60 }, children: [tr("1. 推荐：", { bold: true, color: NAVY2, size: 21 }), tr("自定义请求头", { size: 21 })] }));
 content.push(...code(["X-Api-Key: zrt-oa-2026"]));
 content.push(new Paragraph({ spacing: { before: 140, after: 60 }, children: [tr("2. 兼容方式：", { bold: true, color: NAVY2, size: 21 }), tr("标准 Bearer 请求头", { size: 21 })] }));
 content.push(...code(["Authorization: Bearer zrt-oa-2026"]));
+content.push(new Paragraph({ spacing: { before: 140, after: 60 }, children: [tr("3. 代理/浏览器直调：", { bold: true, color: NAVY2, size: 21 }), tr("查询字符串或表单 body 带 ", { size: 21 }), mono("key", 20), tr("（无法自定义请求头时使用，如 OA 代理、浏览器地址栏）", { size: 21 })] }));
+content.push(...code(["POST /OaApi/GetZhenRenTangStats?month=2026-08&key=zrt-oa-2026"]));
 content.push(note("密钥由我方线下提供。密钥错误或缺失时，接口返回 {\"success\":false,\"msg\":\"无效的访问密钥\"}。"));
 
 // ---- 三、请求参数 ----
@@ -235,6 +237,12 @@ content.push(makeTable([1400, 1200, 900, 5526], [
     dataCell("string", 1200),
     dataCell("否", 900),
     dataCell("月份，格式 yyyy-MM，如 2026-08。可放在查询字符串或表单 body 中；省略时返回全部月份（按月份倒序）", 5526),
+  ] }),
+  new TableRow({ children: [
+    dataCell(mono("key", 20), 1400),
+    dataCell("string", 1200),
+    dataCell("否", 900),
+    dataCell("访问密钥。可放在查询字符串或表单 body 中（请求头 X-Api-Key / Authorization: Bearer 仍可用）。密钥错误或缺失时返回“无效的访问密钥”", 5526),
   ] }),
 ]));
 content.push(new Paragraph({ spacing: { before: 120, after: 60 }, children: [tr("示例请求参数形式（两种等价）：", { bold: true, color: NAVY2, size: 21 })] }));
@@ -251,9 +259,12 @@ content.push(...code([
   "    {",
   '      "序号": 4,',
   '      "月份": "2026-07",',
+  '      "开始日期": "2026-07-01",',
+  '      "结束日期": "2026-07-31",',
   '      "应付加工费": 4257.18,',
   '      "应付快递费": 470.00,',
-  '      "导入时间": "\\/Date(1786609765923)\\/"',
+  '      "导入时间": "\\/Date(1786609765923)\\/",',
+  '      "应付总金额": 4727.18',
   "    }",
   "  ]",
   "}",
@@ -265,11 +276,14 @@ content.push(makeTable([2500, 1200, 5326], [
   new TableRow({ children: [dataCell(mono("data"), 2500, ZEBRA), dataCell("array", 1200, ZEBRA), dataCell("数据列表，按月份倒序排列", 5326, ZEBRA)] }),
   new TableRow({ children: [dataCell(mono("data[].序号"), 2500), dataCell("number", 1200), dataCell("自增主键", 5326)] }),
   new TableRow({ children: [dataCell(mono("data[].月份"), 2500, ZEBRA), dataCell("string", 1200, ZEBRA), dataCell("统计月份，格式 yyyy-MM", 5326, ZEBRA)] }),
+  new TableRow({ children: [dataCell(mono("data[].开始日期"), 2500), dataCell("string", 1200), dataCell("统计月份起始日，格式 yyyy-MM-dd（导入时写入，即当月 1 日）", 5326)] }),
+  new TableRow({ children: [dataCell(mono("data[].结束日期"), 2500, ZEBRA), dataCell("string", 1200, ZEBRA), dataCell("统计月份结束日，格式 yyyy-MM-dd（导入时写入，即当月月末）", 5326, ZEBRA)] }),
   new TableRow({ children: [dataCell(mono("data[].应付加工费"), 2500), dataCell("number", 1200), dataCell("该月应付加工费（合计）", 5326)] }),
   new TableRow({ children: [dataCell(mono("data[].应付快递费"), 2500, ZEBRA), dataCell("number", 1200, ZEBRA), dataCell("该月应付快递费（合计）", 5326, ZEBRA)] }),
   new TableRow({ children: [dataCell(mono("data[].导入时间"), 2500), dataCell("string", 1200), dataCell("导入时间（微软 JSON 日期格式，形如 \\/Date(毫秒时间戳)\\/）", 5326)] }),
+  new TableRow({ children: [dataCell(mono("data[].应付总金额"), 2500, ZEBRA), dataCell("number", 1200, ZEBRA), dataCell("该月应付总金额（= 应付加工费 + 应付快递费，导入时写入）", 5326, ZEBRA)] }),
 ]));
-content.push(note("导入时间为 .NET 序列化的日期格式，如需普通时间可解析括号内毫秒时间戳：new Date(1786609765923)。若某月份尚未导入，data 为空数组 []，success 仍为 true。"));
+content.push(note("导入时间为 .NET 序列化的日期格式，如需普通时间可解析括号内毫秒时间戳：new Date(1786609765923)。开始日期/结束日期/应付总金额为表中实际存储的字段，由「导入到OA」写入：开始=当月1日，结束=当月月末，应付总金额=应付加工费+应付快递费。若某月份尚未导入，data 为空数组 []，success 仍为 true。"));
 content.push(h2("4.3 失败返回"));
 content.push(makeTable([2800, 6226], [
   new TableRow({ children: [headerCell("场景", 2800), headerCell("返回", 6226)] }),
@@ -352,7 +366,7 @@ content.push(h1("七、相关页面"));
 content.push(makeTable([2500, 6526], [
   new TableRow({ children: [headerCell("功能", 2500), headerCell("位置", 6526)] }),
   new TableRow({ children: [dataCell("数据来源（导入）", 2500), dataCell("医院信息系统 → 药品信息核对 → 加工费及快递费汇总 → 「导入到OA」", 6526)] }),
-  new TableRow({ children: [dataCell("数据表", 2500, ZEBRA), dataCell([mono("fghis5..上海真仁堂统计汇总"), tr("（字段：序号、月份、应付加工费、应付快递费、导入时间）", { size: 20 })], 6526, ZEBRA)] }),
+  new TableRow({ children: [dataCell("数据表", 2500, ZEBRA), dataCell([mono("fghis5..上海真仁堂统计汇总"), tr("（字段：序号、月份、开始日期、结束日期、应付加工费、应付快递费、应付总金额、导入时间）", { size: 20 })], 6526, ZEBRA)] }),
 ]));
 content.push(new Paragraph({
   spacing: { before: 400 }, alignment: AlignmentType.CENTER,

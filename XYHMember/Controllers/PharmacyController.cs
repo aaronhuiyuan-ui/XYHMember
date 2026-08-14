@@ -1221,16 +1221,23 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
                 var summary = BuildFeeSummary(detail);
                 decimal 应付加工费 = summary.Sum(s => s.应收加工费 ?? 0m);
                 decimal 应付快递费 = summary.Sum(s => s.应收快递费 ?? 0m);
+                decimal 应付总金额 = 应付加工费 + 应付快递费;
 
+                // 足月导入：开始日期=查询起始（当月1日），结束日期=查询结束（当月月末）
                 db.Database.ExecuteSqlCommand(
-                    @"INSERT INTO fghis5..上海真仁堂统计汇总 (月份, 应付加工费, 应付快递费)
-                      VALUES (@month, @jgf, @kdf)",
+                    @"INSERT INTO fghis5..上海真仁堂统计汇总 (月份, 开始日期, 结束日期, 应付加工费, 应付快递费, 应付总金额)
+                      VALUES (@month, @bdate, @edate, @jgf, @kdf, @total)",
                     new SqlParameter("@month", 月份),
+                    new SqlParameter("@bdate", b.ToString("yyyy-MM-dd")),
+                    new SqlParameter("@edate", e.ToString("yyyy-MM-dd")),
                     new SqlParameter("@jgf", 应付加工费),
-                    new SqlParameter("@kdf", 应付快递费));
+                    new SqlParameter("@kdf", 应付快递费),
+                    new SqlParameter("@total", 应付总金额));
 
                 return Json(new { success = true, msg = "导入成功：" + 月份 +
-                    " 应付加工费=" + 应付加工费.ToString("F2") + " 应付快递费=" + 应付快递费.ToString("F2") });
+                    " 应付加工费=" + 应付加工费.ToString("F2") +
+                    " 应付快递费=" + 应付快递费.ToString("F2") +
+                    " 应付总金额=" + 应付总金额.ToString("F2") });
             }
             catch (Exception ex)
             {

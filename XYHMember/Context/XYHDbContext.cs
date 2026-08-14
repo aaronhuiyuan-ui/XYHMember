@@ -582,9 +582,12 @@ namespace XYHMember.Context
     {
         public int 序号 { get; set; }
         public string 月份 { get; set; }        // yyyy-MM
+        public string 开始日期 { get; set; }     // yyyy-MM-dd（导入时写入）
+        public string 结束日期 { get; set; }     // yyyy-MM-dd（导入时写入）
         public decimal 应付加工费 { get; set; }
         public decimal 应付快递费 { get; set; }
         public DateTime? 导入时间 { get; set; }
+        public decimal 应付总金额 { get; set; }  // = 应付加工费 + 应付快递费（导入时写入）
     }
 
     //医技执行记录查询

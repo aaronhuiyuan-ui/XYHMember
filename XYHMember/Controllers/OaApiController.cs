@@ -15,28 +15,35 @@ namespace XYHMember.Controllers
         /// <summary>
         /// 查询上海真仁堂统计汇总
         /// POST /OaApi/GetZhenRenTangStats
-        /// 请求头：X-Api-Key: &lt;密钥&gt;（兼容 Authorization: Bearer &lt;密钥&gt;）
+        /// 鉴权（任选其一）：
+        ///   1. 请求头 X-Api-Key: &lt;密钥&gt;（兼容 Authorization: Bearer &lt;密钥&gt;）
+        ///   2. 查询字符串或表单 key=&lt;密钥&gt;（兼容 OA 代理不便传 Header 的场景）
         /// 可选参数：month=2026-08（查询字符串或表单；省略返回全部月份，按月份倒序）
         /// </summary>
         [HttpPost]
-        public ActionResult GetZhenRenTangStats(string month = null)
+        public ActionResult GetZhenRenTangStats(string month = null, string key = null)
         {
             var apiKey = ConfigurationManager.AppSettings["OaApiKey"];
-            var key = Request.Headers["X-Api-Key"];
-            if (string.IsNullOrEmpty(key))
+            var k = Request.Headers["X-Api-Key"];
+            if (string.IsNullOrEmpty(k))
             {
                 var auth = Request.Headers["Authorization"];
                 if (!string.IsNullOrEmpty(auth) && auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                    key = auth.Substring("Bearer ".Length).Trim();
+                    k = auth.Substring("Bearer ".Length).Trim();
             }
-            if (string.IsNullOrEmpty(key) || key != apiKey)
+            // 兼容：密钥放查询字符串或表单（?key=... 或 body key=...）
+            if (string.IsNullOrEmpty(k) && !string.IsNullOrEmpty(key))
+                k = key.Trim();
+            if (string.IsNullOrEmpty(k) || k != apiKey)
                 return Json(new { success = false, msg = "无效的访问密钥" });
 
             try
             {
                 using (var db = new XYHDbContext())
                 {
-                    var sql = "SELECT 序号, 月份, 应付加工费, 应付快递费, 导入时间 FROM fghis5..上海真仁堂统计汇总";
+                    var sql = @"SELECT 序号, 月份, 开始日期, 结束日期,
+                                       应付加工费, 应付快递费, 导入时间, 应付总金额
+                                FROM fghis5..上海真仁堂统计汇总";
                     var prms = new List<SqlParameter>();
                     if (!string.IsNullOrEmpty(month))
                     {
