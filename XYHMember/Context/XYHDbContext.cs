@@ -590,6 +590,25 @@ namespace XYHMember.Context
         public decimal 应付总金额 { get; set; }  // = 应付加工费 + 应付快递费（导入时写入）
     }
 
+    //金蝶EAS耗材入库（跨Oracle库查询用）
+    public class MaterialInboundItem
+    {
+        public string ckrq { get; set; }   // 入库日期 yyyy-MM-dd HH:mm
+        public string ckdh { get; set; }   // 单号
+        public string ckmc { get; set; }   // 仓库
+        public string wlbm { get; set; }   // 物料编码
+        public string wlmc { get; set; }   // 物料名称
+        public string gg { get; set; }     // 规格
+        public string cdbm { get; set; }   // 辅助属性编码
+        public string cdmc { get; set; }   // 辅助属性名称
+        public string ph { get; set; }     // 批号
+        public string xq { get; set; }     // 有效期 yyyy-MM-dd
+        public string dw { get; set; }     // 单位
+        public decimal? sl { get; set; }   // 数量
+        public string ckr { get; set; }    // 入库人
+        public string wllb { get; set; }   // 物料类别
+    }
+
     //医技执行记录查询
     public class ExecutionRecordQuery
     {

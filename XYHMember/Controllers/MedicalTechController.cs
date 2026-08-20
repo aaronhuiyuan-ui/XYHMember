@@ -1,9 +1,12 @@
 using ClosedXML.Excel;
+using Oracle.ManagedDataAccess.Client;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Web.Mvc;
 using XYHMember.Context;
 
@@ -964,6 +967,148 @@ namespace XYHMember.Controllers
                 while (inner.InnerException != null) inner = inner.InnerException;
                 return Json(new { success = false, msg = inner.Message });
             }
+        }
+
+        // GET: /MedicalTech/MaterialInbound
+        public ActionResult MaterialInbound()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 耗材入库查询（跨Oracle库：金蝶EAS）
+        /// GET /MedicalTech/GetMaterialInbound?bdate=2026-08-01&edate=2026-08-31&kw=物料编码/名称/拼音首字母
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetMaterialInbound(string bdate, string edate, string kw)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
+                if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
+                var b = DateTime.Parse(bdate);
+                var e = DateTime.Parse(edate);
+
+                var sql = @"SELECT a.faudittime, a.fnumber, g.fname_l2, c.fnumber, c.fname_l2, c.FModel,
+                                   d.fnumber, d.FNAME_L2, b2.flot, b2.fexp, f.fname_l2, b2.FQty, p.fname_l2,
+                                   lGroup.fname_l2
+                            FROM kingdee.t_im_materialreqbill a
+                                 INNER JOIN kingdee.t_im_materialreqbillentry b2 ON a.fid = b2.fparentid
+                                 INNER JOIN kingdee.t_bd_material c ON c.fid = b2.fmaterialid
+                                 INNER JOIN kingdee.T_BD_AsstAttrValue d ON d.fid = b2.fassistpropertyid
+                                 INNER JOIN kingdee.T_BD_MeasureUnit f ON b2.funitid = f.fid
+                                 INNER JOIN kingdee.T_DB_WAREHOUSE g ON g.fid = b2.fwarehouseid
+                                 INNER JOIN kingdee.t_pm_user p ON a.fcreatorid = p.fid
+                                 INNER JOIN kingdee.T_BD_MaterialGroup lGroup ON lGroup.fid = c.FMATERIALGROUPID
+                            WHERE a.fstorageorgunitid = 'MsoAAAGNfOPM567U'
+                              AND a.fcostcenterorgunitid = 'MsoAAASRHsPM567U'
+                              AND a.faudittime >= :bdate
+                              AND a.faudittime < :edate + 1
+                              AND lGroup.fname_l2 = '医用耗材'
+                            ORDER BY a.faudittime";
+                var cs = ConfigurationManager.ConnectionStrings["EAS_Oracle"].ConnectionString;
+                var list = new List<MaterialInboundItem>();
+                using (var conn = new OracleConnection(cs))
+                {
+                    conn.Open();
+                    using (var cmd = new OracleCommand(sql, conn))
+                    {
+                        cmd.Parameters.Add("bdate", OracleDbType.Date).Value = b;
+                        cmd.Parameters.Add("edate", OracleDbType.Date).Value = e;
+                        using (var rd = cmd.ExecuteReader())
+                        {
+                            while (rd.Read())
+                            {
+                                list.Add(new MaterialInboundItem
+                                {
+                                    ckrq = rd.IsDBNull(0) ? null : rd.GetDateTime(0).ToString("yyyy-MM-dd HH:mm"),
+                                    ckdh = rd.IsDBNull(1) ? null : rd.GetString(1),
+                                    ckmc = rd.IsDBNull(2) ? null : rd.GetString(2),
+                                    wlbm = rd.IsDBNull(3) ? null : rd.GetString(3),
+                                    wlmc = rd.IsDBNull(4) ? null : rd.GetString(4),
+                                    gg = rd.IsDBNull(5) ? null : rd.GetString(5),
+                                    cdbm = rd.IsDBNull(6) ? null : rd.GetString(6),
+                                    cdmc = rd.IsDBNull(7) ? null : rd.GetString(7),
+                                    ph = rd.IsDBNull(8) ? null : rd.GetString(8),
+                                    xq = rd.IsDBNull(9) ? null : rd.GetDateTime(9).ToString("yyyy-MM-dd"),
+                                    dw = rd.IsDBNull(10) ? null : rd.GetString(10),
+                                    sl = rd.IsDBNull(11) ? (decimal?)null : rd.GetDecimal(11),
+                                    ckr = rd.IsDBNull(12) ? null : rd.GetString(12),
+                                    wllb = rd.IsDBNull(13) ? null : rd.GetString(13),
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // 关键字过滤：物料编码 / 物料名称 / 物料名称拼音首字母
+                if (!string.IsNullOrWhiteSpace(kw))
+                {
+                    var k = kw.Trim();
+                    var upper = k.ToUpperInvariant();
+                    list = list.Where(x =>
+                        (x.wlbm != null && x.wlbm.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                        (x.wlmc != null && x.wlmc.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                        GetPinyinInitials(x.wlmc).IndexOf(upper, StringComparison.Ordinal) >= 0
+                    ).ToList();
+                }
+                // 按入库日期倒序
+                list = list.OrderByDescending(x => x.ckrq).ToList();
+
+                return Json(list, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 取中文串的拼音首字母（大写）。如“一次性使用” -> “YXC”；
+        /// 英文/数字原样保留大写，其余非汉字字符忽略。
+        /// </summary>
+        private static string GetPinyinInitials(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            var sb = new StringBuilder();
+            var gb = Encoding.GetEncoding("gb2312");
+            foreach (char c in text)
+            {
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+                {
+                    sb.Append(char.ToUpperInvariant(c));
+                    continue;
+                }
+                if (c < 128) continue; // 数字/标点等忽略
+                var bytes = gb.GetBytes(c.ToString());
+                if (bytes.Length != 2) continue; // 非GB2312汉字，忽略
+                var code = (bytes[0] << 8) | bytes[1];
+                var initial = GetPinyinInitial(code);
+                if (initial != '\0') sb.Append(initial);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 按 GB2312 区位码边界表取汉字拼音首字母（A~Z，不含 I/U/V）
+        /// </summary>
+        private static char GetPinyinInitial(int code)
+        {
+            var bounds = new[]
+            {
+                0xB0A1, 0xB0C5, 0xB2C1, 0xB4EE, 0xB6EA, 0xB7A2, 0xB8C1, 0xB9FE,
+                0xBBF7, 0xBFA6, 0xC0AC, 0xC2E8, 0xC4C3, 0xC5B6, 0xC5BE, 0xC6DA,
+                0xC8BB, 0xC8F6, 0xCBFA, 0xCDDA, 0xCEF4, 0xD1B9, 0xD4D1
+            };
+            const string initials = "ABCDEFGHJKLMNOPQRSTWXYZ";
+            if (code < bounds[0]) return '\0';
+            for (int i = 0; i < bounds.Length - 1; i++)
+            {
+                if (code >= bounds[i] && code < bounds[i + 1]) return initials[i];
+            }
+            return 'Z';
         }
 
         private string GetCurrentJobNumber()

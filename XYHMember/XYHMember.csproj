@@ -53,6 +53,9 @@
     <Reference Include="DocumentFormat.OpenXml, Version=2.7.2.0, Culture=neutral, PublicKeyToken=8fb06cb64d019a17, processorArchitecture=MSIL">
       <HintPath>..\packages\DocumentFormat.OpenXml.2.7.2\lib\net40\DocumentFormat.OpenXml.dll</HintPath>
     </Reference>
+    <Reference Include="Oracle.ManagedDataAccess, Version=4.122.1.0, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=MSIL">
+      <HintPath>..\packages\Oracle.ManagedDataAccess.12.2.1100\Oracle.ManagedDataAccess.dll</HintPath>
+    </Reference>
     <Reference Include="EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
       <HintPath>..\packages\EntityFramework.6.4.4\lib\net45\EntityFramework.dll</HintPath>
     </Reference>
@@ -299,6 +302,7 @@
     <Content Include="Views\MedicalTech\DefaultCount.cshtml" />
     <Content Include="Views\MedicalTech\Commission.cshtml" />
     <Content Include="Views\MedicalTech\ExecutionRecords.cshtml" />
+    <Content Include="Views\MedicalTech\MaterialInbound.cshtml" />
     <Content Include="Views\Pharmacy\DispensingQuery.cshtml" />
     <Content Include="Views\Pharmacy\DispensingConfirm.cshtml" />
     <Content Include="Views\Pharmacy\DispensedQuery.cshtml" />

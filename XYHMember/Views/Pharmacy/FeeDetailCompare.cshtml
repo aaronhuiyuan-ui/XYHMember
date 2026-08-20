@@ -8,6 +8,8 @@
 @{
     var bdatepicker = Request["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
     var edatepicker = Request["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var jgfw = Request["jgfw"] ?? "";
+    var jgOptions = new[] { "代煎", "浓汤", "合煎颗粒", "浓缩蜜丸", "打粉", "膏方", "代配", "其他" };
 }
 
 <html>
@@ -68,6 +70,14 @@
                         <label style="margin:0 5px;">—</label>
                         <input type="text" name="edatepicker" id="edatepicker"
                                value="@edatepicker" placeholder="结束日期" style="height:30px;">
+                        <label style="margin:0 10px 0 20px;">加工方式</label>
+                        <select name="jgfw" id="jgfw" style="height:30px;padding:0 4px;">
+                            <option value="">全部</option>
+                            @foreach (var o in jgOptions)
+                            {
+                                <option value="@o" @(jgfw == o ? "selected" : "")>@o</option>
+                            }
+                        </select>
                         <span style="margin-left:40px;display:inline-flex;align-items:center;gap:6px;">
                             <span class="am-input-group-btn">
                                 <button class="am-btn am-btn-default" type="submit">查询</button>

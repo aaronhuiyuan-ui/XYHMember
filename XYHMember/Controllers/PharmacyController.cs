@@ -918,12 +918,17 @@ WHERE outcfcode IS NOT NULL
         {
             var bdate = Request["bdatepicker"]?.Trim();
             var edate = Request["edatepicker"]?.Trim();
+            var jgfw = Request["jgfw"]?.Trim();
             if (string.IsNullOrEmpty(bdate)) bdate = DateTime.Today.ToString("yyyy-MM-dd");
             if (string.IsNullOrEmpty(edate)) edate = DateTime.Today.ToString("yyyy-MM-dd");
 
             try
             {
                 var result = BuildFeeDetailCompare(bdate, edate);
+                if (!string.IsNullOrEmpty(jgfw))
+                {
+                    result = result.Where(r => r.加工方式 == jgfw).ToList();
+                }
                 return View("FeeDetailCompare", result);
             }
             catch (Exception ex)
