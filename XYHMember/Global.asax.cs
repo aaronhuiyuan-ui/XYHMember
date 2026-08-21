@@ -17,5 +17,20 @@ namespace XYHMember
             RouteConfig.RegisterRoutes(RouteTable.Routes);
             BundleConfig.RegisterBundles(BundleTable.Bundles);
         }
+
+        /// <summary>
+        /// 给每个 MVC 的 HTML 响应注入 sessionGuard.js，
+        /// 实现“会话过期后异步请求统一整页跳登录”的全局拦截。
+        /// </summary>
+        protected void Application_PreRequestHandlerExecute(object sender, EventArgs e)
+        {
+            var context = HttpContext.Current;
+            if (context != null && context.CurrentHandler is MvcHandler && context.Response != null)
+            {
+                context.Response.Filter = SessionGuardHtmlFilter.Create(
+                    context.Response.Filter,
+                    context.Response.ContentEncoding);
+            }
+        }
     }
 }

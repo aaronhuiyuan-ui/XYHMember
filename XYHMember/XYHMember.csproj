@@ -154,6 +154,7 @@
     <Compile Include="Controllers\OaApiController.cs" />
     <Compile Include="Controllers\PharmacyController.cs" />
     <Compile Include="Filters\AuthFilter.cs" />
+    <Compile Include="Filters\SessionGuardHtmlFilter.cs" />
     <Compile Include="Helpers\PasswordHelper.cs" />
     <Compile Include="Helpers\QueryHelper.cs" />
     <Compile Include="Controllers\MemberController.cs" />
@@ -270,6 +271,7 @@
     <Content Include="Scripts\MyScript.js" />
     <Content Include="Scripts\pagination.js" />
     <Content Include="Scripts\customDialog.js" />
+    <Content Include="Scripts\sessionGuard.js" />
     <Content Include="Scripts\plugs.js" />
     <Content Include="Web.config">
       <SubType>Designer</SubType>

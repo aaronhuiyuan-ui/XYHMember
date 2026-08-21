@@ -8,6 +8,13 @@
 <html lang="zxx">
 
 <head>
+    <script type="text/javascript">
+        // 若登录页被嵌套在 iframe 中（会话过期时 AuthFilter 把 iframe 重定向到此处），
+        // 需要跳出 iframe，让整个系统（含左侧菜单）都重新登录。
+        if (window.top !== window.self) {
+            window.top.location.href = '@Url.Content("~/Home/Login")';
+        }
+    </script>
     <title>Login</title>
 
     <meta name="viewport" content="width=device-width, initial-scale=1">
