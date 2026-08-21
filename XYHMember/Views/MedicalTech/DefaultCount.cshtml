@@ -137,13 +137,14 @@
                         <thead>
                             <tr>
                                 <th style="width:60px;">序号</th>
+                                <th>项目ID</th>
                                 <th>项目名称</th>
                                 <th>默认总次数</th>
                                 <th style="width:120px;">操作</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody">
-                            <tr><td colspan="4" style="text-align:center;color:#999;">加载中...</td></tr>
+                            <tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -159,6 +160,10 @@
                 <span class="close" onclick="closeModal('dataModal')">&times;</span>
             </div>
             <div class="modal-body">
+                <div class="field">
+                    <label>项目ID <span style="color:#999;font-weight:normal;">（项目编码，可空）</span></label>
+                    <input type="text" id="f_项目ID" maxlength="50" placeholder="请输入项目ID">
+                </div>
                 <div class="field">
                     <label>项目名称 <span style="color:red;">*</span></label>
                     <input type="text" id="f_项目名称" maxlength="200">
@@ -184,21 +189,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="4" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="5" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         renderTable(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="4" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="5" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">暂无数据</td></tr>';
                 return;
             }
 
@@ -207,6 +212,7 @@
                 var d = data[i];
                 html += '<tr>' +
                     '<td>' + d.序号 + '</td>' +
+                    '<td>' + escapeHtml(d.项目ID) + '</td>' +
                     '<td>' + escapeHtml(d.项目名称) + '</td>' +
                     '<td>' + d.默认总次数 + '次</td>' +
                     '<td>' +
@@ -228,6 +234,7 @@
         document.getElementById('addButton').addEventListener('click', function() {
             document.getElementById('modalTitle').textContent = '新增项目';
             document.getElementById('f_序号').value = '';
+            document.getElementById('f_项目ID').value = '';
             document.getElementById('f_项目名称').value = '';
             document.getElementById('f_默认总次数').value = 6;
             openModal('dataModal');
@@ -244,6 +251,7 @@
 
             document.getElementById('modalTitle').textContent = '编辑项目';
             document.getElementById('f_序号').value = item.序号;
+            document.getElementById('f_项目ID').value = item.项目ID || '';
             document.getElementById('f_项目名称').value = item.项目名称;
             document.getElementById('f_默认总次数').value = item.默认总次数;
             openModal('dataModal');
@@ -253,6 +261,7 @@
         function submitSave() {
             var data = {
                 序号: document.getElementById('f_序号').value ? parseInt(document.getElementById('f_序号').value) : null,
+                项目ID: document.getElementById('f_项目ID').value.trim(),
                 项目名称: document.getElementById('f_项目名称').value.trim(),
                 默认总次数: parseInt(document.getElementById('f_默认总次数').value) || 0
             };

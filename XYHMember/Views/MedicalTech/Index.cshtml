@@ -194,6 +194,7 @@
                                 <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
                                 <button class="am-btn am-btn-primary" type="button" id="batchRegBtn" style="margin-left:10px;background:#0e90d2!important;border-color:#0e90d2!important;color:#fff!important;">批量登记</button>
                                 <button class="am-btn am-btn-primary" type="button" id="batchExecBtn" style="margin-left:5px;background:#5eb95e!important;border-color:#5eb95e!important;color:#fff!important;">批量执行</button>
+                                <button class="am-btn am-btn-default" type="button" id="updateTotalBtn" style="margin-left:10px;">修改总次数</button>
                                 <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:10px;">导出到Excel</button>
                             </span>
                         </span>
@@ -211,6 +212,7 @@
                             <th class="table-chck" style="width:30px;"><input type="checkbox"></th>
                             <th>门诊号</th>
                             <th>姓名</th>
+                            <th>项目ID</th>
                             <th>项目名称<span class="hdr-filter-trigger" data-col="项目名称">▼</span>
                                 <div class="hdr-filter-dropdown" id="hdrDropdown项目名称">
                                     <div class="hdr-filter-opt" data-value="">全部</div>
@@ -237,7 +239,7 @@
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="15" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
+                        <tr><td colspan="16" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -336,6 +338,30 @@
         </div>
     </div>
 
+    <!-- ========== 修改总次数弹窗 ========== -->
+    <div class="modal-overlay" id="updateTotalModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>修改总次数</span>
+                <span class="close" onclick="closeModal('updateTotalModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="field field-readonly">
+                    <label>已选记录</label>
+                    <input type="text" id="ut_Info" readonly>
+                </div>
+                <div class="field">
+                    <label>新总次数 <span style="color:#999;font-weight:normal;">（疗程总次数，>0 的整数）</span></label>
+                    <input type="number" id="ut_新总次数" min="1" max="99" placeholder="请输入新的总次数">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('updateTotalModal')">取消</button>
+                <button class="btn-primary" onclick="submitUpdateTotal()">确认修改</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== 历史记录弹窗 ========== -->
     <div class="modal-overlay" id="historyModal">
         <div class="modal-box" style="width:600px;">
@@ -380,7 +406,7 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="15" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="16" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         window._queryDataFull = data;
                         applyHdrFilters();
@@ -388,14 +414,14 @@
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="15" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="16" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:#999;">未找到数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:#999;">未找到数据</td></tr>';
                 return;
             }
 
@@ -435,6 +461,7 @@
                     '<td><input type="checkbox" data-idx="' + i + '"></td>' +
                     '<td>' + d.门诊号 + '</td>' +
                     '<td>' + escapeHtml(d.姓名) + '</td>' +
+                    '<td>' + (d.项目ID != null ? d.项目ID : '') + '</td>' +
                     '<td>' + escapeHtml(d.项目名称) + '</td>' +
                     '<td>' + (d.数量 != null ? d.数量 : '') + '</td>' +
                     '<td>' + (d.金额 != null ? d.金额.toFixed(2) : '') + '</td>' +
@@ -470,6 +497,7 @@
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
                 '<td></td>' +
                 '<td>合计</td>' +
+                '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
@@ -1068,6 +1096,64 @@
             loadBatchItem();
             });
         });
+
+        // ===== 修改总次数 =====
+        document.getElementById('updateTotalBtn').addEventListener('click', function() {
+            var checked = getCheckedData();
+            if (checked.length === 0) { customDialog.info('请先勾选要修改的记录', '提示'); return; }
+
+            // 只有已登记的记录才有总次数可改
+            var regs = checked.filter(function(item) { return item.data.登记ID != null; });
+            if (regs.length === 0) {
+                customDialog.info('勾选的项目均未登记，无法修改总次数', '提示');
+                return;
+            }
+
+            var names = [];
+            for (var i = 0; i < regs.length; i++) {
+                names.push(regs[i].data.姓名 + ' - ' + regs[i].data.项目名称);
+            }
+            var skipped = checked.length - regs.length;
+            var info = '已选 ' + regs.length + ' 条' +
+                       (skipped > 0 ? '（另有 ' + skipped + ' 条未登记，已跳过）' : '') +
+                       '：' + names.join('、');
+            document.getElementById('ut_Info').value = info;
+            document.getElementById('ut_新总次数').value = '';
+            openModal('updateTotalModal');
+        });
+
+        function submitUpdateTotal() {
+            var checked = getCheckedData();
+            if (checked.length === 0) { customDialog.info('请先勾选要修改的记录', '提示'); return; }
+
+            var newVal = parseInt(document.getElementById('ut_新总次数').value);
+            if (!newVal || newVal <= 0) { customDialog.info('请输入有效的总次数', '提示'); return; }
+
+            var ids = [];
+            var regs = checked.filter(function(item) { return item.data.登记ID != null; });
+            for (var i = 0; i < regs.length; i++) {
+                ids.push(regs[i].data.登记ID);
+            }
+            if (ids.length === 0) { customDialog.info('勾选的项目均未登记，无法修改总次数', '提示'); return; }
+
+            fetch('@Url.Action("UpdateTotalCount", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 登记IDs: ids, 新总次数: newVal })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    customDialog.alert(res.msg, '提示', function() {
+                        closeModal('updateTotalModal');
+                        doSearch();
+                    });
+                } else {
+                    customDialog.error(res.msg, '修改失败');
+                }
+            })
+            .catch(function(err) { customDialog.error(err.message, '修改失败'); });
+        }
 
         // ===== 导出到Excel（服务端导出，含执行明细一对多；导出全部结果而非仅当前页） =====
         document.getElementById('exportBtn').addEventListener('click', function() {
