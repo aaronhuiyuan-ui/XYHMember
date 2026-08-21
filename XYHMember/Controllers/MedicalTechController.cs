@@ -77,7 +77,7 @@ namespace XYHMember.Controllers
                 SELECT a.结帐ID, a.门诊号, a.姓名, b.就诊ID, b.处方ID,
                        CONVERT(varchar, b.日期, 23) AS 日期,
                        CONVERT(varchar, b.时间, 8) AS 时间,
-                       b.项目ID, b.项目名称, b.单价, b.数量, b.金额,
+                       b.套餐名称, b.项目ID, b.项目名称, b.单价, b.数量, b.金额,
                        ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额, 0), 0) AS 实收金额,
                        -- 执行人：同一登记下的去重执行人，多个用分号隔开
                        ISNULL(pe.执行人, '') AS 执行人,
@@ -99,7 +99,7 @@ namespace XYHMember.Controllers
                   AND b.项目类别 IN (6, 59)
                   AND b.日期 BETWEEN @bdate AND @edate
                   AND (@name = '' OR a.姓名 LIKE '%' + @name + '%' OR b.项目名称 LIKE '%' + @name + '%')
-                ORDER BY b.日期 DESC, b.时间 DESC";
+                ORDER BY b.日期 DESC, b.时间 DESC, b.套餐名称";
 
             return db.Database.SqlQuery<MedicalTechChargeItem>(sql,
                 new SqlParameter("@name", (name ?? "").Trim()),
@@ -141,11 +141,11 @@ namespace XYHMember.Controllers
                 // 表头：主列13 + 执行明细列6
                 var headers = new List<string>
                 {
-                    "门诊号", "姓名", "项目ID", "项目名称", "数量", "项目金额", "实收金额", "收费日期",
+                    "门诊号", "姓名", "套餐名称", "项目ID", "项目名称", "数量", "项目金额", "实收金额", "收费日期",
                     "状态", "执行进度", "已执行金额", "未执行金额", "执行人", "操作人员提成",
                     "执行次数", "执行时间", "执行人工号", "执行人姓名", "岗位", "备注"
                 };
-                int mainCols = 14;
+                int mainCols = 15;
 
                 var rows = new List<List<string>>();
                 foreach (var d in items)
@@ -164,6 +164,7 @@ namespace XYHMember.Controllers
                     {
                         d.门诊号?.ToString() ?? "",
                         d.姓名 ?? "",
+                        d.套餐名称 ?? "",
                         d.项目ID?.ToString() ?? "",
                         d.项目名称 ?? "",
                         d.数量?.ToString("G29") ?? "",

@@ -212,6 +212,7 @@
                             <th class="table-chck" style="width:30px;"><input type="checkbox"></th>
                             <th>门诊号</th>
                             <th>姓名</th>
+                            <th>套餐名称</th>
                             <th>项目ID</th>
                             <th>项目名称<span class="hdr-filter-trigger" data-col="项目名称">▼</span>
                                 <div class="hdr-filter-dropdown" id="hdrDropdown项目名称">
@@ -239,7 +240,7 @@
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="16" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
+                        <tr><td colspan="17" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -406,7 +407,7 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="16" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         window._queryDataFull = data;
                         applyHdrFilters();
@@ -414,14 +415,14 @@
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="16" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:#999;">未找到数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#999;">未找到数据</td></tr>';
                 return;
             }
 
@@ -461,6 +462,7 @@
                     '<td><input type="checkbox" data-idx="' + i + '"></td>' +
                     '<td>' + d.门诊号 + '</td>' +
                     '<td>' + escapeHtml(d.姓名) + '</td>' +
+                    '<td>' + escapeHtml(d.套餐名称) + '</td>' +
                     '<td>' + (d.项目ID != null ? d.项目ID : '') + '</td>' +
                     '<td>' + escapeHtml(d.项目名称) + '</td>' +
                     '<td>' + (d.数量 != null ? d.数量 : '') + '</td>' +
@@ -497,6 +499,7 @@
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
                 '<td></td>' +
                 '<td>合计</td>' +
+                '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +

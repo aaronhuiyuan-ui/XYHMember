@@ -441,6 +441,7 @@ namespace XYHMember.Context
         public int? 处方ID { get; set; }
         public string 日期 { get; set; }
         public string 时间 { get; set; }
+        public string 套餐名称 { get; set; }
         public int? 项目ID { get; set; }
         public string 项目名称 { get; set; }
         public decimal? 单价 { get; set; }
