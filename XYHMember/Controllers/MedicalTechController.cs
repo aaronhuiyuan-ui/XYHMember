@@ -593,19 +593,21 @@ namespace XYHMember.Controllers
         }
 
         /// <summary>
-        /// 查询项目默认次数列表
+        /// 查询项目默认次数列表（按项目ID匹配；name 仅用于维护页按名称搜索）
         /// </summary>
         [HttpGet]
-        public ActionResult GetDefaultCountList(string name)
+        public ActionResult GetDefaultCountList(string name, string 项目ID)
         {
             try
             {
                 var sql = @"SELECT * FROM fghis5..医技项目默认次数表
-                            WHERE @name = '' OR 项目名称 = @name
+                            WHERE (@name = '' OR 项目名称 = @name)
+                              AND (@项目ID = '' OR 项目ID = @项目ID)
                             ORDER BY 序号 ASC";
 
                 var result = db.Database.SqlQuery<MedicalTechDefaultCount>(sql,
-                    new SqlParameter("@name", (name ?? "").Trim())).ToList();
+                    new SqlParameter("@name", (name ?? "").Trim()),
+                    new SqlParameter("@项目ID", (项目ID ?? "").Trim())).ToList();
 
                 return Json(result, JsonRequestBehavior.AllowGet);
             }
@@ -893,7 +895,7 @@ namespace XYHMember.Controllers
                     AND b.项目名称 = r.项目名称
                 LEFT JOIN fghis5..门诊_收费发票表 a ON a.结帐ID = b.结帐ID
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
-                LEFT JOIN fghis5..医技项目默认次数表 dc ON dc.项目名称 = r.项目名称
+                LEFT JOIN fghis5..医技项目默认次数表 dc ON dc.项目ID = CAST(b.项目ID AS NVARCHAR)
                 WHERE e.delete_flag = 'f'
                   AND CONVERT(date, e.执行时间) BETWEEN @bdate AND @edate
                   AND (@name = '' OR r.病人姓名 LIKE '%' + @name + '%' OR r.项目名称 LIKE '%' + @name + '%')

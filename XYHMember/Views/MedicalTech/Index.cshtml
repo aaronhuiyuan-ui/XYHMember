@@ -631,8 +631,9 @@
 
             var qty = (d.数量 != null && d.数量 > 0) ? d.数量 : 1;
 
-            // 根据项目名称查询默认次数
-            fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?name=' + encodeURIComponent(d.项目名称))
+            // 根据项目ID查询默认次数
+            var pid = (d.项目ID != null ? d.项目ID : '');
+            fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?项目ID=' + encodeURIComponent(pid))
                 .then(function(r) { return r.json(); })
                 .then(function(list) {
                     if (list && list.length > 0 && list[0].默认总次数) {
@@ -983,8 +984,9 @@
                     }
                     var item = toReg[idx];
                 var d = item.data;
-                // 查询默认次数
-                fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?name=' + encodeURIComponent(d.项目名称))
+                // 查询默认次数（按项目ID）
+                var pid = (d.项目ID != null ? d.项目ID : '');
+                fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?项目ID=' + encodeURIComponent(pid))
                     .then(function(r) { return r.json(); })
                     .then(function(list) {
                         var qty = (d.数量 != null && d.数量 > 0) ? d.数量 : 1;
