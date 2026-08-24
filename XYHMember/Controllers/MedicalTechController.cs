@@ -92,9 +92,10 @@ namespace XYHMember.Controllers
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
                 LEFT JOIN 执行汇总 e ON e.登记ID = r.登记ID
                 LEFT JOIN 执行人汇总 pe ON pe.登记ID = r.登记ID
-                LEFT JOIN (SELECT 项目名称, MAX(提成比例) AS 提成比例
+                LEFT JOIN (SELECT CAST(项目ID AS NVARCHAR(50)) AS 项目ID, MAX(提成比例) AS 提成比例
                            FROM fghis5..医技项目操作人员提成表
-                           GROUP BY 项目名称) c ON c.项目名称 = b.项目名称
+                           WHERE 项目ID IS NOT NULL AND 项目ID != ''
+                           GROUP BY CAST(项目ID AS NVARCHAR(50))) c ON c.项目ID = CAST(b.项目ID AS NVARCHAR(50))
                 WHERE a.发票状态 = '2'
                   AND b.项目类别 IN (6, 59)
                   AND b.日期 BETWEEN @bdate AND @edate
@@ -285,6 +286,13 @@ namespace XYHMember.Controllers
                     return Json(new { success = false, msg = "该项目已登记，请勿重复登记" });
 
                 // 提成金额 = 项目收费金额 × 提成比例（不依赖完成状态，登记时即核算）
+                var 项目ID = db.Database.SqlQuery<int?>(
+                    @"SELECT TOP 1 b.项目ID FROM fghis5..门诊_收费明细表 b
+                      WHERE b.结帐ID = @结帐ID AND b.处方ID = @处方ID AND b.项目名称 = @项目名称",
+                    new SqlParameter("@结帐ID", 结帐ID),
+                    new SqlParameter("@处方ID", 处方ID),
+                    new SqlParameter("@项目名称", 项目名称 ?? "")).FirstOrDefault();
+
                 var 金额 = db.Database.SqlQuery<decimal?>(
                     @"SELECT TOP 1 b.金额 FROM fghis5..门诊_收费明细表 b
                       WHERE b.结帐ID = @结帐ID AND b.处方ID = @处方ID AND b.项目名称 = @项目名称",
@@ -293,8 +301,9 @@ namespace XYHMember.Controllers
                     new SqlParameter("@项目名称", 项目名称 ?? "")).FirstOrDefault();
 
                 var 比例 = db.Database.SqlQuery<decimal?>(
-                    @"SELECT TOP 1 提成比例 FROM fghis5..医技项目操作人员提成表 WHERE 项目名称 = @项目名称",
-                    new SqlParameter("@项目名称", 项目名称 ?? "")).FirstOrDefault();
+                    @"SELECT TOP 1 提成比例 FROM fghis5..医技项目操作人员提成表
+                      WHERE 项目ID = CAST(@项目ID AS NVARCHAR(50))",
+                    new SqlParameter("@项目ID", 项目ID.HasValue ? 项目ID.Value.ToString() : "")).FirstOrDefault();
 
                 var 提成金额 = Math.Round((金额 ?? 0) * (比例 ?? 0) / 100m, 2);
 
@@ -415,9 +424,10 @@ namespace XYHMember.Controllers
                                 FROM fghis5..医技登记表 r
                                 LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
                                     AND b.项目名称 = r.项目名称
-                                LEFT JOIN (SELECT 项目名称, MAX(提成比例) AS 提成比例
+                                LEFT JOIN (SELECT CAST(项目ID AS NVARCHAR(50)) AS 项目ID, MAX(提成比例) AS 提成比例
                                            FROM fghis5..医技项目操作人员提成表
-                                           GROUP BY 项目名称) c ON c.项目名称 = r.项目名称
+                                           WHERE 项目ID IS NOT NULL AND 项目ID != ''
+                                           GROUP BY CAST(项目ID AS NVARCHAR(50))) c ON c.项目ID = CAST(b.项目ID AS NVARCHAR(50))
                                 WHERE r.登记ID = @登记ID";
                 var reg = db.Database.SqlQuery<MedicalTechRegistration>(regSql,
                     new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
@@ -726,7 +736,7 @@ namespace XYHMember.Controllers
         /// 新增/修改提成配置
         /// </summary>
         [HttpPost]
-        public ActionResult SaveCommission(int? 序号, string 项目名称, string 岗位, decimal 提成比例)
+        public ActionResult SaveCommission(int? 序号, string 项目ID, string 项目名称, string 岗位, decimal 提成比例)
         {
             try
             {
@@ -737,10 +747,17 @@ namespace XYHMember.Controllers
                 if (提成比例 <= 0)
                     return Json(new { success = false, msg = "提成比例必须大于0" });
 
-                // 查重：同一项目名称 + 岗位不允许重复（排除自身）
+                项目ID = (项目ID ?? "").Trim();
+                object 项目IDValue = string.IsNullOrEmpty(项目ID) ? (object)DBNull.Value : 项目ID;
+
+                // 查重：有项目ID按 项目ID+岗位，无则按 项目名称+岗位（排除自身）
                 var checkSql = @"SELECT COUNT(*) FROM fghis5..医技项目操作人员提成表
-                                WHERE 项目名称 = @项目名称 AND 岗位 = @岗位 AND (@序号 IS NULL OR 序号 != @序号)";
+                                WHERE 岗位 = @岗位
+                                  AND ((@项目ID != '' AND 项目ID = @项目ID)
+                                       OR (@项目ID = '' AND 项目名称 = @项目名称))
+                                  AND (@序号 IS NULL OR 序号 != @序号)";
                 var exists = db.Database.SqlQuery<int>(checkSql,
+                    new SqlParameter("@项目ID", 项目ID ?? ""),
                     new SqlParameter("@项目名称", 项目名称 ?? ""),
                     new SqlParameter("@岗位", 岗位 ?? ""),
                     new SqlParameter("@序号", (object)序号 ?? DBNull.Value)
@@ -752,19 +769,21 @@ namespace XYHMember.Controllers
                 if (序号.HasValue)
                 {
                     var sql = @"UPDATE fghis5..医技项目操作人员提成表
-                                SET 项目名称 = @项目名称, 岗位 = @岗位, 提成比例 = @提成比例
+                                SET 项目ID = @项目ID, 项目名称 = @项目名称, 岗位 = @岗位, 提成比例 = @提成比例
                                 WHERE 序号 = @序号";
                     db.Database.ExecuteSqlCommand(sql,
                         new SqlParameter("@序号", 序号.Value),
+                        new SqlParameter("@项目ID", 项目IDValue),
                         new SqlParameter("@项目名称", 项目名称 ?? ""),
                         new SqlParameter("@岗位", 岗位 ?? ""),
                         new SqlParameter("@提成比例", 提成比例));
                 }
                 else
                 {
-                    var sql = @"INSERT INTO fghis5..医技项目操作人员提成表 (项目名称, 岗位, 提成比例)
-                                VALUES (@项目名称, @岗位, @提成比例)";
+                    var sql = @"INSERT INTO fghis5..医技项目操作人员提成表 (项目ID, 项目名称, 岗位, 提成比例)
+                                VALUES (@项目ID, @项目名称, @岗位, @提成比例)";
                     db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@项目ID", 项目IDValue),
                         new SqlParameter("@项目名称", 项目名称 ?? ""),
                         new SqlParameter("@岗位", 岗位 ?? ""),
                         new SqlParameter("@提成比例", 提成比例));

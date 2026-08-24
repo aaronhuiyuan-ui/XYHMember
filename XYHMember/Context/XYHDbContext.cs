@@ -426,6 +426,7 @@ namespace XYHMember.Context
     {
         [Key]
         public int 序号 { get; set; }
+        public string 项目ID { get; set; }
         public string 项目名称 { get; set; }
         public string 岗位 { get; set; }
         public decimal? 提成比例 { get; set; }
