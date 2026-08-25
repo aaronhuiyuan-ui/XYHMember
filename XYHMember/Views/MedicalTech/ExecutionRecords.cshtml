@@ -31,6 +31,42 @@
             display: table !important;
         }
         .summary-row td { font-weight: bold; border-top: 2px solid #999; }
+        #dataTable th { position: relative; }
+        .hdr-filter-trigger {
+            cursor: pointer;
+            font-size: 10px;
+            margin-left: 2px;
+            color: #999;
+            user-select: none;
+        }
+        .hdr-filter-trigger:hover,
+        .hdr-filter-trigger.active { color: #0e90d2; }
+        .hdr-filter-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%; left: 0;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            min-width: 130px;
+            max-height: 260px;
+            overflow-y: auto;
+            color: #333;
+        }
+        .hdr-filter-dropdown.show { display: block; }
+        .hdr-filter-opt {
+            padding: 6px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            color: #333;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .hdr-filter-opt:last-child { border-bottom: none; }
+        .hdr-filter-opt:hover { background: #f5f5f5; color: #000; }
+        .hdr-filter-opt.selected { background: #e6f2ff; color: #0e90d2; font-weight: bold; }
         .modal-overlay {
             display: none;
             position: fixed;
@@ -105,8 +141,12 @@
                             <th style="width:30px;"><input type="checkbox" id="checkAll" onchange="toggleAllChecks(this)"></th>
                             <th>执行时间</th>
                             <th>病人姓名</th>
-                            <th>套餐名称</th>
-                            <th>项目名称</th>
+                            <th>套餐名称<span class="hdr-filter-trigger" data-col="套餐名称">▼</span>
+                                <div class="hdr-filter-dropdown" id="hdrDropdown套餐名称"></div>
+                            </th>
+                            <th>项目名称<span class="hdr-filter-trigger" data-col="项目名称">▼</span>
+                                <div class="hdr-filter-dropdown" id="hdrDropdown项目名称"></div>
+                            </th>
                             <th>本次执行次数</th>
                             <th>数量</th>
                             <th>默认次数</th>
@@ -114,7 +154,9 @@
                             <th>进度</th>
                             <th>本次执行金额</th>
                             <th>操作人提成</th>
-                            <th>执行人</th>
+                            <th>执行人<span class="hdr-filter-trigger" data-col="执行人">▼</span>
+                                <div class="hdr-filter-dropdown" id="hdrDropdown执行人"></div>
+                            </th>
                             <th>岗位</th>
                             <th>备注</th>
                         </tr>
@@ -153,6 +195,7 @@
                         document.getElementById('tableBody').innerHTML =
                             '<tr><td colspan="15" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
+                        window._queryDataFull = data;
                         renderTable(data);
                     }
                 })
@@ -228,6 +271,150 @@
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
+
+        // ===== 表头筛选 =====
+        window._hdrFilter = {};
+
+        // 点击三角展开下拉并动态填充内容
+        document.querySelectorAll('.hdr-filter-trigger').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var col = this.dataset.col;
+                var dd = document.getElementById('hdrDropdown' + col);
+                var isOpen = dd.classList.contains('show');
+                closeAllHdrDropdowns();
+
+                if (!isOpen) {
+                    // 展开前动态填充
+                    if (col === '套餐名称') rebuildHdrDropdown套餐名称();
+                    else if (col === '项目名称') rebuildHdrDropdown项目名称();
+                    else if (col === '执行人') rebuildHdrDropdown执行人();
+                    dd.classList.add('show');
+                    this.classList.add('active');
+                }
+            });
+        });
+
+        function rebuildHdrDropdown套餐名称() {
+            var dd = document.getElementById('hdrDropdown套餐名称');
+            var data = window._queryDataFull || [];
+            dd.innerHTML = '';
+            var allOpt = document.createElement('div');
+            allOpt.className = 'hdr-filter-opt';
+            allOpt.dataset.value = '';
+            allOpt.textContent = '全部';
+            allOpt.addEventListener('click', hdrOptClick);
+            dd.appendChild(allOpt);
+            var seen = {};
+            for (var i = 0; i < data.length; i++) {
+                var name = data[i].套餐名称;
+                if (name && !seen[name]) {
+                    seen[name] = true;
+                    var opt = document.createElement('div');
+                    opt.className = 'hdr-filter-opt';
+                    opt.dataset.value = name;
+                    opt.textContent = name;
+                    opt.addEventListener('click', hdrOptClick);
+                    dd.appendChild(opt);
+                }
+            }
+            var curVal = window._hdrFilter['套餐名称'] || '';
+            dd.querySelectorAll('.hdr-filter-opt').forEach(function(o) {
+                if (o.dataset.value === curVal) o.classList.add('selected');
+            });
+        }
+
+        function rebuildHdrDropdown项目名称() {
+            var dd = document.getElementById('hdrDropdown项目名称');
+            var data = window._queryDataFull || [];
+            dd.innerHTML = '';
+            var allOpt = document.createElement('div');
+            allOpt.className = 'hdr-filter-opt';
+            allOpt.dataset.value = '';
+            allOpt.textContent = '全部';
+            allOpt.addEventListener('click', hdrOptClick);
+            dd.appendChild(allOpt);
+            var seen = {};
+            for (var i = 0; i < data.length; i++) {
+                var name = data[i].项目名称;
+                if (name && !seen[name]) {
+                    seen[name] = true;
+                    var opt = document.createElement('div');
+                    opt.className = 'hdr-filter-opt';
+                    opt.dataset.value = name;
+                    opt.textContent = name;
+                    opt.addEventListener('click', hdrOptClick);
+                    dd.appendChild(opt);
+                }
+            }
+            var curVal = window._hdrFilter['项目名称'] || '';
+            dd.querySelectorAll('.hdr-filter-opt').forEach(function(o) {
+                if (o.dataset.value === curVal) o.classList.add('selected');
+            });
+        }
+
+        function rebuildHdrDropdown执行人() {
+            var dd = document.getElementById('hdrDropdown执行人');
+            var data = window._queryDataFull || [];
+            dd.innerHTML = '';
+            var allOpt = document.createElement('div');
+            allOpt.className = 'hdr-filter-opt';
+            allOpt.dataset.value = '';
+            allOpt.textContent = '全部';
+            allOpt.addEventListener('click', hdrOptClick);
+            dd.appendChild(allOpt);
+            var seen = {};
+            for (var i = 0; i < data.length; i++) {
+                var name = data[i].执行人姓名;
+                if (name && !seen[name]) {
+                    seen[name] = true;
+                    var opt = document.createElement('div');
+                    opt.className = 'hdr-filter-opt';
+                    opt.dataset.value = name;
+                    opt.textContent = name;
+                    opt.addEventListener('click', hdrOptClick);
+                    dd.appendChild(opt);
+                }
+            }
+            var curVal = window._hdrFilter['执行人'] || '';
+            dd.querySelectorAll('.hdr-filter-opt').forEach(function(o) {
+                if (o.dataset.value === curVal) o.classList.add('selected');
+            });
+        }
+
+        function hdrOptClick(e) {
+            var el = e.currentTarget;
+            var col = el.parentElement.id.replace('hdrDropdown', '');
+            var value = el.dataset.value;
+            el.parentElement.querySelectorAll('.hdr-filter-opt').forEach(function(o) { o.classList.remove('selected'); });
+            el.classList.add('selected');
+            window._hdrFilter[col] = value;
+            applyHdrFilters();
+            closeAllHdrDropdowns();
+        }
+
+        function applyHdrFilters() {
+            if (!window._queryDataFull) return;
+            var pkgFilter = window._hdrFilter['套餐名称'] || '';
+            var projectFilter = window._hdrFilter['项目名称'] || '';
+            var execFilter = window._hdrFilter['执行人'] || '';
+
+            var filtered = window._queryDataFull.filter(function(d) {
+                if (pkgFilter && d.套餐名称 !== pkgFilter) return false;
+                if (projectFilter && d.项目名称 !== projectFilter) return false;
+                if (execFilter && d.执行人姓名 !== execFilter) return false;
+                return true;
+            });
+
+            renderTable(filtered);
+        }
+
+        function closeAllHdrDropdowns() {
+            document.querySelectorAll('.hdr-filter-dropdown').forEach(function(d) { d.classList.remove('show'); });
+            document.querySelectorAll('.hdr-filter-trigger').forEach(function(t) { t.classList.remove('active'); });
+        }
+
+        document.addEventListener('click', function() { closeAllHdrDropdowns(); });
 
         function openModal(id) { document.getElementById(id).classList.add('active'); }
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
