@@ -1389,7 +1389,8 @@ namespace XYHMember.Controllers
                                    l.序号, l.关联入库序号, l.物料编码, l.耗材名称, l.规格型号, l.单位, l.批号, l.领用数量,
                                    CONVERT(varchar(10), l.申领日期, 120) AS 申领日期,
                                    CONVERT(varchar(10), l.到库日期, 120) AS 到库日期,
-                                   CONVERT(varchar(10), l.保质期, 120) AS 保质期
+                                   CONVERT(varchar(10), l.保质期, 120) AS 保质期,
+                                   l.备注 AS 明细备注
                             FROM fghis5..耗材出库单 h
                                  LEFT JOIN fghis5..耗材出库明细 l ON h.出库单号 = l.出库单号
                             WHERE (@bdate = '' OR h.出库日期 >= @bdate)
@@ -1534,7 +1535,7 @@ namespace XYHMember.Controllers
         {
             try
             {
-                var sql = @"SELECT 序号, 套餐ID, 物料编码, 耗材名称, 规格型号, 单位, 数量
+                var sql = @"SELECT 序号, 套餐ID, 物料编码, 耗材名称, 规格型号, 单位, 数量, 备注
                             FROM fghis5..套餐耗材明细 WHERE 套餐ID = @套餐ID ORDER BY 序号";
 
                 var list = db.Database.SqlQuery<PackageMaterial>(sql,
@@ -1579,14 +1580,15 @@ namespace XYHMember.Controllers
                             if (l.数量 == null || l.数量 <= 0) continue;
 
                             db.Database.ExecuteSqlCommand(
-                                @"INSERT INTO fghis5..套餐耗材明细 (套餐ID, 物料编码, 耗材名称, 规格型号, 单位, 数量)
-                                  VALUES (@套餐ID, @物料编码, @耗材名称, @规格型号, @单位, @数量)",
+                                @"INSERT INTO fghis5..套餐耗材明细 (套餐ID, 物料编码, 耗材名称, 规格型号, 单位, 数量, 备注)
+                                  VALUES (@套餐ID, @物料编码, @耗材名称, @规格型号, @单位, @数量, @备注)",
                                 new SqlParameter("@套餐ID", 套餐ID),
                                 new SqlParameter("@物料编码", (object)l.物料编码 ?? DBNull.Value),
                                 new SqlParameter("@耗材名称", (object)l.耗材名称 ?? DBNull.Value),
                                 new SqlParameter("@规格型号", (object)l.规格型号 ?? DBNull.Value),
                                 new SqlParameter("@单位", (object)l.单位 ?? DBNull.Value),
-                                new SqlParameter("@数量", l.数量.Value));
+                                new SqlParameter("@数量", l.数量.Value),
+                                new SqlParameter("@备注", (object)(string.IsNullOrWhiteSpace(l.备注) ? "固定消耗" : l.备注) ?? DBNull.Value));
                         }
                     }
 

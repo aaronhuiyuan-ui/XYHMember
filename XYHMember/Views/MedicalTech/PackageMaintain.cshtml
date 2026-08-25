@@ -28,7 +28,7 @@
         .table-wrapper > table { display: table !important; }
         #pkgTable { width: 100%; min-width: 720px; table-layout: auto; white-space: nowrap; }
         #pkgTable th, #pkgTable td { padding: 6px 8px !important; }
-        #matGrid { width: 100%; min-width: 1100px; table-layout: auto; white-space: nowrap; }
+        #matGrid { width: 100%; min-width: 1260px; table-layout: auto; white-space: nowrap; }
         #matGrid th, #matGrid td { padding: 6px 8px !important; vertical-align: middle; }
         #matGrid input[type="text"],
         #matGrid input[type="number"] { height: 30px; padding: 0 6px; border: 1px solid #d0d0d0; border-radius: 3px; font-size: 13px; box-sizing: border-box; }
@@ -110,6 +110,7 @@
                             <th>规格型号</th>
                             <th>单位</th>
                             <th style="width:100px;">数量<span style="color:#999;font-weight:normal;">（整套餐消耗）</span></th>
+                            <th style="width:140px;">备注</th>
                             <th style="width:60px;">操作</th>
                         </tr>
                     </thead>
@@ -257,6 +258,7 @@
                 '<td class="m-规格型号"></td>' +
                 '<td class="m-单位"></td>' +
                 '<td><input type="number" class="m-数量" min="0.001" step="0.001" placeholder="数量" style="width:90px;height:30px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;"></td>' +
+                '<td><input type="text" class="m-备注" value="固定消耗" placeholder="固定消耗" style="width:130px;height:30px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;"></td>' +
                 '<td><button type="button" class="btn-action" onclick="removeMatLine(this)">删除</button></td>';
             tb.appendChild(tr);
             var input = tr.querySelector('.line-combo');
@@ -273,6 +275,7 @@
             tr.querySelector('.m-规格型号').textContent = item.规格型号 || '';
             tr.querySelector('.m-单位').textContent = item.单位 || '';
             tr.querySelector('.m-数量').value = item.数量 || '';
+            tr.querySelector('.m-备注').value = item.备注 || '固定消耗';
             tr.querySelector('.line-combo').value = item.耗材名称 || '';
         }
 
@@ -349,6 +352,8 @@
             tr.querySelector('.m-耗材名称').textContent = item.物料名称 || '';
             tr.querySelector('.m-规格型号').textContent = item.规格 || '';
             tr.querySelector('.m-单位').textContent = item.单位 || '';
+            var remark = tr.querySelector('.m-备注');
+            if (remark && !remark.value.trim()) remark.value = '固定消耗';
             input.value = item.物料名称;
             dd.classList.remove('show');
         }
@@ -360,7 +365,7 @@
                     var tb = document.getElementById('matBody');
                     tb.innerHTML = '';
                     if (list && list.success === false) {
-                        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:red;">' + escapeHtml(list.msg) + '</td></tr>';
+                        tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:red;">' + escapeHtml(list.msg) + '</td></tr>';
                         return;
                     }
                     var arr = list || [];
@@ -384,7 +389,8 @@
                     耗材名称: tr.querySelector('.m-耗材名称').textContent,
                     规格型号: tr.querySelector('.m-规格型号').textContent,
                     单位: tr.querySelector('.m-单位').textContent,
-                    数量: qty
+                    数量: qty,
+                    备注: (tr.querySelector('.m-备注').value || '固定消耗').trim()
                 });
             }
             return lines;

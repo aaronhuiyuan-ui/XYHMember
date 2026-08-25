@@ -308,6 +308,7 @@
     <Content Include="Views\MedicalTech\MaterialInbound.cshtml" />
     <Content Include="Views\MedicalTech\MaterialOutbound.cshtml" />
     <Content Include="Views\MedicalTech\PackageMaintain.cshtml" />
+    <Content Include="Tools\AutoDeductPackage.bat" />
     <Content Include="Views\Pharmacy\DispensingQuery.cshtml" />
     <Content Include="Views\Pharmacy\DispensingConfirm.cshtml" />
     <Content Include="Views\Pharmacy\DispensedQuery.cshtml" />

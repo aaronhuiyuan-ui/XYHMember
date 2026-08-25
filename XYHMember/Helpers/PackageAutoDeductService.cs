@@ -149,8 +149,8 @@ namespace XYHMember
                                         if (take <= 0) continue;
 
                                         db.Database.ExecuteSqlCommand(
-                                            @"INSERT INTO fghis5..耗材出库明细 (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 申领日期, 到库日期, 保质期)
-                                              VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @申领日期, NULL, @保质期)",
+                                            @"INSERT INTO fghis5..耗材出库明细 (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 申领日期, 到库日期, 保质期, 备注)
+                                              VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @申领日期, NULL, @保质期, @备注)",
                                             new SqlParameter("@出库单号", 单号),
                                             new SqlParameter("@关联入库序号", b2.序号),
                                             new SqlParameter("@物料编码", (object)b2.物料编码 ?? DBNull.Value),
@@ -160,7 +160,8 @@ namespace XYHMember
                                             new SqlParameter("@批号", (object)b2.批号 ?? DBNull.Value),
                                             new SqlParameter("@领用数量", take),
                                             new SqlParameter("@申领日期", 出库D),
-                                            new SqlParameter("@保质期", (object)ParseDate(b2.有效期) ?? DBNull.Value));
+                                            new SqlParameter("@保质期", (object)ParseDate(b2.有效期) ?? DBNull.Value),
+                                            new SqlParameter("@备注", (object)(string.IsNullOrWhiteSpace(l.备注) ? "固定消耗" : l.备注) ?? DBNull.Value));
 
                                         db.Database.ExecuteSqlCommand(
                                             "UPDATE fghis5..耗材入库表 SET 剩余数量 = 剩余数量 - @qty WHERE 序号 = @id",

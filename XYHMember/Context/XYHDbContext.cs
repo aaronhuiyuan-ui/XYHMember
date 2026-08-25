@@ -690,10 +690,11 @@ namespace XYHMember.Context
         public string 保质期 { get; set; }
     }
 
-    //耗材出库列表（主表+明细平铺 + 来源类型，查询展示用）
+    //耗材出库列表（主表+明细平铺 + 来源类型 + 明细备注，查询展示用）
     public class OutboundRecordWithSource : MaterialOutboundRecord
     {
         public string 来源类型 { get; set; }
+        public string 明细备注 { get; set; }
     }
 
     //套餐表（后台维护：套餐名称与 HIS 门诊_收费明细表.套餐名称 一致）
@@ -715,6 +716,7 @@ namespace XYHMember.Context
         public string 规格型号 { get; set; }
         public string 单位 { get; set; }
         public decimal? 数量 { get; set; }
+        public string 备注 { get; set; }
     }
 
     //医技执行记录查询

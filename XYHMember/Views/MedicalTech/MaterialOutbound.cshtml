@@ -151,10 +151,11 @@
                             <th>登记时间</th>
                             <th>来源类型</th>
                             <th>备注</th>
+                            <th>明细备注</th>
                         </tr>
                     </thead>
                     <tbody id="outBody">
-                        <tr><td colspan="17" style="text-align:center;color:#999;">加载中...</td></tr>
+                        <tr><td colspan="18" style="text-align:center;color:#999;">加载中...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -408,21 +409,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('outBody').innerHTML =
-                            '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
+                            '<tr><td colspan="18" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
                     } else {
                         renderOutbound(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('outBody').innerHTML =
-                        '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
+                        '<tr><td colspan="18" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
                 });
         }
 
         function renderOutbound(data) {
             var tbody = document.getElementById('outBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#999;">暂无出库记录</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="18" style="text-align:center;color:#999;">暂无出库记录</td></tr>';
                 return;
             }
             var html = '';
@@ -448,12 +449,13 @@
                     '<td>' + escapeHtml(d.登记时间) + '</td>' +
                     '<td>' + (d.来源类型 ? escapeHtml(d.来源类型) : '手工出库') + '</td>' +
                     '<td>' + escapeHtml(d.备注) + '</td>' +
+                    '<td>' + escapeHtml(d.明细备注) + '</td>' +
                     '</tr>';
             }
             html += '<tr class="summary-row" style="background:#f0f0f0;">' +
                 '<td colspan="7">合计</td>' +
                 '<td>' + totalQty + '</td>' +
-                '<td colspan="9"></td>' +
+                '<td colspan="10"></td>' +
                 '</tr>';
             tbody.innerHTML = html;
             initTablePagination('outTable', { summaryRows: 1 });
