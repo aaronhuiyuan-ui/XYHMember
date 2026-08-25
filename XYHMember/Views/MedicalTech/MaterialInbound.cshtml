@@ -31,6 +31,67 @@
             display: table !important;
         }
         .summary-row td { font-weight: bold; border-top: 2px solid #999; }
+
+        /* 弹窗样式 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 9999;
+        }
+        .modal-overlay.active { display: block; }
+        .modal-box {
+            background: #fff;
+            border-radius: 4px;
+            width: 400px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            position: absolute;
+            top: 50px;
+            left: 500px;
+        }
+        .modal-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e9e9e9;
+            font-size: 15px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header .close {
+            cursor: pointer;
+            font-size: 20px;
+            color: #999;
+            line-height: 1;
+        }
+        .modal-header .close:hover { color: #333; }
+        .modal-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
+        .modal-body .field { margin-bottom: 12px; }
+        .modal-body label { display: block; margin-bottom: 3px; font-weight: 600; font-size: 13px; color: #555; }
+        .modal-body select {
+            width: 100%; padding: 6px 8px; border: 1px solid #d0d0d0;
+            border-radius: 3px; font-size: 13px; box-sizing: border-box;
+        }
+        .modal-footer {
+            padding: 10px 16px;
+            border-top: 1px solid #e9e9e9;
+            text-align: right;
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+        .modal-footer button {
+            padding: 5px 16px; border-radius: 3px; cursor: pointer;
+            font-size: 13px; border: 1px solid #d0d0d0; background: #fff;
+        }
+        .modal-footer .btn-primary {
+            background: #0e90d2; color: #fff; border-color: #0e90d2;
+        }
+        .modal-footer .btn-primary:hover { background: #0a7ec4; }
     </style>
 </head>
 <body>
@@ -51,6 +112,7 @@
                         <span style="margin-left:20px;display:inline-flex;align-items:center;gap:6px;">
                             <span class="am-input-group-btn">
                                 <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
+                                <button class="am-btn am-btn-default" type="button" id="auditBtn" style="margin-left:10px;">审核</button>
                             </span>
                         </span>
                     </div>
@@ -64,6 +126,7 @@
                 <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
                     <thead>
                         <tr>
+                            <th style="width:30px;"><input type="checkbox" id="checkAll" onchange="toggleAllChecks(this)"></th>
                             <th>入库日期</th>
                             <th>单号</th>
                             <th>仓库</th>
@@ -78,16 +141,40 @@
                             <th>数量</th>
                             <th>入库人</th>
                             <th>物料类别</th>
+                            <th>审核状态</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="14" style="text-align:center;color:#999;">加载中...</td></tr>
+                        <tr><td colspan="16" style="text-align:center;color:#999;">加载中...</td></tr>
                     </tbody>
                 </table>
                 </div>
 
                 <div id="paginationContainer"></div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 审核弹窗 ===== -->
+    <div class="modal-overlay" id="auditModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>审核耗材入库</span>
+                <span class="close" onclick="closeModal('auditModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="auditInfo" style="margin:0 0 12px;color:#666;"></p>
+                <div class="field">
+                    <label>审核人 <span style="color:red;">*</span></label>
+                    <select id="auditStaff">
+                        <option value="">请选择</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('auditModal')">取消</button>
+                <button class="btn-primary" onclick="submitAudit()">确认审核</button>
             </div>
         </div>
     </div>
@@ -112,6 +199,89 @@
                 .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
+        // ===== 弹窗控制 =====
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        document.querySelectorAll('.modal-overlay').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                if (e.target === this) this.classList.remove('active');
+            });
+        });
+
+        // ===== 全选/取消全选 =====
+        function toggleAllChecks(cb) {
+            var checks = document.querySelectorAll('#dataTable tbody .row-check');
+            for (var i = 0; i < checks.length; i++) {
+                if (!checks[i].disabled) checks[i].checked = cb.checked;
+            }
+        }
+
+        // ===== 审核 =====
+        var _auditRows = [];
+        document.getElementById('auditBtn').addEventListener('click', function() {
+            var checks = document.querySelectorAll('#dataTable tbody .row-check:checked');
+            if (checks.length === 0) {
+                customDialog.info('请先勾选要审核的记录', '提示');
+                return;
+            }
+            var rows = window._queryData || [];
+            _auditRows = [];
+            for (var i = 0; i < checks.length; i++) {
+                var idx = parseInt(checks[i].getAttribute('data-idx'));
+                if (rows[idx] && !rows[idx].已审核) _auditRows.push(rows[idx]);
+            }
+            if (_auditRows.length === 0) {
+                customDialog.info('勾选的记录都已是已审核状态', '提示');
+                return;
+            }
+            document.getElementById('auditInfo').innerText = '已选 ' + _auditRows.length + ' 条记录，确认审核入库？';
+            loadStaffOptions(document.getElementById('auditStaff'), '');
+            openModal('auditModal');
+        });
+
+        function loadStaffOptions(sel, curVal) {
+            fetch('@Url.Action("GetStaffList", "MedicalTech")?name=')
+                .then(function(r) { return r.json(); })
+                .then(function(list) {
+                    sel.innerHTML = '<option value="">请选择</option>';
+                    if (list && list.length) {
+                        for (var i = 0; i < list.length; i++) {
+                            var o = document.createElement('option');
+                            o.value = list[i].姓名;
+                            o.textContent = list[i].姓名 + '（' + (list[i].岗位 || '') + '）';
+                            sel.appendChild(o);
+                        }
+                    }
+                    if (curVal) sel.value = curVal;
+                })
+                .catch(function(err) {
+                    sel.innerHTML = '<option value="">请选择</option>';
+                });
+        }
+
+        function submitAudit() {
+            var staff = document.getElementById('auditStaff').value;
+            if (!staff) { customDialog.info('请选择审核人', '提示'); return; }
+
+            fetch('@Url.Action("AuditMaterialInbound", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: _auditRows, 审核人: staff })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    customDialog.alert(res.msg, '提示', function() {
+                        closeModal('auditModal');
+                        doSearch();
+                    });
+                } else {
+                    customDialog.error(res.msg, '审核失败');
+                }
+            })
+            .catch(function(err) { customDialog.error(err.message, '审核失败'); });
+        }
+
         // ===== 查询 =====
         function doSearch() {
             var bdate = document.getElementById('bdatepicker').value;
@@ -124,21 +294,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="14" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
+                            '<tr><td colspan="16" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
                     } else {
                         renderTable(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="14" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
+                        '<tr><td colspan="16" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#999;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:#999;">暂无数据</td></tr>';
                 return;
             }
 
@@ -148,7 +318,8 @@
                 var d = data[i];
                 totalSl += (d.sl != null ? Number(d.sl) : 0);
 
-                html += '<tr>' +
+                html += '<tr data-idx="' + i + '"' + (d.已审核 ? ' style="color:#999;background:#f7f7f7;"' : '') + '>' +
+                    '<td><input type="checkbox" class="row-check" data-idx="' + i + '"' + (d.已审核 ? ' disabled' : '') + '></td>' +
                     '<td>' + escapeHtml(d.ckrq) + '</td>' +
                     '<td>' + escapeHtml(d.ckdh) + '</td>' +
                     '<td>' + escapeHtml(d.ckmc) + '</td>' +
@@ -163,16 +334,18 @@
                     '<td>' + (d.sl != null ? Number(d.sl) : '') + '</td>' +
                     '<td>' + escapeHtml(d.ckr) + '</td>' +
                     '<td>' + escapeHtml(d.wllb) + '</td>' +
+                    '<td>' + (d.已审核 ? '已审核' : '<span style="color:#0e90d2;">未审核</span>') + '</td>' +
                     '</tr>';
             }
 
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
-                '<td>合计</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>' +
-                '<td>' + totalSl + '</td><td></td><td></td>' +
+                '<td></td><td>合计</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>' +
+                '<td>' + totalSl + '</td><td></td><td></td><td></td>' +
                 '</tr>';
 
             tbody.innerHTML = html;
             window._queryData = data;
+            document.getElementById('checkAll').checked = false;
             initTablePagination('dataTable', { summaryRows: 1 });
         }
 

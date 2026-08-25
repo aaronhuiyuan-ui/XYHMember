@@ -1,0 +1,475 @@
+@{
+    Layout = null;
+    var bdate = Request["bdate"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edate = Request["edate"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>耗材出库</title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    @Styles.Render("~/Content/flatpickr")
+    <style>
+        body { background: #fff; }
+        fieldset.ob-box {
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+        }
+        fieldset.ob-box#obRegisterBox,
+        fieldset.ob-box#obRecordBox {
+            min-height: 400px;
+        }
+        fieldset.ob-box legend {
+            font-weight: bold;
+            font-size: 14px;
+            padding: 0 8px;
+        }
+        .ob-header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .ob-header label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: #555; }
+        .ob-header input,
+        .ob-header select {
+            height: 30px; padding: 0 6px; border: 1px solid #d0d0d0;
+            border-radius: 3px; font-size: 13px; box-sizing: border-box;
+        }
+        .table-wrapper { overflow: auto !important; max-width: calc(100vw - 60px) !important; }
+        .table-wrapper > table { display: table !important; }
+        #outGrid { width: 100%; min-width: 1400px; table-layout: auto; white-space: nowrap; }
+        #outGrid th, #outGrid td { padding: 2px 6px !important; vertical-align: middle; }
+        #outGrid input[type="text"],
+        #outGrid input[type="number"] { height: 30px !important; }
+        #outTable { width: 100%; min-width: 1600px; table-layout: auto; white-space: nowrap; }
+        #outTable th, #outTable td { padding: 2px 6px !important; }
+        .summary-row td { font-weight: bold; border-top: 2px solid #999; }
+
+        /* 关联耗材名称 下拉 */
+        .combo-cell { position: relative; }
+        .combo-dropdown {
+            display: none;
+            position: fixed;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 9999;
+            min-width: 420px;
+            max-width: 560px;
+            max-height: 60vh;
+            overflow-y: auto;
+            color: #333;
+            font-size: 13px;
+        }
+        .combo-dropdown.show { display: block; }
+        .combo-item { padding: 6px 10px; cursor: pointer; white-space: nowrap; border-bottom: 1px solid #f0f0f0; }
+        .combo-item:hover { background: #e6f2ff; }
+
+        .btn-action {
+            padding: 2px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;
+            border: 1px solid #d0d0d0; background: #fff;
+        }
+        .btn-action:hover { border-color: #dd514c; color: #dd514c; }
+    </style>
+</head>
+<body>
+
+    <div style="margin:12px 20px;">
+
+        <!-- ===== 出库登记区 ===== -->
+        <fieldset class="ob-box" id="obRegisterBox">
+            <legend>出库登记</legend>
+            <div class="ob-header">
+                <label>出库日期 <input type="text" id="obOutDate" style="width:130px;"></label>
+                <label>领用人 <select id="ob领用人" style="width:150px;"><option value="">请选择</option></select></label>
+                <label>发料人签字 <input type="text" id="ob发料人" value="夏紫薇" style="width:110px;"></label>
+                <label>登记人 <select id="ob登记人" style="width:150px;"><option value="">请选择</option></select></label>
+                <span style="margin-left:auto;display:inline-flex;gap:8px;">
+                    <button class="am-btn am-btn-default" type="button" id="addLineBtn">+ 添加明细</button>
+                    <button class="am-btn am-btn-primary" type="button" id="saveOutBtn">保存出库</button>
+                </span>
+            </div>
+            <div class="table-wrapper">
+                <table class="am-table am-table-bordered" id="outGrid">
+                    <thead>
+                        <tr>
+                            <th style="width:230px;">关联耗材名称<span style="color:#999;font-weight:normal;">（输入首拼/编码/批号）</span></th>
+                            <th>物料编码</th>
+                            <th>耗材名称</th>
+                            <th>规格型号</th>
+                            <th>单位</th>
+                            <th>批号</th>
+                            <th>保质期</th>
+                            <th>领用数量</th>
+                            <th>申领日期</th>
+                            <th>到库日期</th>
+                            <th style="width:60px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </fieldset>
+
+        <!-- ===== 出库记录列表 ===== -->
+        <fieldset class="ob-box" id="obRecordBox">
+            <legend>出库记录</legend>
+            <div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <label style="font-size:13px;color:#555;">出库日期</label>
+                <input type="text" id="obBdate" value="@bdate" style="width:120px;height:30px;border:1px solid #d0d0d0;border-radius:3px;">
+                <label style="font-size:13px;color:#555;">—</label>
+                <input type="text" id="obEdate" value="@edate" style="width:120px;height:30px;border:1px solid #d0d0d0;border-radius:3px;">
+                <input type="text" id="obKw" placeholder="耗材名称/领用人/单号" style="width:180px;height:30px;border:1px solid #d0d0d0;border-radius:3px;">
+                <button class="am-btn am-btn-default" type="button" onclick="doSearchOutbound()">查询</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="am-table am-table-striped am-table-hover table-main" id="outTable">
+                    <thead>
+                        <tr>
+                            <th>出库单号</th>
+                            <th>出库日期</th>
+                            <th>物料编码</th>
+                            <th>耗材名称</th>
+                            <th>规格型号</th>
+                            <th>单位</th>
+                            <th>批号</th>
+                            <th>领用数量</th>
+                            <th>申领日期</th>
+                            <th>到库日期</th>
+                            <th>保质期</th>
+                            <th>领用人</th>
+                            <th>发料人签字</th>
+                            <th>登记人</th>
+                            <th>登记时间</th>
+                            <th>来源类型</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody id="outBody">
+                        <tr><td colspan="17" style="text-align:center;color:#999;">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="paginationContainer"></div>
+        </fieldset>
+
+    </div>
+
+    <script src="~/Scripts/pagination.js"></script>
+    <script src="~/Scripts/customDialog.js"></script>
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        flatpickr("#obOutDate", { dateFormat: "Y-m-d", defaultDate: "today" });
+        flatpickr("#obBdate", { dateFormat: "Y-m-d", defaultDate: "@bdate" });
+        flatpickr("#obEdate", { dateFormat: "Y-m-d", defaultDate: "@edate" });
+
+        function escapeHtml(v) {
+            if (v === null || v === undefined) return '';
+            return String(v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // ===== 领用人/登记人 下拉 =====
+        function loadStaffForOutbound() {
+            fetch('@Url.Action("GetStaffList", "MedicalTech")?name=')
+                .then(function(r) { return r.json(); })
+                .then(function(list) {
+                    var lyr = document.getElementById('ob领用人');
+                    var djr = document.getElementById('ob登记人');
+                    lyr.innerHTML = '<option value="">请选择</option>';
+                    djr.innerHTML = '<option value="">请选择</option>';
+                    if (list && list.length) {
+                        var validPost = { '医师': 1, '理疗师': 1, '护士': 1 };
+                        for (var i = 0; i < list.length; i++) {
+                            var p = list[i].岗位 || '';
+                            var opt = document.createElement('option');
+                            opt.value = list[i].姓名;
+                            opt.textContent = list[i].姓名 + '（' + p + '）';
+                            djr.appendChild(opt.cloneNode(true));
+                            if (validPost[p]) lyr.appendChild(opt);
+                        }
+                    }
+                })
+                .catch(function(err) {});
+        }
+
+        // ===== 出库明细行 =====
+        function addLine() {
+            var tbody = document.getElementById('outGrid').querySelector('tbody');
+            var tr = document.createElement('tr');
+            tr.className = 'out-line';
+            tr.setAttribute('data-inbound-id', '');
+            tr.innerHTML =
+                '<td class="combo-cell">' +
+                    '<input type="text" class="line-combo" placeholder="物料名称/拼音/编码/批号" style="width:220px;height:34px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;">' +
+                    '<div class="combo-dropdown"></div>' +
+                '</td>' +
+                '<td class="l-物料编码"></td>' +
+                '<td class="l-耗材名称"></td>' +
+                '<td class="l-规格型号"></td>' +
+                '<td class="l-单位"></td>' +
+                '<td class="l-批号"></td>' +
+                '<td><input type="text" class="l-保质期" placeholder="点击选择" style="width:110px;height:34px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;"></td>' +
+                '<td class="qty-cell">' +
+                    '<input type="number" class="l-领用数量" min="0.001" step="0.001" placeholder="数量" style="width:80px;height:34px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;">' +
+                    '<span class="l-remain" style="color:#999;font-size:12px;display:block;"></span>' +
+                '</td>' +
+                '<td><input type="text" class="l-申领日期" placeholder="点击选择" style="width:110px;height:34px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;"></td>' +
+                '<td><input type="text" class="l-到库日期" placeholder="点击选择" style="width:110px;height:34px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;"></td>' +
+                '<td><button type="button" class="btn-action" onclick="removeLine(this)">删除</button></td>';
+            tbody.appendChild(tr);
+
+            var input = tr.querySelector('.line-combo');
+            var dd = tr.querySelector('.combo-dropdown');
+            bindCombo(input, dd);
+
+            flatpickr(tr.querySelector('.l-保质期'), { dateFormat: "Y-m-d" });
+            flatpickr(tr.querySelector('.l-申领日期'), { dateFormat: "Y-m-d" });
+            flatpickr(tr.querySelector('.l-到库日期'), { dateFormat: "Y-m-d" });
+        }
+
+        function removeLine(btn) {
+            var tr = btn.closest('tr');
+            if (tr) tr.parentNode.removeChild(tr);
+        }
+
+        // ===== 关联耗材名称 下拉（拼音首拼/编码/批号搜索）=====
+        // 下拉改为相对视口定位，避免被表格外层 overflow 容器裁切，输入后无需滚动即可看到关联项
+        function showDd(input, dd) {
+            var rect = input.getBoundingClientRect();
+            dd.style.position = 'fixed';
+            dd.style.top = (rect.bottom + 4) + 'px';
+            dd.style.left = rect.left + 'px';
+            dd.style.width = Math.max(rect.width, 420) + 'px';
+            dd.style.maxHeight = Math.max(160, window.innerHeight - rect.bottom - 20) + 'px';
+            dd.classList.add('show');
+        }
+        function repositionDd(input, dd) {
+            if (!dd.classList.contains('show')) return;
+            var rect = input.getBoundingClientRect();
+            dd.style.top = (rect.bottom + 4) + 'px';
+            dd.style.left = rect.left + 'px';
+        }
+        function bindCombo(input, dd) {
+            var timer = null;
+            var doSearch = function() {
+                var kw = input.value.trim();
+                if (!kw) { dd.classList.remove('show'); return; }
+                fetch('@Url.Action("GetLocalMaterialInbound", "MedicalTech")?kw=' + encodeURIComponent(kw))
+                    .then(function(r) { return r.json(); })
+                    .then(function(list) {
+                        dd.innerHTML = '';
+                        if (list && list.success === false) {
+                            dd.innerHTML = '<div class="combo-item" style="color:red;">' + escapeHtml(list.msg) + '</div>';
+                            showDd(input, dd);
+                            return;
+                        }
+                        if (!list || list.length === 0) {
+                            dd.innerHTML = '<div class="combo-item" style="color:#999;">无匹配</div>';
+                            showDd(input, dd);
+                            return;
+                        }
+                        for (var i = 0; i < list.length; i++) {
+                            (function(item) {
+                                var div = document.createElement('div');
+                                div.className = 'combo-item';
+                                div.textContent = item.物料名称 + ' | ' + (item.规格 || '') + ' | 批:' + (item.批号 || '-') + ' | 剩:' + item.剩余数量;
+                                div.addEventListener('click', function() { selectCombo(input, dd, item); });
+                                dd.appendChild(div);
+                            })(list[i]);
+                        }
+                        showDd(input, dd);
+                    })
+                    .catch(function(err) {
+                        dd.innerHTML = '<div class="combo-item" style="color:red;">' + escapeHtml(err.message) + '</div>';
+                        showDd(input, dd);
+                    });
+            };
+            input.addEventListener('input', function() {
+                clearTimeout(timer);
+                timer = setTimeout(doSearch, 250);
+            });
+            input.addEventListener('focus', function() { if (input.value.trim()) doSearch(); });
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !dd.contains(e.target)) dd.classList.remove('show');
+            });
+            window.addEventListener('scroll', function() { repositionDd(input, dd); }, true);
+        }
+
+        function selectCombo(input, dd, item) {
+            var tr = input.closest('tr');
+            tr.setAttribute('data-inbound-id', item.序号);
+            tr.querySelector('.l-物料编码').textContent = item.物料编码 || '';
+            tr.querySelector('.l-耗材名称').textContent = item.物料名称 || '';
+            tr.querySelector('.l-规格型号').textContent = item.规格 || '';
+            tr.querySelector('.l-单位').textContent = item.单位 || '';
+            tr.querySelector('.l-批号').textContent = item.批号 || '';
+            tr.querySelector('.l-保质期').value = item.有效期 || '';
+            var sq = tr.querySelector('.l-申领日期');
+            if (!sq.value && item.入库日期) sq.value = item.入库日期.substring(0, 10);
+            tr.querySelector('.l-领用数量').value = '';
+            tr.querySelector('.l-remain').textContent = '剩余:' + item.剩余数量;
+            input.value = item.物料名称;
+            dd.classList.remove('show');
+        }
+
+        // ===== 保存出库 =====
+        function saveOutbound() {
+            var 出库日期 = document.getElementById('obOutDate').value;
+            var 领用人 = document.getElementById('ob领用人').value;
+            var 发料人签字 = document.getElementById('ob发料人').value.trim();
+            var 登记人 = document.getElementById('ob登记人').value;
+
+            if (!领用人) { customDialog.info('请选择领用人', '提示'); return; }
+            if (!发料人签字) { customDialog.info('请填写发料人签字', '提示'); return; }
+
+            var trs = document.querySelectorAll('#outGrid tbody tr');
+            var lines = [];
+            for (var i = 0; i < trs.length; i++) {
+                var tr = trs[i];
+                var inboundId = tr.getAttribute('data-inbound-id');
+                if (!inboundId) continue;
+                var qty = parseFloat(tr.querySelector('.l-领用数量').value);
+                if (!qty || qty <= 0) {
+                    customDialog.info('第 ' + (i + 1) + ' 行领用数量无效', '提示');
+                    return;
+                }
+                lines.push({
+                    关联入库序号: parseInt(inboundId),
+                    物料编码: tr.querySelector('.l-物料编码').textContent,
+                    耗材名称: tr.querySelector('.l-耗材名称').textContent,
+                    规格型号: tr.querySelector('.l-规格型号').textContent,
+                    单位: tr.querySelector('.l-单位').textContent,
+                    批号: tr.querySelector('.l-批号').textContent,
+                    领用数量: qty,
+                    申领日期: tr.querySelector('.l-申领日期').value,
+                    到库日期: tr.querySelector('.l-到库日期').value,
+                    保质期: tr.querySelector('.l-保质期').value
+                });
+            }
+            if (lines.length === 0) {
+                customDialog.info('请至少添加一条出库明细', '提示');
+                return;
+            }
+
+            fetch('@Url.Action("SaveMaterialOutbound", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    出库日期: 出库日期,
+                    领用人: 领用人,
+                    发料人签字: 发料人签字,
+                    登记人: 登记人,
+                    lines: lines
+                })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    customDialog.alert(res.msg, '提示', function() {
+                        clearOutboundForm();
+                        doSearchOutbound();
+                    });
+                } else {
+                    customDialog.error(res.msg, '保存失败');
+                }
+            })
+            .catch(function(err) { customDialog.error(err.message, '保存失败'); });
+        }
+
+        function clearOutboundForm() {
+            var tbody = document.getElementById('outGrid').querySelector('tbody');
+            tbody.innerHTML = '';
+            addLine();
+            document.getElementById('ob领用人').value = '';
+            document.getElementById('ob发料人').value = '夏紫薇';
+            document.getElementById('ob登记人').value = '';
+        }
+
+        // ===== 出库记录列表 =====
+        function doSearchOutbound() {
+            var bdate = document.getElementById('obBdate').value;
+            var edate = document.getElementById('obEdate').value;
+            var kw = document.getElementById('obKw').value;
+
+            fetch('@Url.Action("GetOutboundList", "MedicalTech")?bdate=' + encodeURIComponent(bdate) +
+                  '&edate=' + encodeURIComponent(edate) + '&kw=' + encodeURIComponent(kw))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.success === false) {
+                        document.getElementById('outBody').innerHTML =
+                            '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
+                    } else {
+                        renderOutbound(data);
+                    }
+                })
+                .catch(function(err) {
+                    document.getElementById('outBody').innerHTML =
+                        '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
+                });
+        }
+
+        function renderOutbound(data) {
+            var tbody = document.getElementById('outBody');
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#999;">暂无出库记录</td></tr>';
+                return;
+            }
+            var html = '';
+            var totalQty = 0;
+            for (var i = 0; i < data.length; i++) {
+                var d = data[i];
+                totalQty += (d.领用数量 || 0);
+                html += '<tr>' +
+                    '<td>' + escapeHtml(d.出库单号) + '</td>' +
+                    '<td>' + escapeHtml(d.出库日期) + '</td>' +
+                    '<td>' + escapeHtml(d.物料编码) + '</td>' +
+                    '<td>' + escapeHtml(d.耗材名称) + '</td>' +
+                    '<td>' + escapeHtml(d.规格型号) + '</td>' +
+                    '<td>' + escapeHtml(d.单位) + '</td>' +
+                    '<td>' + escapeHtml(d.批号) + '</td>' +
+                    '<td>' + (d.领用数量 != null ? Number(d.领用数量) : '') + '</td>' +
+                    '<td>' + escapeHtml(d.申领日期) + '</td>' +
+                    '<td>' + escapeHtml(d.到库日期) + '</td>' +
+                    '<td>' + escapeHtml(d.保质期) + '</td>' +
+                    '<td>' + escapeHtml(d.领用人) + '</td>' +
+                    '<td>' + escapeHtml(d.发料人签字) + '</td>' +
+                    '<td>' + escapeHtml(d.登记人) + '</td>' +
+                    '<td>' + escapeHtml(d.登记时间) + '</td>' +
+                    '<td>' + (d.来源类型 ? escapeHtml(d.来源类型) : '手工出库') + '</td>' +
+                    '<td>' + escapeHtml(d.备注) + '</td>' +
+                    '</tr>';
+            }
+            html += '<tr class="summary-row" style="background:#f0f0f0;">' +
+                '<td colspan="7">合计</td>' +
+                '<td>' + totalQty + '</td>' +
+                '<td colspan="9"></td>' +
+                '</tr>';
+            tbody.innerHTML = html;
+            initTablePagination('outTable', { summaryRows: 1 });
+        }
+
+        // ===== 事件绑定 =====
+        document.getElementById('addLineBtn').addEventListener('click', addLine);
+        document.getElementById('saveOutBtn').addEventListener('click', saveOutbound);
+        document.getElementById('obKw').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { doSearchOutbound(); e.preventDefault(); }
+        });
+
+        // ===== 初始化 =====
+        loadStaffForOutbound();
+        addLine();
+        doSearchOutbound();
+    </script>
+</body>
+</html>

@@ -1082,6 +1082,20 @@ namespace XYHMember.Controllers
                         GetPinyinInitials(x.wlmc).IndexOf(upper, StringComparison.Ordinal) >= 0
                     ).ToList();
                 }
+                // 本地已审核集合（单号|物料编码|批号），用于页面标记「已审核」
+                var auditedKeys = new HashSet<string>();
+                try
+                {
+                    auditedKeys = new HashSet<string>(db.Database.SqlQuery<string>(
+                        "SELECT 唯一键 FROM fghis5..耗材入库表 WHERE 唯一键 IS NOT NULL").ToList());
+                }
+                catch { /* 本地表尚未创建时忽略 */ }
+
+                foreach (var it in list)
+                {
+                    it.已审核 = auditedKeys.Contains((it.ckdh ?? "") + "|" + (it.wlbm ?? "") + "|" + (it.ph ?? ""));
+                }
+
                 // 按入库日期倒序
                 list = list.OrderByDescending(x => x.ckrq).ToList();
 
@@ -1153,6 +1167,462 @@ namespace XYHMember.Controllers
             var userId = ((int?)Session["UserId"]) ?? 1;
             var user = db.Users.Find(userId);
             return user?.Name ?? "";
+        }
+
+        // ========== 耗材管理：审核落库 & 出库 ==========
+
+        // GET: /MedicalTech/MaterialOutbound
+        public ActionResult MaterialOutbound()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 出库「关联耗材名称」下拉数据：本地已审核且剩余数量>0 的入库记录
+        /// GET /MedicalTech/GetLocalMaterialInbound?kw=编码/名称/拼音首字母/批号
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetLocalMaterialInbound(string kw)
+        {
+            try
+            {
+                var sql = @"SELECT 序号,
+                                   CONVERT(varchar(19), 入库日期, 120) AS 入库日期,
+                                   单号, 仓库, 物料编码, 物料名称, 规格, 产地编码, 产地名称, 批号,
+                                   CONVERT(varchar(10), 有效期, 120) AS 有效期,
+                                   单位, 数量, 入库人, 物料类别, 状态, 剩余数量
+                            FROM fghis5..耗材入库表
+                            WHERE 状态 = '已审核' AND (剩余数量 IS NULL OR 剩余数量 > 0)
+                            ORDER BY 序号 DESC";
+                var list = db.Database.SqlQuery<LocalMaterialInbound>(sql).ToList();
+
+                if (!string.IsNullOrWhiteSpace(kw))
+                {
+                    var k = kw.Trim();
+                    var upper = k.ToUpperInvariant();
+                    list = list.Where(x =>
+                        (x.物料编码 != null && x.物料编码.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                        (x.物料名称 != null && x.物料名称.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                        (x.批号 != null && x.批号.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                        GetPinyinInitials(x.物料名称).IndexOf(upper, StringComparison.Ordinal) >= 0
+                    ).ToList();
+                }
+
+                return Json(list, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 审核耗材入库：把勾选的 EAS 记录写入本地耗材入库表（按 单号+物料编码+批号 去重）
+        /// POST /MedicalTech/AuditMaterialInbound  body: { items:[...], 审核人:"张三" }
+        /// </summary>
+        [HttpPost]
+        public ActionResult AuditMaterialInbound(List<MaterialInboundItem> items, string 审核人)
+        {
+            try
+            {
+                if (items == null || items.Count == 0)
+                    return Json(new { success = false, msg = "请先勾选要审核的记录" });
+                if (string.IsNullOrWhiteSpace(审核人))
+                    return Json(new { success = false, msg = "请选择审核人" });
+
+                int ok = 0, dup = 0;
+                var now = DateTime.Now;
+                foreach (var it in items)
+                {
+                    var key = (it.ckdh ?? "") + "|" + (it.wlbm ?? "") + "|" + (it.ph ?? "");
+                    var exists = db.Database.SqlQuery<int>(
+                        "SELECT COUNT(*) FROM fghis5..耗材入库表 WHERE 唯一键 = @key",
+                        new SqlParameter("@key", key)).FirstOrDefault();
+                    if (exists > 0) { dup++; continue; }
+
+                    db.Database.ExecuteSqlCommand(
+                        @"INSERT INTO fghis5..耗材入库表
+                          (入库日期, 单号, 仓库, 物料编码, 物料名称, 规格, 产地编码, 产地名称, 批号, 有效期,
+                           单位, 数量, 入库人, 物料类别, 审核时间, 审核人, 状态, 剩余数量, 唯一键)
+                          VALUES (@入库日期, @单号, @仓库, @物料编码, @物料名称, @规格, @产地编码, @产地名称, @批号, @有效期,
+                            @单位, @数量, @入库人, @物料类别, @审核时间, @审核人, '已审核', @剩余数量, @唯一键)",
+                        new SqlParameter("@入库日期", (object)ParseDate(it.ckrq) ?? DBNull.Value),
+                        new SqlParameter("@单号", (object)it.ckdh ?? DBNull.Value),
+                        new SqlParameter("@仓库", (object)it.ckmc ?? DBNull.Value),
+                        new SqlParameter("@物料编码", (object)it.wlbm ?? DBNull.Value),
+                        new SqlParameter("@物料名称", (object)it.wlmc ?? DBNull.Value),
+                        new SqlParameter("@规格", (object)it.gg ?? DBNull.Value),
+                        new SqlParameter("@产地编码", (object)it.cdbm ?? DBNull.Value),
+                        new SqlParameter("@产地名称", (object)it.cdmc ?? DBNull.Value),
+                        new SqlParameter("@批号", (object)it.ph ?? DBNull.Value),
+                        new SqlParameter("@有效期", (object)ParseDate(it.xq) ?? DBNull.Value),
+                        new SqlParameter("@单位", (object)it.dw ?? DBNull.Value),
+                        new SqlParameter("@数量", (object)it.sl ?? DBNull.Value),
+                        new SqlParameter("@入库人", (object)it.ckr ?? DBNull.Value),
+                        new SqlParameter("@物料类别", (object)it.wllb ?? DBNull.Value),
+                        new SqlParameter("@审核时间", now),
+                        new SqlParameter("@审核人", 审核人 ?? ""),
+                        new SqlParameter("@剩余数量", (object)it.sl ?? DBNull.Value),
+                        new SqlParameter("@唯一键", key));
+                    ok++;
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    msg = "审核成功 " + ok + " 条" + (dup > 0 ? "，" + dup + " 条已审核过跳过" : "")
+                });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        private static DateTime? ParseDate(string s)
+        {
+            DateTime d;
+            if (DateTime.TryParse(s, out d)) return d;
+            return null;
+        }
+
+        /// <summary>
+        /// 保存耗材出库（一单多条），校验并扣减剩余数量
+        /// POST /MedicalTech/SaveMaterialOutbound
+        /// </summary>
+        [HttpPost]
+        public ActionResult SaveMaterialOutbound(string 出库日期, string 领用人, string 发料人签字, string 登记人, string 备注, List<MaterialOutboundLine> lines)
+        {
+            try
+            {
+                if (lines == null || lines.Count == 0)
+                    return Json(new { success = false, msg = "请至少添加一条出库明细" });
+                if (string.IsNullOrWhiteSpace(领用人))
+                    return Json(new { success = false, msg = "请选择领用人" });
+                if (string.IsNullOrWhiteSpace(发料人签字))
+                    return Json(new { success = false, msg = "请填写发料人签字" });
+
+                var 单号 = "CK" + DateTime.Now.ToString("yyyyMMddHHmmss");
+                var 出库D = ParseDate(出库日期) ?? DateTime.Today;
+
+                using (var tx = db.Database.BeginTransaction())
+                {
+                    db.Database.ExecuteSqlCommand(
+                        @"INSERT INTO fghis5..耗材出库单 (出库单号, 出库日期, 领用人, 发料人签字, 登记人, 登记时间, 备注)
+                          VALUES (@出库单号, @出库日期, @领用人, @发料人签字, @登记人, GETDATE(), @备注)",
+                        new SqlParameter("@出库单号", 单号),
+                        new SqlParameter("@出库日期", 出库D),
+                        new SqlParameter("@领用人", 领用人 ?? ""),
+                        new SqlParameter("@发料人签字", 发料人签字 ?? ""),
+                        new SqlParameter("@登记人", 登记人 ?? ""),
+                        new SqlParameter("@备注", (object)备注 ?? DBNull.Value));
+
+                    foreach (var line in lines)
+                    {
+                        if (line.关联入库序号 == null)
+                            throw new Exception("出库明细缺少关联入库记录");
+                        if (line.领用数量 == null || line.领用数量 <= 0)
+                            throw new Exception("领用数量必须大于 0");
+
+                        var remain = db.Database.SqlQuery<decimal?>(
+                            "SELECT 剩余数量 FROM fghis5..耗材入库表 WHERE 序号 = @id",
+                            new SqlParameter("@id", line.关联入库序号.Value)).FirstOrDefault();
+
+                        if (remain == null)
+                            throw new Exception("关联入库记录不存在（序号 " + line.关联入库序号 + "）");
+                        if (line.领用数量 > remain)
+                            throw new Exception("领用数量超过剩余数量：" + (line.耗材名称 ?? "") + "（剩余 " + remain + "）");
+
+                        db.Database.ExecuteSqlCommand(
+                            @"INSERT INTO fghis5..耗材出库明细
+                              (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 申领日期, 到库日期, 保质期)
+                              VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @申领日期, @到库日期, @保质期)",
+                            new SqlParameter("@出库单号", 单号),
+                            new SqlParameter("@关联入库序号", line.关联入库序号.Value),
+                            new SqlParameter("@物料编码", (object)line.物料编码 ?? DBNull.Value),
+                            new SqlParameter("@耗材名称", (object)line.耗材名称 ?? DBNull.Value),
+                            new SqlParameter("@规格型号", (object)line.规格型号 ?? DBNull.Value),
+                            new SqlParameter("@单位", (object)line.单位 ?? DBNull.Value),
+                            new SqlParameter("@批号", (object)line.批号 ?? DBNull.Value),
+                            new SqlParameter("@领用数量", line.领用数量.Value),
+                            new SqlParameter("@申领日期", (object)ParseDate(line.申领日期) ?? DBNull.Value),
+                            new SqlParameter("@到库日期", (object)ParseDate(line.到库日期) ?? DBNull.Value),
+                            new SqlParameter("@保质期", (object)ParseDate(line.保质期) ?? DBNull.Value));
+
+                        db.Database.ExecuteSqlCommand(
+                            @"UPDATE fghis5..耗材入库表 SET 剩余数量 = 剩余数量 - @qty WHERE 序号 = @id",
+                            new SqlParameter("@qty", line.领用数量.Value),
+                            new SqlParameter("@id", line.关联入库序号.Value));
+                    }
+
+                    tx.Commit();
+                }
+
+                return Json(new { success = true, msg = "出库成功，单号：" + 单号 });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 出库记录列表（主表+明细，按明细行展开）
+        /// GET /MedicalTech/GetOutboundList?bdate=&edate=&kw=
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetOutboundList(string bdate, string edate, string kw)
+        {
+            try
+            {
+                var sql = @"SELECT h.出库单号,
+                                   CONVERT(varchar(19), h.出库日期, 120) AS 出库日期,
+                                   h.领用人, h.发料人签字, h.登记人,
+                                   CONVERT(varchar(19), h.登记时间, 120) AS 登记时间,
+                                   h.备注, h.来源类型,
+                                   l.序号, l.关联入库序号, l.物料编码, l.耗材名称, l.规格型号, l.单位, l.批号, l.领用数量,
+                                   CONVERT(varchar(10), l.申领日期, 120) AS 申领日期,
+                                   CONVERT(varchar(10), l.到库日期, 120) AS 到库日期,
+                                   CONVERT(varchar(10), l.保质期, 120) AS 保质期
+                            FROM fghis5..耗材出库单 h
+                                 LEFT JOIN fghis5..耗材出库明细 l ON h.出库单号 = l.出库单号
+                            WHERE (@bdate = '' OR h.出库日期 >= @bdate)
+                              AND (@edate = '' OR h.出库日期 < DATEADD(day, 1, @edate))
+                              AND (@kw = '' OR l.耗材名称 LIKE '%' + @kw + '%' OR h.领用人 LIKE '%' + @kw + '%' OR h.出库单号 LIKE '%' + @kw + '%')
+                            ORDER BY h.出库日期 DESC, h.出库单号 DESC, l.序号";
+
+                var list = db.Database.SqlQuery<OutboundRecordWithSource>(sql,
+                    new SqlParameter("@bdate", string.IsNullOrWhiteSpace(bdate) ? "" : bdate.Trim()),
+                    new SqlParameter("@edate", string.IsNullOrWhiteSpace(edate) ? "" : edate.Trim()),
+                    new SqlParameter("@kw", string.IsNullOrWhiteSpace(kw) ? "" : kw.Trim())).ToList();
+
+                return Json(list, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        // ========== 套餐耗材维护 ==========
+
+        // GET: /MedicalTech/PackageMaintain
+        public ActionResult PackageMaintain()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 套餐列表（含耗材种类数）
+        /// GET /MedicalTech/GetPackageList?name=
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetPackageList(string name)
+        {
+            try
+            {
+                var sql = @"SELECT p.序号, p.套餐名称, p.备注,
+                                   ISNULL((SELECT COUNT(*) FROM fghis5..套餐耗材明细 d WHERE d.套餐ID = p.序号), 0) AS 耗材种类数
+                            FROM fghis5..套餐表 p
+                            WHERE @name = '' OR p.套餐名称 LIKE '%' + @name + '%'
+                            ORDER BY p.序号 DESC";
+
+                var list = db.Database.SqlQuery<PackageItem>(sql,
+                    new SqlParameter("@name", (name ?? "").Trim())).ToList();
+
+                return Json(list, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 新增/修改套餐（名称去重）
+        /// POST /MedicalTech/SavePackage
+        /// </summary>
+        [HttpPost]
+        public ActionResult SavePackage(int? 序号, string 套餐名称, string 备注)
+        {
+            try
+            {
+                套餐名称 = (套餐名称 ?? "").Trim();
+                if (string.IsNullOrEmpty(套餐名称))
+                    return Json(new { success = false, msg = "套餐名称不能为空" });
+
+                var exists = db.Database.SqlQuery<int>(
+                    @"SELECT COUNT(*) FROM fghis5..套餐表
+                      WHERE LTRIM(RTRIM(套餐名称)) = @套餐名称 AND (@序号 IS NULL OR 序号 != @序号)",
+                    new SqlParameter("@套餐名称", 套餐名称),
+                    new SqlParameter("@序号", (object)序号 ?? DBNull.Value)).FirstOrDefault() > 0;
+                if (exists)
+                    return Json(new { success = false, msg = "已存在同名套餐" });
+
+                int 套餐ID;
+                if (序号.HasValue)
+                {
+                    套餐ID = 序号.Value;
+                    db.Database.ExecuteSqlCommand(
+                        "UPDATE fghis5..套餐表 SET 套餐名称 = @套餐名称, 备注 = @备注 WHERE 序号 = @序号",
+                        new SqlParameter("@序号", 序号.Value),
+                        new SqlParameter("@套餐名称", 套餐名称),
+                        new SqlParameter("@备注", (object)备注 ?? DBNull.Value));
+                }
+                else
+                {
+                    套餐ID = db.Database.SqlQuery<int>(
+                        @"INSERT INTO fghis5..套餐表 (套餐名称, 备注) VALUES (@套餐名称, @备注);
+                          SELECT CAST(SCOPE_IDENTITY() AS INT)",
+                        new SqlParameter("@套餐名称", 套餐名称),
+                        new SqlParameter("@备注", (object)备注 ?? DBNull.Value)).FirstOrDefault();
+                }
+
+                return Json(new { success = true, msg = "保存成功", 套餐ID = 套餐ID });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 删除套餐（连同其耗材明细）
+        /// POST /MedicalTech/DeletePackage
+        /// </summary>
+        [HttpPost]
+        public ActionResult DeletePackage(int 序号)
+        {
+            try
+            {
+                using (var tx = db.Database.BeginTransaction())
+                {
+                    db.Database.ExecuteSqlCommand(
+                        "DELETE FROM fghis5..套餐耗材明细 WHERE 套餐ID = @序号", new SqlParameter("@序号", 序号));
+                    db.Database.ExecuteSqlCommand(
+                        "DELETE FROM fghis5..套餐表 WHERE 序号 = @序号", new SqlParameter("@序号", 序号));
+                    tx.Commit();
+                }
+                return Json(new { success = true, msg = "删除成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 某套餐的耗材明细
+        /// GET /MedicalTech/GetPackageMaterials?套餐ID=
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetPackageMaterials(int 套餐ID)
+        {
+            try
+            {
+                var sql = @"SELECT 序号, 套餐ID, 物料编码, 耗材名称, 规格型号, 单位, 数量
+                            FROM fghis5..套餐耗材明细 WHERE 套餐ID = @套餐ID ORDER BY 序号";
+
+                var list = db.Database.SqlQuery<PackageMaterial>(sql,
+                    new SqlParameter("@套餐ID", 套餐ID)).ToList();
+
+                return Json(list, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 保存套餐耗材明细（整单替换：删旧插新）
+        /// POST /MedicalTech/SavePackageMaterials  body: { 套餐ID, lines:[{物料编码,耗材名称,规格型号,单位,数量}] }
+        /// </summary>
+        [HttpPost]
+        public ActionResult SavePackageMaterials(int 套餐ID, List<PackageMaterial> lines)
+        {
+            try
+            {
+                var pkg = db.Database.SqlQuery<int>(
+                    "SELECT COUNT(*) FROM fghis5..套餐表 WHERE 序号 = @套餐ID",
+                    new SqlParameter("@套餐ID", 套餐ID)).FirstOrDefault();
+                if (pkg <= 0)
+                    return Json(new { success = false, msg = "套餐不存在" });
+
+                using (var tx = db.Database.BeginTransaction())
+                {
+                    db.Database.ExecuteSqlCommand(
+                        "DELETE FROM fghis5..套餐耗材明细 WHERE 套餐ID = @套餐ID",
+                        new SqlParameter("@套餐ID", 套餐ID));
+
+                    if (lines != null)
+                    {
+                        foreach (var l in lines)
+                        {
+                            if (string.IsNullOrWhiteSpace(l.物料编码)) continue;
+                            if (l.数量 == null || l.数量 <= 0) continue;
+
+                            db.Database.ExecuteSqlCommand(
+                                @"INSERT INTO fghis5..套餐耗材明细 (套餐ID, 物料编码, 耗材名称, 规格型号, 单位, 数量)
+                                  VALUES (@套餐ID, @物料编码, @耗材名称, @规格型号, @单位, @数量)",
+                                new SqlParameter("@套餐ID", 套餐ID),
+                                new SqlParameter("@物料编码", (object)l.物料编码 ?? DBNull.Value),
+                                new SqlParameter("@耗材名称", (object)l.耗材名称 ?? DBNull.Value),
+                                new SqlParameter("@规格型号", (object)l.规格型号 ?? DBNull.Value),
+                                new SqlParameter("@单位", (object)l.单位 ?? DBNull.Value),
+                                new SqlParameter("@数量", l.数量.Value));
+                        }
+                    }
+
+                    tx.Commit();
+                }
+
+                return Json(new { success = true, msg = "保存成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 手动触发套餐自动扣减
+        /// POST /MedicalTech/RunPackageAutoDeductManual  bdate/edate=yyyy-MM-dd
+        /// </summary>
+        [HttpPost]
+        public ActionResult RunPackageAutoDeductManual(string bdate, string edate)
+        {
+            try
+            {
+                var b = DateTime.Parse(bdate ?? DateTime.Today.ToString("yyyy-MM-dd"));
+                var e = DateTime.Parse(edate ?? DateTime.Today.ToString("yyyy-MM-dd"));
+                var sum = PackageAutoDeductService.Run(b, e, GetCurrentUserName());
+                return Json(sum);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
         }
     }
 }

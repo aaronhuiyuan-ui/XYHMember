@@ -611,6 +611,110 @@ namespace XYHMember.Context
         public decimal? sl { get; set; }   // 数量
         public string ckr { get; set; }    // 入库人
         public string wllb { get; set; }   // 物料类别
+        public bool 已审核 { get; set; }   // 是否已审核落库（页面标记用）
+    }
+
+    //本地耗材入库表（审核落库后）
+    public class LocalMaterialInbound
+    {
+        public int 序号 { get; set; }
+        public string 入库日期 { get; set; }
+        public string 单号 { get; set; }
+        public string 仓库 { get; set; }
+        public string 物料编码 { get; set; }
+        public string 物料名称 { get; set; }
+        public string 规格 { get; set; }
+        public string 产地编码 { get; set; }
+        public string 产地名称 { get; set; }
+        public string 批号 { get; set; }
+        public string 有效期 { get; set; }
+        public string 单位 { get; set; }
+        public decimal? 数量 { get; set; }
+        public string 入库人 { get; set; }
+        public string 物料类别 { get; set; }
+        public string 审核时间 { get; set; }
+        public string 审核人 { get; set; }
+        public string 状态 { get; set; }
+        public decimal? 剩余数量 { get; set; }
+    }
+
+    //耗材出库单（主表）
+    public class MaterialOutboundHeader
+    {
+        public string 出库单号 { get; set; }
+        public string 出库日期 { get; set; }
+        public string 领用人 { get; set; }
+        public string 发料人签字 { get; set; }
+        public string 登记人 { get; set; }
+        public string 登记时间 { get; set; }
+        public string 备注 { get; set; }
+    }
+
+    //耗材出库明细（从表，一单多条）
+    public class MaterialOutboundLine
+    {
+        public int 序号 { get; set; }
+        public string 出库单号 { get; set; }
+        public int? 关联入库序号 { get; set; }
+        public string 物料编码 { get; set; }
+        public string 耗材名称 { get; set; }
+        public string 规格型号 { get; set; }
+        public string 单位 { get; set; }
+        public string 批号 { get; set; }
+        public decimal? 领用数量 { get; set; }
+        public string 申领日期 { get; set; }
+        public string 到库日期 { get; set; }
+        public string 保质期 { get; set; }
+    }
+
+    //耗材出库列表（主表+明细平铺，查询展示用）
+    public class MaterialOutboundRecord
+    {
+        public string 出库单号 { get; set; }
+        public string 出库日期 { get; set; }
+        public string 领用人 { get; set; }
+        public string 发料人签字 { get; set; }
+        public string 登记人 { get; set; }
+        public string 登记时间 { get; set; }
+        public string 备注 { get; set; }
+        public int 序号 { get; set; }
+        public int? 关联入库序号 { get; set; }
+        public string 物料编码 { get; set; }
+        public string 耗材名称 { get; set; }
+        public string 规格型号 { get; set; }
+        public string 单位 { get; set; }
+        public string 批号 { get; set; }
+        public decimal? 领用数量 { get; set; }
+        public string 申领日期 { get; set; }
+        public string 到库日期 { get; set; }
+        public string 保质期 { get; set; }
+    }
+
+    //耗材出库列表（主表+明细平铺 + 来源类型，查询展示用）
+    public class OutboundRecordWithSource : MaterialOutboundRecord
+    {
+        public string 来源类型 { get; set; }
+    }
+
+    //套餐表（后台维护：套餐名称与 HIS 门诊_收费明细表.套餐名称 一致）
+    public class PackageItem
+    {
+        public int 序号 { get; set; }
+        public string 套餐名称 { get; set; }
+        public string 备注 { get; set; }
+        public int 耗材种类数 { get; set; }
+    }
+
+    //套餐耗材明细（每个套餐消耗哪些耗材、各多少）
+    public class PackageMaterial
+    {
+        public int 序号 { get; set; }
+        public int 套餐ID { get; set; }
+        public string 物料编码 { get; set; }
+        public string 耗材名称 { get; set; }
+        public string 规格型号 { get; set; }
+        public string 单位 { get; set; }
+        public decimal? 数量 { get; set; }
     }
 
     //医技执行记录查询

@@ -1,0 +1,466 @@
+@{
+    Layout = null;
+    var bdate = Request["bdate"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edate = Request["edate"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>套餐耗材维护</title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    @Styles.Render("~/Content/flatpickr")
+    <style>
+        body { background: #fff; }
+        fieldset.pkg-box {
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            padding: 16px 20px;
+            margin-bottom: 18px;
+        }
+        fieldset.pkg-box legend { font-weight: bold; font-size: 14px; padding: 0 8px; }
+        .pkg-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .pkg-toolbar label { font-size: 13px; color: #555; }
+        .pkg-toolbar input, .pkg-toolbar select { height: 30px; padding: 0 6px; border: 1px solid #d0d0d0; border-radius: 3px; font-size: 13px; box-sizing: border-box; }
+        .table-wrapper { overflow: auto !important; max-width: calc(100vw - 60px) !important; }
+        .table-wrapper > table { display: table !important; }
+        #pkgTable { width: 100%; min-width: 720px; table-layout: auto; white-space: nowrap; }
+        #pkgTable th, #pkgTable td { padding: 6px 8px !important; }
+        #matGrid { width: 100%; min-width: 1100px; table-layout: auto; white-space: nowrap; }
+        #matGrid th, #matGrid td { padding: 6px 8px !important; vertical-align: middle; }
+        #matGrid input[type="text"],
+        #matGrid input[type="number"] { height: 30px; padding: 0 6px; border: 1px solid #d0d0d0; border-radius: 3px; font-size: 13px; box-sizing: border-box; }
+        .btn-action { padding: 2px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; border: 1px solid #d0d0d0; background: #fff; }
+        .btn-action:hover { border-color: #dd514c; color: #dd514c; }
+
+        /* 关联耗材名称 下拉（fixed 定位避免被容器裁切） */
+        .combo-cell { position: relative; }
+        .combo-dropdown {
+            display: none;
+            position: fixed;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 9999;
+            min-width: 420px;
+            max-width: 560px;
+            max-height: 60vh;
+            overflow-y: auto;
+            color: #333;
+            font-size: 13px;
+        }
+        .combo-dropdown.show { display: block; }
+        .combo-item { padding: 6px 10px; cursor: pointer; white-space: nowrap; border-bottom: 1px solid #f0f0f0; }
+        .combo-item:hover { background: #e6f2ff; }
+
+        .deduct-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .deduct-bar label { font-size: 13px; color: #555; }
+    </style>
+</head>
+<body>
+    <div style="margin:12px 20px;">
+
+        <!-- ===== 套餐列表 ===== -->
+        <fieldset class="pkg-box">
+            <legend>套餐列表</legend>
+            <div class="pkg-toolbar">
+                <input type="text" id="pkgKw" placeholder="套餐名称关键字" style="width:200px;">
+                <button class="am-btn am-btn-default" type="button" onclick="doSearchPkg()">查询</button>
+                <button class="am-btn am-btn-primary" type="button" onclick="newPkg()">+ 新增套餐</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="am-table am-table-striped am-table-hover table-main" id="pkgTable">
+                    <thead>
+                        <tr>
+                            <th>套餐名称</th>
+                            <th>备注</th>
+                            <th>耗材种类</th>
+                            <th style="width:120px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pkgBody">
+                        <tr><td colspan="4" style="text-align:center;color:#999;">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="pkgPagination"></div>
+        </fieldset>
+
+        <!-- ===== 套餐编辑 ===== -->
+        <fieldset class="pkg-box" id="editBox" style="display:none;">
+            <legend>套餐编辑</legend>
+            <div class="pkg-toolbar">
+                <label>套餐名称 <span style="color:red;">*</span></label>
+                <input type="text" id="editPkgName" style="width:300px;" placeholder="与HIS里的套餐名称完全一致">
+                <label>备注</label>
+                <input type="text" id="editPkgRemark" style="width:200px;">
+                <button class="am-btn am-btn-primary" type="button" onclick="savePkg()">保存套餐</button>
+                <button class="am-btn am-btn-default" type="button" onclick="closeEdit()">关闭</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="am-table am-table-bordered" id="matGrid">
+                    <thead>
+                        <tr>
+                            <th style="width:230px;">关联耗材名称<span style="color:#999;font-weight:normal;">（输入首拼/编码/批号）</span></th>
+                            <th>物料编码</th>
+                            <th>耗材名称</th>
+                            <th>规格型号</th>
+                            <th>单位</th>
+                            <th style="width:100px;">数量<span style="color:#999;font-weight:normal;">（整套餐消耗）</span></th>
+                            <th style="width:60px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="matBody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top:10px;">
+                <button class="am-btn am-btn-default" type="button" onclick="addMatLine()">+ 添加耗材</button>
+                <button class="am-btn am-btn-primary" type="button" onclick="savePkg()">保存套餐</button>
+            </div>
+        </fieldset>
+
+        <!-- ===== 手动扣减 ===== -->
+        <fieldset class="pkg-box">
+            <legend>套餐自动扣减</legend>
+            <div class="deduct-bar">
+                <label>开始日期</label>
+                <input type="text" id="dctBdate" value="@bdate" style="width:120px;height:30px;border:1px solid #d0d0d0;border-radius:3px;">
+                <label>—</label>
+                <input type="text" id="dctEdate" value="@edate" style="width:120px;height:30px;border:1px solid #d0d0d0;border-radius:3px;">
+                <button class="am-btn am-btn-primary" type="button" onclick="runDeduct()">立即扣减</button>
+                <span style="font-size:12px;color:#999;">每天定时自动跑；手动用于试跑/补跑，重复跑不会重复扣。</span>
+            </div>
+        </fieldset>
+
+    </div>
+
+    <script src="~/Scripts/pagination.js"></script>
+    <script src="~/Scripts/customDialog.js"></script>
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        flatpickr("#dctBdate", { dateFormat: "Y-m-d", defaultDate: "@bdate" });
+        flatpickr("#dctEdate", { dateFormat: "Y-m-d", defaultDate: "@edate" });
+
+        function escapeHtml(v) {
+            if (v === null || v === undefined) return '';
+            return String(v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // ===== 套餐列表 =====
+        var _pkgs = [];
+        var _curPkgId = null;
+
+        function doSearchPkg() { loadPkgs(); }
+
+        function loadPkgs() {
+            var kw = document.getElementById('pkgKw').value;
+            fetch('@Url.Action("GetPackageList", "MedicalTech")?name=' + encodeURIComponent(kw))
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data && data.success === false) {
+                        document.getElementById('pkgBody').innerHTML =
+                            '<tr><td colspan="4" style="text-align:center;color:red;">' + escapeHtml(data.msg) + '</td></tr>';
+                        return;
+                    }
+                    _pkgs = data || [];
+                    renderPkgs();
+                })
+                .catch(function (err) {
+                    document.getElementById('pkgBody').innerHTML =
+                        '<tr><td colspan="4" style="text-align:center;color:red;">' + escapeHtml(err.message) + '</td></tr>';
+                });
+        }
+
+        function renderPkgs() {
+            var tb = document.getElementById('pkgBody');
+            if (!_pkgs.length) {
+                tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">暂无数据</td></tr>';
+                initTablePagination('pkgTable', { summaryRows: 0 });
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < _pkgs.length; i++) {
+                var p = _pkgs[i];
+                html += '<tr>' +
+                    '<td>' + escapeHtml(p.套餐名称) + '</td>' +
+                    '<td>' + escapeHtml(p.备注) + '</td>' +
+                    '<td>' + (p.耗材种类数 || 0) + '</td>' +
+                    '<td>' +
+                        '<button class="btn-action" onclick="editPkg(' + p.序号 + ')">编辑</button> ' +
+                        '<button class="btn-action" onclick="delPkg(' + p.序号 + ')">删除</button>' +
+                    '</td></tr>';
+            }
+            tb.innerHTML = html;
+            initTablePagination('pkgTable', { summaryRows: 0 });
+        }
+
+        function newPkg() {
+            document.getElementById('editBox').style.display = 'block';
+            document.getElementById('editPkgName').value = '';
+            document.getElementById('editPkgRemark').value = '';
+            _curPkgId = null;
+            document.getElementById('matBody').innerHTML = '';
+            addMatLine();
+            document.getElementById('editBox').scrollIntoView();
+        }
+
+        function editPkg(id) {
+            var p = null;
+            for (var i = 0; i < _pkgs.length; i++) { if (_pkgs[i].序号 == id) { p = _pkgs[i]; break; } }
+            if (!p) return;
+            document.getElementById('editBox').style.display = 'block';
+            document.getElementById('editPkgName').value = p.套餐名称 || '';
+            document.getElementById('editPkgRemark').value = p.备注 || '';
+            _curPkgId = id;
+            loadMats(id);
+            document.getElementById('editBox').scrollIntoView();
+        }
+
+        function closeEdit() {
+            document.getElementById('editBox').style.display = 'none';
+            _curPkgId = null;
+        }
+
+        function delPkg(id) {
+            customDialog.confirm('确定删除该套餐及其耗材明细？', '确认', function () {
+                fetch('@Url.Action("DeletePackage", "MedicalTech")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 序号: id })
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) { customDialog.alert(res.msg, '提示', function () { loadPkgs(); }); }
+                    else { customDialog.error(res.msg, '删除失败'); }
+                })
+                .catch(function (err) { customDialog.error(err.message, '删除失败'); });
+            });
+        }
+
+        // ===== 套餐耗材明细 =====
+        function addMatLine() {
+            var tb = document.getElementById('matBody');
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td class="combo-cell">' +
+                    '<input type="text" class="line-combo" placeholder="物料名称/拼音/编码/批号" style="width:220px;height:30px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;">' +
+                    '<div class="combo-dropdown"></div>' +
+                '</td>' +
+                '<td class="m-物料编码"></td>' +
+                '<td class="m-耗材名称"></td>' +
+                '<td class="m-规格型号"></td>' +
+                '<td class="m-单位"></td>' +
+                '<td><input type="number" class="m-数量" min="0.001" step="0.001" placeholder="数量" style="width:90px;height:30px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;"></td>' +
+                '<td><button type="button" class="btn-action" onclick="removeMatLine(this)">删除</button></td>';
+            tb.appendChild(tr);
+            var input = tr.querySelector('.line-combo');
+            var dd = tr.querySelector('.combo-dropdown');
+            bindCombo(input, dd);
+        }
+
+        function addMatLineFrom(item) {
+            addMatLine();
+            var trs = document.querySelectorAll('#matBody tr');
+            var tr = trs[trs.length - 1];
+            tr.querySelector('.m-物料编码').textContent = item.物料编码 || '';
+            tr.querySelector('.m-耗材名称').textContent = item.耗材名称 || '';
+            tr.querySelector('.m-规格型号').textContent = item.规格型号 || '';
+            tr.querySelector('.m-单位').textContent = item.单位 || '';
+            tr.querySelector('.m-数量').value = item.数量 || '';
+            tr.querySelector('.line-combo').value = item.耗材名称 || '';
+        }
+
+        function removeMatLine(btn) {
+            var tr = btn.closest('tr');
+            if (tr) tr.parentNode.removeChild(tr);
+        }
+
+        // ===== 关联耗材名称 下拉 =====
+        function showDd(input, dd) {
+            var rect = input.getBoundingClientRect();
+            dd.style.position = 'fixed';
+            dd.style.top = (rect.bottom + 4) + 'px';
+            dd.style.left = rect.left + 'px';
+            dd.style.width = Math.max(rect.width, 420) + 'px';
+            dd.style.maxHeight = Math.max(160, window.innerHeight - rect.bottom - 20) + 'px';
+            dd.classList.add('show');
+        }
+        function repositionDd(input, dd) {
+            if (!dd.classList.contains('show')) return;
+            var rect = input.getBoundingClientRect();
+            dd.style.top = (rect.bottom + 4) + 'px';
+            dd.style.left = rect.left + 'px';
+        }
+        function bindCombo(input, dd) {
+            var timer = null;
+            var doSearch = function () {
+                var kw = input.value.trim();
+                if (!kw) { dd.classList.remove('show'); return; }
+                fetch('@Url.Action("GetLocalMaterialInbound", "MedicalTech")?kw=' + encodeURIComponent(kw))
+                    .then(function (r) { return r.json(); })
+                    .then(function (list) {
+                        dd.innerHTML = '';
+                        if (list && list.success === false) {
+                            dd.innerHTML = '<div class="combo-item" style="color:red;">' + escapeHtml(list.msg) + '</div>';
+                            showDd(input, dd);
+                            return;
+                        }
+                        if (!list || list.length === 0) {
+                            dd.innerHTML = '<div class="combo-item" style="color:#999;">无匹配</div>';
+                            showDd(input, dd);
+                            return;
+                        }
+                        for (var i = 0; i < list.length; i++) {
+                            (function (item) {
+                                var div = document.createElement('div');
+                                div.className = 'combo-item';
+                                div.textContent = item.物料名称 + ' | ' + (item.规格 || '') + ' | 批:' + (item.批号 || '-') + ' | 剩:' + item.剩余数量;
+                                div.addEventListener('click', function () { selectCombo(input, dd, item); });
+                                dd.appendChild(div);
+                            })(list[i]);
+                        }
+                        showDd(input, dd);
+                    })
+                    .catch(function (err) {
+                        dd.innerHTML = '<div class="combo-item" style="color:red;">' + escapeHtml(err.message) + '</div>';
+                        showDd(input, dd);
+                    });
+            };
+            input.addEventListener('input', function () {
+                clearTimeout(timer);
+                timer = setTimeout(doSearch, 250);
+            });
+            input.addEventListener('focus', function () { if (input.value.trim()) doSearch(); });
+            document.addEventListener('click', function (e) {
+                if (!input.contains(e.target) && !dd.contains(e.target)) dd.classList.remove('show');
+            });
+            window.addEventListener('scroll', function () { repositionDd(input, dd); }, true);
+        }
+
+        function selectCombo(input, dd, item) {
+            var tr = input.closest('tr');
+            tr.querySelector('.m-物料编码').textContent = item.物料编码 || '';
+            tr.querySelector('.m-耗材名称').textContent = item.物料名称 || '';
+            tr.querySelector('.m-规格型号').textContent = item.规格 || '';
+            tr.querySelector('.m-单位').textContent = item.单位 || '';
+            input.value = item.物料名称;
+            dd.classList.remove('show');
+        }
+
+        function loadMats(id) {
+            fetch('@Url.Action("GetPackageMaterials", "MedicalTech")?套餐ID=' + id)
+                .then(function (r) { return r.json(); })
+                .then(function (list) {
+                    var tb = document.getElementById('matBody');
+                    tb.innerHTML = '';
+                    if (list && list.success === false) {
+                        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:red;">' + escapeHtml(list.msg) + '</td></tr>';
+                        return;
+                    }
+                    var arr = list || [];
+                    for (var i = 0; i < arr.length; i++) addMatLineFrom(arr[i]);
+                    if (arr.length === 0) addMatLine();
+                })
+                .catch(function () {});
+        }
+
+        function collectMatLines() {
+            var trs = document.querySelectorAll('#matBody tr');
+            var lines = [];
+            for (var i = 0; i < trs.length; i++) {
+                var tr = trs[i];
+                var code = (tr.querySelector('.m-物料编码').textContent || '').trim();
+                if (!code) continue;
+                var qty = parseFloat(tr.querySelector('.m-数量').value);
+                if (!qty || qty <= 0) continue;
+                lines.push({
+                    物料编码: code,
+                    耗材名称: tr.querySelector('.m-耗材名称').textContent,
+                    规格型号: tr.querySelector('.m-规格型号').textContent,
+                    单位: tr.querySelector('.m-单位').textContent,
+                    数量: qty
+                });
+            }
+            return lines;
+        }
+
+        // ===== 保存套餐（名称+明细）=====
+        function savePkg() {
+            var name = document.getElementById('editPkgName').value.trim();
+            if (!name) { customDialog.info('请填写套餐名称', '提示'); return; }
+            var remark = document.getElementById('editPkgRemark').value.trim();
+
+            fetch('@Url.Action("SavePackage", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 序号: _curPkgId, 套餐名称: name, 备注: remark })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.success) { customDialog.error(res.msg, '保存失败'); return null; }
+                _curPkgId = res.套餐ID;
+                return fetch('@Url.Action("SavePackageMaterials", "MedicalTech")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 套餐ID: res.套餐ID, lines: collectMatLines() })
+                });
+            })
+            .then(function (r) { if (!r) return null; return r.json(); })
+            .then(function (res2) {
+                if (!res2) return;
+                if (res2.success) {
+                    customDialog.alert(res2.msg, '提示', function () { loadPkgs(); loadMats(_curPkgId); });
+                } else {
+                    customDialog.error(res2.msg, '保存失败');
+                }
+            })
+            .catch(function (err) { customDialog.error(err.message, '保存失败'); });
+        }
+
+        // ===== 手动扣减 =====
+        function runDeduct() {
+            var b = document.getElementById('dctBdate').value;
+            var e = document.getElementById('dctEdate').value;
+            if (!b || !e) { customDialog.info('请选择扣减日期范围', '提示'); return; }
+
+            fetch('@Url.Action("RunPackageAutoDeductManual", "MedicalTech")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bdate: b, edate: e })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res && res.success === false) { customDialog.error(res.msg, '扣减失败'); return; }
+                var s = res || {};
+                var msg = '总套餐使用事件：' + (s.总事件 || 0) + '\n' +
+                    '已扣减出库单：' + (s.已扣减单数 || 0) + ' 张（明细 ' + (s.已扣减明细行数 || 0) + ' 行）\n' +
+                    '未维护套餐：' + (s.未维护 || 0) + '，未配置耗材：' + (s.未配置耗材 || 0) + '\n' +
+                    '重复跳过：' + (s.重复 || 0) + '\n' +
+                    '库存不足跳过：' + (s.库存不足 || 0) + '\n' +
+                    '失败：' + (s.失败 || 0);
+                if (s.库存不足明细 && s.库存不足明细.length) {
+                    msg += '\n\n【库存不足明细】\n' + s.库存不足明细.join('\n');
+                }
+                if (s.失败明细 && s.失败明细.length) {
+                    msg += '\n\n【失败明细】\n' + s.失败明细.join('\n');
+                }
+                customDialog.info(msg, '扣减结果');
+            })
+            .catch(function (err) { customDialog.error(err.message, '扣减失败'); });
+        }
+
+        // ===== 事件绑定 & 初始化 =====
+        document.getElementById('pkgKw').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); doSearchPkg(); }
+        });
+
+        loadPkgs();
+    </script>
+</body>
+</html>
