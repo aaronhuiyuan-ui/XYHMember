@@ -1186,8 +1186,10 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
         }
 
         /// <summary>
-        /// 导入到OA（POST）：仅允许足月查询（整月且不超过一个月），
-        /// 将当月汇总的应付加工费/应付快递费写入 fghis5..上海真仁堂统计汇总
+        /// 导入到OA（POST）：仅允许足月查询（整月且不超过一个月）。
+        /// 将当月汇总的应付加工费/应付快递费合并写入 fghis5..上海真仁堂统计汇总：
+        /// 同一月份一行，本页只更新加工费/快递费，应付药品费保留已有值（无则0），
+        /// 应付总金额 = 加工费 + 快递费 + 药品费 重算。
         /// </summary>
         [HttpPost]
         public ActionResult ImportToOA()
@@ -1212,13 +1214,6 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
 
             try
             {
-                // 重复校验：同一月份已导入则拒绝
-                var exists = db.Database.SqlQuery<int>(
-                    "SELECT COUNT(*) FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
-                    new SqlParameter("@month", 月份)).FirstOrDefault();
-                if (exists > 0)
-                    return Json(new { success = false, msg = "该月份(" + 月份 + ")已导入，如需更新请先删除原数据" });
-
                 // 汇总金额（复用现有明细/汇总构建逻辑）
                 var detail = BuildFeeDetailCompare(bdate, edate);
                 if (detail.Count == 0)
@@ -1226,23 +1221,21 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
                 var summary = BuildFeeSummary(detail);
                 decimal 应付加工费 = summary.Sum(s => s.应收加工费 ?? 0m);
                 decimal 应付快递费 = summary.Sum(s => s.应收快递费 ?? 0m);
-                decimal 应付总金额 = 应付加工费 + 应付快递费;
 
-                // 足月导入：开始日期=查询起始（当月1日），结束日期=查询结束（当月月末）
-                db.Database.ExecuteSqlCommand(
-                    @"INSERT INTO fghis5..上海真仁堂统计汇总 (月份, 开始日期, 结束日期, 应付加工费, 应付快递费, 应付总金额)
-                      VALUES (@month, @bdate, @edate, @jgf, @kdf, @total)",
-                    new SqlParameter("@month", 月份),
-                    new SqlParameter("@bdate", b.ToString("yyyy-MM-dd")),
-                    new SqlParameter("@edate", e.ToString("yyyy-MM-dd")),
-                    new SqlParameter("@jgf", 应付加工费),
-                    new SqlParameter("@kdf", 应付快递费),
-                    new SqlParameter("@total", 应付总金额));
+                // 合并更新：加工费页只负责加工费/快递费；药品费保留已有值（无则0），不覆盖
+                var 已有药品费 = db.Database.SqlQuery<decimal?>(
+                    "SELECT 应付药品费 FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
+                    new SqlParameter("@month", 月份)).FirstOrDefault() ?? 0m;
+
+                var 应付总金额 = UpsertZhenRenTangStat(月份,
+                    b.ToString("yyyy-MM-dd"), e.ToString("yyyy-MM-dd"),
+                    应付加工费, 应付快递费, 已有药品费);
 
                 return Json(new { success = true, msg = "导入成功：" + 月份 +
                     " 应付加工费=" + 应付加工费.ToString("F2") +
                     " 应付快递费=" + 应付快递费.ToString("F2") +
-                    " 应付总金额=" + 应付总金额.ToString("F2") });
+                    " 应付药品费=" + 已有药品费.ToString("F3") +
+                    " 应付总金额=" + 应付总金额.ToString("F3") });
             }
             catch (Exception ex)
             {
@@ -1250,6 +1243,129 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
                 while (inner.InnerException != null) inner = inner.InnerException;
                 return Json(new { success = false, msg = "导入失败：" + inner.Message });
             }
+        }
+
+        /// <summary>
+        /// 药品汇总信息核对页「导入到OA」（POST）：仅允许足月查询。
+        /// 将当月「结算金额（发药金额×折扣0.6）按月合计」合并写入 fghis5..上海真仁堂统计汇总 的 应付药品费：
+        /// 同一月份一行，本页只更新药品费，加工费/快递费保留已有值（无则0），
+        /// 应付总金额 = 加工费 + 快递费 + 药品费 重算。
+        /// </summary>
+        [HttpPost]
+        public ActionResult ImportDrugToOA()
+        {
+            var bdate = Request["bdatepicker"]?.Trim();
+            var edate = Request["edatepicker"]?.Trim();
+            DateTime b, e;
+            if (!DateTime.TryParse(bdate, out b) || !DateTime.TryParse(edate, out e))
+                return Json(new { success = false, msg = "日期格式不正确" });
+
+            // 足月校验：同月 && 起始=1号 && 结束=月末
+            var isSameMonth = b.Year == e.Year && b.Month == e.Month;
+            var isFullMonth = isSameMonth && b.Day == 1 && e.Day == DateTime.DaysInMonth(b.Year, b.Month);
+            if (!isFullMonth)
+            {
+                var msg = isSameMonth ? "不是足月查询（需查询整月：1日~月末），无法导入"
+                                      : "查询跨度超过一个月，无法导入";
+                return Json(new { success = false, msg });
+            }
+
+            var 月份 = b.ToString("yyyy-MM");
+
+            try
+            {
+                var detail = BuildDrugDetailCompare(bdate, edate);
+                if (detail.Count == 0)
+                    return Json(new { success = false, msg = "该月份无数据，无法导入" });
+
+                // 应付药品费 = 结算金额按月合计（发药金额×折扣0.6），保留3位
+                decimal 应付药品费 = Math.Round(detail.Sum(x => x.结算金额 ?? 0m), 3, MidpointRounding.AwayFromZero);
+
+                // 合并更新：药品页只负责药品费；加工费/快递费保留已有值（无则0），不覆盖
+                var 已有加工费 = db.Database.SqlQuery<decimal?>(
+                    "SELECT 应付加工费 FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
+                    new SqlParameter("@month", 月份)).FirstOrDefault() ?? 0m;
+                var 已有快递费 = db.Database.SqlQuery<decimal?>(
+                    "SELECT 应付快递费 FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
+                    new SqlParameter("@month", 月份)).FirstOrDefault() ?? 0m;
+
+                var 应付总金额 = UpsertZhenRenTangStat(月份,
+                    b.ToString("yyyy-MM-dd"), e.ToString("yyyy-MM-dd"),
+                    已有加工费, 已有快递费, 应付药品费);
+
+                return Json(new { success = true, msg = "导入成功：" + 月份 +
+                    " 应付加工费=" + 已有加工费.ToString("F2") +
+                    " 应付快递费=" + 已有快递费.ToString("F2") +
+                    " 应付药品费=" + 应付药品费.ToString("F3") +
+                    " 应付总金额=" + 应付总金额.ToString("F3") });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = "导入失败：" + inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 合并写入上海真仁堂统计汇总（同一月份一行，受 月份 唯一索引约束）：
+        /// 月份已存在→UPDATE；不存在→INSERT。三个金额由调用方传入已解析好的最终值，
+        /// 应付总金额 = 加工费 + 快递费 + 药品费 在本方法内重算（保留3位）。返回应付总金额。
+        /// </summary>
+        private decimal UpsertZhenRenTangStat(string 月份, string 开始日期, string 结束日期,
+            decimal 应付加工费, decimal 应付快递费, decimal 应付药品费)
+        {
+            decimal 应付总金额 = Math.Round(应付加工费 + 应付快递费 + 应付药品费, 3, MidpointRounding.AwayFromZero);
+
+            var exists = db.Database.SqlQuery<int>(
+                "SELECT COUNT(*) FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
+                new SqlParameter("@month", 月份)).FirstOrDefault() > 0;
+
+            if (exists)
+            {
+                db.Database.ExecuteSqlCommand(
+                    @"UPDATE fghis5..上海真仁堂统计汇总
+                      SET 开始日期 = @bdate, 结束日期 = @edate,
+                          应付加工费 = @jgf, 应付快递费 = @kdf, 应付药品费 = @ypf,
+                          应付总金额 = @total, 导入时间 = GETDATE()
+                      WHERE 月份 = @month",
+                    new SqlParameter("@month", 月份),
+                    new SqlParameter("@bdate", 开始日期),
+                    new SqlParameter("@edate", 结束日期),
+                    new SqlParameter("@jgf", 应付加工费),
+                    new SqlParameter("@kdf", 应付快递费),
+                    new SqlParameter("@ypf", 应付药品费),
+                    new SqlParameter("@total", 应付总金额));
+            }
+            else
+            {
+                db.Database.ExecuteSqlCommand(
+                    @"INSERT INTO fghis5..上海真仁堂统计汇总
+                      (月份, 开始日期, 结束日期, 应付加工费, 应付快递费, 应付药品费, 应付总金额, 导入时间)
+                      VALUES (@month, @bdate, @edate, @jgf, @kdf, @ypf, @total, GETDATE())",
+                    new SqlParameter("@month", 月份),
+                    new SqlParameter("@bdate", 开始日期),
+                    new SqlParameter("@edate", 结束日期),
+                    new SqlParameter("@jgf", 应付加工费),
+                    new SqlParameter("@kdf", 应付快递费),
+                    new SqlParameter("@ypf", 应付药品费),
+                    new SqlParameter("@total", 应付总金额));
+            }
+
+            return 应付总金额;
+        }
+
+        /// <summary>
+        /// 上海真仁堂统计汇总页面（GET）：直接展示 fghis5..上海真仁堂统计汇总 表数据（只读）
+        /// </summary>
+        public ActionResult ZhenRenTangStats()
+        {
+            var list = db.Database.SqlQuery<ZhenRenTangStat>(
+                @"SELECT 序号, 月份, 开始日期, 结束日期,
+                         应付加工费, 应付快递费, 应付药品费, 导入时间, 应付总金额
+                   FROM fghis5..上海真仁堂统计汇总
+                   ORDER BY 月份 DESC").ToList();
+            return View(list);
         }
 
         /// <summary>

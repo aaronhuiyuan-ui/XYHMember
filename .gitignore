@@ -260,3 +260,4 @@ paket-files/
 __pycache__/
 *.pyc
 /XYHMember/耗材管理操作文档.docx
+/XYHMember/SQL/上海真仁堂统计汇总_加应付药品费.sql

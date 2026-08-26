@@ -71,6 +71,7 @@
                             </span>
                         </span>
                         <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:15px;">导出到Excel</button>
+                        <button class="am-btn am-btn-default" type="button" id="importOaBtn" style="margin-left:15px;">导入到OA</button>
                     </div>
                 </form>
             </div>
@@ -221,6 +222,36 @@
                 exportBtn.disabled = false;
                 exportBtn.innerText = '导出到Excel';
                 customDialog.error('导出失败：' + err.message);
+            });
+        });
+
+        // 导入到OA：校验足月后，将当月结算金额合计写入 上海真仁堂统计汇总.应付药品费
+        var importOaBtn = document.getElementById('importOaBtn');
+        importOaBtn.addEventListener('click', function () {
+            customDialog.confirm('确认将当前足月查询的结算金额合计导入到OA（应付药品费）吗？', '导入确认', function () {
+                importOaBtn.disabled = true;
+                importOaBtn.innerText = '导入中...';
+
+                var bd = document.getElementById('bdatepicker').value;
+                var ed = document.getElementById('edatepicker').value;
+
+                fetch('@Url.Action("ImportDrugToOA", "Pharmacy")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'bdatepicker=' + encodeURIComponent(bd) + '&edatepicker=' + encodeURIComponent(ed)
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    importOaBtn.disabled = false;
+                    importOaBtn.innerText = '导入到OA';
+                    if (data.success) customDialog.success(data.msg);
+                    else customDialog.error(data.msg);
+                })
+                .catch(function (err) {
+                    importOaBtn.disabled = false;
+                    importOaBtn.innerText = '导入到OA';
+                    customDialog.error('导入失败：' + err.message);
+                });
             });
         });
     </script>

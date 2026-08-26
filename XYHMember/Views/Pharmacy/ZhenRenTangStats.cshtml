@@ -1,0 +1,156 @@
+@{
+    ViewBag.Title = "上海真仁堂统计汇总";
+}
+
+@using XYHMember.Context;
+@model List<ZhenRenTangStat>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    <style>
+        #dataTable {
+            width: 100% !important;
+            min-width: 900px !important;
+            table-layout: auto !important;
+        }
+        #dataTable th,
+        #dataTable td {
+            padding: 3px 8px !important;
+            white-space: nowrap;
+        }
+        #dataTable thead th {
+            background: #f0f0f0 !important;
+            color: #333 !important;
+            font-weight: 600;
+        }
+        .table-wrapper {
+            overflow: auto !important;
+            width: 80% !important;
+            max-width: 80% !important;
+        }
+        .table-wrapper > table {
+            display: table !important;
+        }
+        .summary-bar {
+            display: flex;
+            gap: 20px;
+            padding: 10px 16px;
+            background: #f2f2f2;
+            border-radius: 4px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        .summary-bar span label { color: #666; margin-right: 3px; }
+        .summary-bar span .val { font-weight: 600; color: #333; }
+    </style>
+</head>
+
+<body>
+    <div>
+        <div class="container">
+            <div>
+                <div style="margin:10px 0 14px 10px;font-size:13px;color:#666;">
+                    数据来源：fghis5..上海真仁堂统计汇总（由「加工费及快递费汇总」「药品汇总信息核对」导入到OA时写入）
+                </div>
+            </div>
+        </div>
+
+        @if (Model != null && Model.Count > 0)
+        {
+            var sum加工费 = Model.Sum(m => m.应付加工费);
+            var sum快递费 = Model.Sum(m => m.应付快递费);
+            var sum药品费 = Model.Sum(m => m.应付药品费);
+            var sum总金额 = Model.Sum(m => m.应付总金额);
+
+            <div class="summary-bar">
+                <span><label>月份数：</label><span class="val total-count">@Model.Count</span></span>
+                <span><label>应付加工费：</label><span class="val">@sum加工费.ToString("F2")</span></span>
+                <span><label>应付快递费：</label><span class="val">@sum快递费.ToString("F2")</span></span>
+                <span><label>应付药品费：</label><span class="val">@sum药品费.ToString("F3")</span></span>
+                <span><label>应付总金额：</label><span class="val">@sum总金额.ToString("F3")</span></span>
+            </div>
+        }
+
+        <div class="am-g">
+            <div class="am-u-sm-12">
+                <div class="table-wrapper" style="overflow:auto;">
+                <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>序号</th>
+                            <th>月份</th>
+                            <th>开始日期</th>
+                            <th>结束日期</th>
+                            <th>应付加工费</th>
+                            <th>应付快递费</th>
+                            <th>应付药品费</th>
+                            <th>应付总金额</th>
+                            <th>导入时间</th>
+                        </tr>
+                    </thead>
+                    @if (Model != null && Model.Count > 0)
+                    {
+                        <tbody>
+                            @{
+                                decimal sum加工费 = 0m, sum快递费 = 0m, sum药品费 = 0m, sum总金额 = 0m;
+                            }
+                            @foreach (var item in Model)
+                            {
+                                sum加工费 += item.应付加工费;
+                                sum快递费 += item.应付快递费;
+                                sum药品费 += item.应付药品费;
+                                sum总金额 += item.应付总金额;
+
+                                <tr>
+                                    <td>@item.序号</td>
+                                    <td>@item.月份</td>
+                                    <td>@item.开始日期</td>
+                                    <td>@item.结束日期</td>
+                                    <td>@item.应付加工费.ToString("F2")</td>
+                                    <td>@item.应付快递费.ToString("F2")</td>
+                                    <td>@item.应付药品费.ToString("F3")</td>
+                                    <td>@item.应付总金额.ToString("F3")</td>
+                                    <td>@(item.导入时间.HasValue ? item.导入时间.Value.ToString("yyyy-MM-dd HH:mm") : "")</td>
+                                </tr>
+                            }
+                            <tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">
+                                <td></td>
+                                <td>合计</td>
+                                <td></td>
+                                <td></td>
+                                <td>@sum加工费.ToString("F2")</td>
+                                <td>@sum快递费.ToString("F2")</td>
+                                <td>@sum药品费.ToString("F3")</td>
+                                <td>@sum总金额.ToString("F3")</td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    }
+                </table>
+                </div>
+
+                @if (Model != null && Model.Count > 1)
+                {
+                    <div id="paginationContainer"></div>
+                }
+
+                @if (Model == null || Model.Count == 0)
+                {
+                    <div style="padding:40px;text-align:center;color:#999;font-size:15px;">暂无数据</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <script src="~/Scripts/pagination.js"></script>
+    <script>
+        initTablePagination('dataTable');
+    </script>
+
+</body>
+</html>

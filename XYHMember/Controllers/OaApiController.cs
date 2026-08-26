@@ -42,7 +42,7 @@ namespace XYHMember.Controllers
                 using (var db = new XYHDbContext())
                 {
                     var sql = @"SELECT 序号, 月份, 开始日期, 结束日期,
-                                       应付加工费, 应付快递费, 导入时间, 应付总金额
+                                       应付加工费, 应付快递费, 应付药品费, 导入时间, 应付总金额
                                 FROM fghis5..上海真仁堂统计汇总";
                     var prms = new List<SqlParameter>();
                     if (!string.IsNullOrEmpty(month))

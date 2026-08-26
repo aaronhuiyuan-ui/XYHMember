@@ -588,10 +588,11 @@ namespace XYHMember.Context
         public string 月份 { get; set; }        // yyyy-MM
         public string 开始日期 { get; set; }     // yyyy-MM-dd（导入时写入）
         public string 结束日期 { get; set; }     // yyyy-MM-dd（导入时写入）
-        public decimal 应付加工费 { get; set; }
-        public decimal 应付快递费 { get; set; }
+        public decimal 应付加工费 { get; set; }  // 加工费及快递费汇总页导入
+        public decimal 应付快递费 { get; set; }  // 加工费及快递费汇总页导入
+        public decimal 应付药品费 { get; set; }  // 药品汇总信息核对页导入（结算金额按月合计，3位）
         public DateTime? 导入时间 { get; set; }
-        public decimal 应付总金额 { get; set; }  // = 应付加工费 + 应付快递费（导入时写入）
+        public decimal 应付总金额 { get; set; }  // = 应付加工费 + 应付快递费 + 应付药品费（导入时重算）
     }
 
     //金蝶EAS耗材入库（跨Oracle库查询用）

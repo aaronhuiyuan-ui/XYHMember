@@ -317,6 +317,7 @@
     <Content Include="Views\Pharmacy\DrugSummaryCompare.cshtml" />
     <Content Include="Views\Pharmacy\FeeDetailCompare.cshtml" />
     <Content Include="Views\Pharmacy\FeeSummaryCompare.cshtml" />
+    <Content Include="Views\Pharmacy\ZhenRenTangStats.cshtml" />
     <Content Include="Views\ReportForms\Reception.cshtml" />
     <Content Include="Views\ReportForms\DailyReport.cshtml" />
     <Content Include="Views\ReportForms\Department.cshtml" />
