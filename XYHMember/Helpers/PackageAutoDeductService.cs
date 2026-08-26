@@ -19,6 +19,11 @@ namespace XYHMember
         public int 失败 { get; set; }
         public List<string> 库存不足明细 { get; set; } = new List<string>();
         public List<string> 失败明细 { get; set; } = new List<string>();
+        // 退费回冲
+        public int 回冲单数 { get; set; }
+        public int 回冲明细行数 { get; set; }
+        public int 回冲失败 { get; set; }
+        public List<string> 回冲失败明细 { get; set; } = new List<string>();
     }
 
     /// <summary>套餐使用事件（门诊_收费明细表 按 结帐ID+处方ID+套餐名称 聚合）</summary>
@@ -32,11 +37,43 @@ namespace XYHMember
         public string 姓名 { get; set; }
     }
 
+    /// <summary>套餐退费事件（红冲发票=状态0 的原发票套餐使用；退费日期=红冲发票结帐日期）</summary>
+    public class PackageRefundEvent
+    {
+        public int 退费发票ID { get; set; }   // 红冲发票 结帐ID（负数）
+        public int 结帐ID { get; set; }        // 原发票 结帐ID
+        public int 处方ID { get; set; }
+        public int 就诊ID { get; set; }
+        public string 套餐名称 { get; set; }
+        public string 退费日期 { get; set; }   // yyyyMMdd
+        public string 姓名 { get; set; }
+    }
+
+    /// <summary>套餐自动扣减生成的出库明细行（回冲时原样反向扣回）</summary>
+    public class PackageOutboundLine
+    {
+        public int? 关联入库序号 { get; set; }
+        public string 物料编码 { get; set; }
+        public string 耗材名称 { get; set; }
+        public string 规格型号 { get; set; }
+        public string 单位 { get; set; }
+        public string 批号 { get; set; }
+        public decimal? 领用数量 { get; set; }
+        public string 申领日期 { get; set; }
+        public string 到库日期 { get; set; }
+        public string 保质期 { get; set; }
+        public string 备注 { get; set; }
+    }
+
     /// <summary>
     /// 套餐耗材自动扣减核心逻辑。
     /// 扫描 HIS 门诊_收费明细表里某日期区间的套餐使用事件，按「套餐耗材明细」整单扣减
     /// 耗材入库表.剩余数量，并生成耗材出库单（备注/来源类型=套餐自动扣减）。
-    /// 幂等：来源标识(结帐ID_处方ID_套餐名称) 唯一索引保证不重复扣；库存不足整单跳过。
+    /// 只处理 门诊_收费发票表.发票状态=2（正常未退费）的发票；退费发票(状态1/0)不参与扣减，
+    /// 避免套餐已退费却仍扣耗材。
+    /// 同时做「退费回冲」：若某套餐已自动扣减过、之后该发票退费(状态1)，则生成红冲出库单
+    /// （来源类型=套餐退费回冲，领用数量为负数），并把对应入库批次剩余数量加回去。
+    /// 幂等：来源标识(结帐ID_处方ID_套餐名称 / 回冲_...) 唯一索引保证不重复扣/重复回冲；库存不足整单跳过。
     /// </summary>
     public static class PackageAutoDeductService
     {
@@ -48,11 +85,14 @@ namespace XYHMember
                 var b = bdate.ToString("yyyyMMdd");
                 var e = edate.ToString("yyyyMMdd");
 
+                // 发票状态：2=正常未退费；1=原发票已退费（成对出现）；0=退费/红冲发票（负结帐ID）。
+                // 只扣「正常未退费」的套餐使用；退费的套餐不参与扣减，否则会误扣耗材。
                 var events = db.Database.SqlQuery<PackageUsageEvent>(
                     @"SELECT b.结帐ID, b.处方ID, b.就诊ID, LTRIM(RTRIM(b.套餐名称)) AS 套餐名称, b.日期, MAX(a.姓名) AS 姓名
                       FROM fghis5..门诊_收费明细表 b
                       JOIN fghis5..门诊_收费发票表 a ON a.结帐ID = b.结帐ID
                       WHERE b.套餐名称 IS NOT NULL AND b.套餐名称 <> ''
+                        AND a.发票状态 = 2
                         AND b.日期 BETWEEN @bdate AND @edate
                       GROUP BY b.结帐ID, b.处方ID, b.就诊ID, b.套餐名称, b.日期
                       ORDER BY b.日期",
@@ -190,6 +230,123 @@ namespace XYHMember
                     {
                         sum.失败++;
                         sum.失败明细.Add("套餐《" + (ev.套餐名称 ?? "") + "》就诊ID " + ev.就诊ID + "：" + ex.Message);
+                    }
+                }
+
+                // ===== 退费回冲：已退费(原发票状态1)且之前已自动扣减的套餐，生成红冲出库单、把耗材加回库存 =====
+                var 回冲单号前缀 = "TCR" + DateTime.Now.ToString("yyyyMMddHHmmss");
+                var 回冲序号 = 0;
+
+                var refunds = db.Database.SqlQuery<PackageRefundEvent>(
+                    @"SELECT r.结帐ID AS 退费发票ID, a.结帐ID, b.处方ID, b.就诊ID,
+                             LTRIM(RTRIM(b.套餐名称)) AS 套餐名称, r.结帐日期 AS 退费日期, MAX(a.姓名) AS 姓名
+                      FROM fghis5..门诊_收费发票表 r
+                      JOIN fghis5..门诊_收费发票表 a ON a.结帐ID = -r.结帐ID AND a.发票状态 = 1
+                      JOIN fghis5..门诊_收费明细表 b ON b.结帐ID = a.结帐ID
+                      WHERE r.发票状态 = 0
+                        AND b.套餐名称 IS NOT NULL AND b.套餐名称 <> ''
+                        AND r.结帐日期 BETWEEN @bdate AND @edate
+                      GROUP BY r.结帐ID, a.结帐ID, b.处方ID, b.就诊ID, b.套餐名称, r.结帐日期
+                      ORDER BY r.结帐日期",
+                    new SqlParameter("@bdate", b),
+                    new SqlParameter("@edate", e)).ToList();
+
+                foreach (var rf in refunds)
+                {
+                    try
+                    {
+                        var 套餐名称 = (rf.套餐名称 ?? "").Trim();
+                        var 原来源标识 = rf.结帐ID + "_" + rf.处方ID + "_" + 套餐名称;
+                        var 回冲标识 = "回冲_" + 原来源标识;
+
+                        // 原发票是否已被自动扣减过（来源类型=套餐自动扣减）
+                        var 原出库单号 = db.Database.SqlQuery<string>(
+                            @"SELECT 出库单号 FROM fghis5..耗材出库单 WHERE 来源标识 = @标识 AND 来源类型 = '套餐自动扣减'",
+                            new SqlParameter("@标识", 原来源标识)).FirstOrDefault();
+                        if (string.IsNullOrEmpty(原出库单号)) continue;   // 从未自动扣减，无需回冲
+
+                        // 幂等：已回冲过则跳过
+                        var 已回冲 = db.Database.SqlQuery<int>(
+                            "SELECT COUNT(*) FROM fghis5..耗材出库单 WHERE 来源标识 = @标识",
+                            new SqlParameter("@标识", 回冲标识)).FirstOrDefault();
+                        if (已回冲 > 0) continue;
+
+                        var lines = db.Database.SqlQuery<PackageOutboundLine>(
+                            @"SELECT l.关联入库序号, l.物料编码, l.耗材名称, l.规格型号, l.单位, l.批号, l.领用数量,
+                                     CONVERT(varchar(10), l.申领日期, 120) AS 申领日期,
+                                     CONVERT(varchar(10), l.到库日期, 120) AS 到库日期,
+                                     CONVERT(varchar(10), l.保质期, 120) AS 保质期, l.备注
+                              FROM fghis5..耗材出库明细 l WHERE l.出库单号 = @单号",
+                            new SqlParameter("@单号", 原出库单号)).ToList();
+                        if (lines.Count == 0) continue;   // 原单没有明细，无从回冲
+
+                        using (var tx = db.Database.BeginTransaction())
+                        {
+                            try
+                            {
+                                回冲序号++;
+                                var 单号 = 回冲单号前缀 + 回冲序号.ToString("D2");
+                                var 回冲D = DateTime.ParseExact(rf.退费日期, "yyyyMMdd", null);
+
+                                db.Database.ExecuteSqlCommand(
+                                    @"INSERT INTO fghis5..耗材出库单 (出库单号, 出库日期, 领用人, 发料人签字, 登记人, 登记时间, 备注, 来源类型, 来源标识)
+                                      VALUES (@出库单号, @出库日期, @领用人, '系统自动', @登记人, GETDATE(), '套餐退费回冲', '套餐退费回冲', @来源标识)",
+                                    new SqlParameter("@出库单号", 单号),
+                                    new SqlParameter("@出库日期", 回冲D),
+                                    new SqlParameter("@领用人", (object)rf.姓名 ?? DBNull.Value),
+                                    new SqlParameter("@登记人", 登记人 ?? ""),
+                                    new SqlParameter("@来源标识", 回冲标识));
+
+                                foreach (var l in lines)
+                                {
+                                    var qty = l.领用数量 ?? 0;
+                                    if (qty <= 0) continue;
+
+                                    var remain = db.Database.SqlQuery<decimal?>(
+                                        "SELECT 剩余数量 FROM fghis5..耗材入库表 WHERE 序号 = @id",
+                                        new SqlParameter("@id", l.关联入库序号)).FirstOrDefault();
+                                    if (remain == null)
+                                        throw new Exception("入库批次不存在（序号 " + l.关联入库序号 + "），无法回冲");
+
+                                    db.Database.ExecuteSqlCommand(
+                                        @"INSERT INTO fghis5..耗材出库明细 (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 申领日期, 到库日期, 保质期, 备注)
+                                          VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @申领日期, @到库日期, @保质期, @备注)",
+                                        new SqlParameter("@出库单号", 单号),
+                                        new SqlParameter("@关联入库序号", (object)l.关联入库序号 ?? DBNull.Value),
+                                        new SqlParameter("@物料编码", (object)l.物料编码 ?? DBNull.Value),
+                                        new SqlParameter("@耗材名称", (object)l.耗材名称 ?? DBNull.Value),
+                                        new SqlParameter("@规格型号", (object)l.规格型号 ?? DBNull.Value),
+                                        new SqlParameter("@单位", (object)l.单位 ?? DBNull.Value),
+                                        new SqlParameter("@批号", (object)l.批号 ?? DBNull.Value),
+                                        new SqlParameter("@领用数量", -qty),
+                                        new SqlParameter("@申领日期", (object)ParseDate(l.申领日期) ?? DBNull.Value),
+                                        new SqlParameter("@到库日期", (object)ParseDate(l.到库日期) ?? DBNull.Value),
+                                        new SqlParameter("@保质期", (object)ParseDate(l.保质期) ?? DBNull.Value),
+                                        new SqlParameter("@备注", "套餐退费回冲"));
+
+                                    db.Database.ExecuteSqlCommand(
+                                        "UPDATE fghis5..耗材入库表 SET 剩余数量 = 剩余数量 + @qty WHERE 序号 = @id",
+                                        new SqlParameter("@qty", qty),
+                                        new SqlParameter("@id", l.关联入库序号));
+
+                                    sum.回冲明细行数++;
+                                }
+
+                                tx.Commit();
+                                sum.回冲单数++;
+                            }
+                            catch (Exception ex)
+                            {
+                                tx.Rollback();
+                                sum.回冲失败++;
+                                sum.回冲失败明细.Add("套餐《" + 套餐名称 + "》退费发票 " + rf.退费发票ID + "：" + ex.Message);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        sum.回冲失败++;
+                        sum.回冲失败明细.Add("套餐《" + (rf.套餐名称 ?? "") + "》退费发票 " + rf.退费发票ID + "：" + ex.Message);
                     }
                 }
             }
