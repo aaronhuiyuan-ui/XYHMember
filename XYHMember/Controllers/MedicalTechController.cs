@@ -1029,12 +1029,12 @@ namespace XYHMember.Controllers
                                  INNER JOIN kingdee.T_BD_MeasureUnit f ON b2.funitid = f.fid
                                  INNER JOIN kingdee.T_DB_WAREHOUSE g ON g.fid = b2.fwarehouseid
                                  INNER JOIN kingdee.t_pm_user p ON a.fcreatorid = p.fid
-                                 INNER JOIN kingdee.T_BD_MaterialGroup lGroup ON lGroup.fid = c.FMATERIALGROUPID
+                                 LEFT  JOIN kingdee.T_BD_MaterialGroup lGroup ON lGroup.fid = c.FMATERIALGROUPID
                             WHERE a.fstorageorgunitid = 'MsoAAAGNfOPM567U'
                               AND a.fcostcenterorgunitid = 'MsoAAASRHsPM567U'
                               AND a.faudittime >= :bdate
                               AND a.faudittime < :edate + 1
-                              AND lGroup.fname_l2 = '医用耗材'
+                              -- AND lGroup.fname_l2 = '医用耗材'   -- 已注释：显示所有类别耗材
                             ORDER BY a.faudittime";
                 var cs = ConfigurationManager.ConnectionStrings["EAS_Oracle"].ConnectionString;
                 var list = new List<MaterialInboundItem>();
