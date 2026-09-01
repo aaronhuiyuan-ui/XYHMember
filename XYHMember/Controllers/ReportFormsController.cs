@@ -35,7 +35,7 @@ namespace XYHMember.Controllers
                        SET CONCAT_NULL_YIELDS_NULL ON;
 WITH sfrbb AS (
 	SELECT
-		m.就诊id,
+		COALESCE(m.就诊id, m2.就诊id) AS 就诊id,
 		a.PID,
 		a.门诊号,
 		a.姓名,
@@ -57,23 +57,23 @@ WITH sfrbb AS (
                 fghis5..门诊_收费明细表 a1
                 LEFT JOIN fghis5..门诊_收费处方表 f1 ON f1.结帐ID = a1.结帐ID AND a1.处方id = f1.处方id
                 LEFT JOIN fghis5..系统_医生信息表 d1 ON f1.医生ID = d1.医生ID
-            WHERE a1.结帐ID = b.结帐ID
+            WHERE a1.结帐ID = ABS(b.结帐ID)
         ) c2
         WHERE c2.医生姓名 IS NOT NULL
         FOR XML PATH(''), TYPE
     ).value('.', 'NVARCHAR(MAX)'), 1, 1, '') as 接诊医生,
 		
 		b.总金额,
-		SUM ( CASE WHEN c.类别名称 = '诊查费' THEN c.金额 ELSE 0 END ) AS 诊查费,
-		SUM ( CASE WHEN c.类别名称 = '材料费' THEN c.金额 ELSE 0 END ) AS 材料费,
-		SUM ( CASE WHEN c.类别名称 = '检查费' THEN c.金额 ELSE 0 END ) AS 检查费,
-		SUM ( CASE WHEN c.类别名称 = '检验费' THEN c.金额 ELSE 0 END ) AS 检验费,
-		SUM ( CASE WHEN c.类别名称 = '治疗费' THEN c.金额 ELSE 0 END ) AS 治疗费,
-		SUM ( CASE WHEN c.类别名称 = '中草药' THEN c.金额 ELSE 0 END ) AS 中草药,
-		SUM ( CASE WHEN c.类别名称 = '工艺品' THEN c.金额 ELSE 0 END ) AS 工艺品,
-		SUM ( CASE WHEN c.类别名称 = '理疗费' THEN c.金额 ELSE 0 END ) AS 理疗费,
-		SUM ( CASE WHEN c.类别名称 = '加工费' THEN c.金额 ELSE 0 END ) AS 加工费,
-        SUM ( CASE WHEN c.类别名称 = '辨证论治费' THEN c.金额 ELSE 0 END ) AS 辨证论治费,
+		SUM ( CASE WHEN c.类别名称 = '诊查费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 诊查费,
+		SUM ( CASE WHEN c.类别名称 = '材料费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 材料费,
+		SUM ( CASE WHEN c.类别名称 = '检查费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 检查费,
+		SUM ( CASE WHEN c.类别名称 = '检验费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 检验费,
+		SUM ( CASE WHEN c.类别名称 = '治疗费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 治疗费,
+		SUM ( CASE WHEN c.类别名称 = '中草药' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 中草药,
+		SUM ( CASE WHEN c.类别名称 = '工艺品' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 工艺品,
+		SUM ( CASE WHEN c.类别名称 = '理疗费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 理疗费,
+		SUM ( CASE WHEN c.类别名称 = '加工费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 加工费,
+        SUM ( CASE WHEN c.类别名称 = '辨证论治费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END ) AS 辨证论治费,
 		'收费' AS 类别,
 		ISNULL( d.现金, 0 ) AS 现金,
 		ISNULL( d.POS, 0 ) AS POS,
@@ -88,7 +88,8 @@ WITH sfrbb AS (
 	FROM
 		fghis5..系统_病人基本信息表 a
 		LEFT JOIN fghis5..门诊_收费发票表 b ON a.门诊号 = b.门诊号
-		LEFT JOIN fghis5..门诊_收费发票表_结帐ID m ON b.结帐ID = m.结帐ID
+		LEFT JOIN (SELECT 结帐ID, MAX(就诊id) AS 就诊id FROM fghis5..门诊_收费发票表_结帐ID GROUP BY 结帐ID) m ON b.结帐ID = m.结帐ID
+		LEFT JOIN (SELECT 结帐ID, MAX(就诊id) AS 就诊id FROM fghis5..门诊_收费发票表_结帐ID GROUP BY 结帐ID) m2 ON m2.结帐ID = ABS(b.结帐ID)
 		LEFT JOIN (
 		SELECT
 			a.结帐ID,
@@ -100,16 +101,16 @@ WITH sfrbb AS (
 		GROUP BY
 			a.结帐ID,
 			b.类别名称 
-		) c ON b.结帐ID = c.结帐ID
+		) c ON ABS(b.结帐ID) = c.结帐ID
 		LEFT JOIN (
 		SELECT
 			结帐ID,
-			SUM ( CASE WHEN 支付方式 = 0 THEN 支付金额 ELSE 0 END ) AS 现金,
-			SUM ( CASE WHEN 支付方式 = 1 THEN 支付金额 ELSE 0 END ) AS POS,
-			SUM ( CASE WHEN 支付方式 = 4 THEN 支付金额 ELSE 0 END ) AS 储值卡,
-			SUM ( CASE WHEN 支付方式 = 6 THEN 支付金额 ELSE 0 END ) AS 折扣,
-			SUM ( CASE WHEN 支付方式 = 31 THEN 支付金额 ELSE 0 END ) AS 微信,
-			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝,
+			SUM ( CASE WHEN 支付方式 = 0 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 现金,
+			SUM ( CASE WHEN 支付方式 = 1 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS POS,
+			SUM ( CASE WHEN 支付方式 = 4 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 储值卡,
+			SUM ( CASE WHEN 支付方式 = 6 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 折扣,
+			SUM ( CASE WHEN 支付方式 = 31 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 微信,
+			SUM ( CASE WHEN 支付方式 = 32 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 支付宝,
             max(fghis5.dbo.ExtractFieldValue(备注, '备注')) AS 备注,
             max(fghis5.dbo.ExtractFieldValue(备注, '折扣比例')) AS 折扣比例
 		FROM
@@ -120,12 +121,13 @@ WITH sfrbb AS (
 			结帐ID
 		) d ON b.结帐ID = d.结帐ID 
 	WHERE
-		b.操作工号 != '6666' 
+		(b.操作工号 != '6666' OR b.发票状态 IN ('0','1')) 
 		AND b.结帐日期 BETWEEN @bdate AND @edate 
 		AND ( @name = '' OR a.姓名 = @name ) 
-		AND b.发票状态 = '2' 
+		AND b.发票状态 IN ('2','1','0') 
+		AND a.姓名 NOT LIKE '%测试%' 
 	GROUP BY
-		m.就诊id,
+		COALESCE(m.就诊id, m2.就诊id),
 		a.PID,
 		a.门诊号,
 		a.姓名,
@@ -146,7 +148,7 @@ WITH sfrbb AS (
 		d.支付宝,d.折扣比例,d.备注
 		UNION ALL
 	SELECT
-		b.就诊id,
+		COALESCE(gm.就诊id, gm2.就诊id) AS 就诊id,
 		a.PID,
 		a.门诊号,
 		a.姓名,
@@ -182,16 +184,16 @@ WITH sfrbb AS (
         d.折扣比例,d.备注
 	FROM
 		fghis5..系统_病人基本信息表 a
-		LEFT JOIN fghis5..门诊_挂号发票表_结帐ID b ON a.门诊号 = b.门诊号
+	LEFT JOIN fghis5..门诊_挂号发票表 b ON a.门诊号 = b.门诊号
 		LEFT JOIN (
 		SELECT
 			结帐ID,
-			SUM ( CASE WHEN 支付方式 = 0 THEN 支付金额 ELSE 0 END ) AS 现金,
-			SUM ( CASE WHEN 支付方式 = 1 THEN 支付金额 ELSE 0 END ) AS POS,
-			SUM ( CASE WHEN 支付方式 = 4 THEN 支付金额 ELSE 0 END ) AS 储值卡,
-			SUM ( CASE WHEN 支付方式 = 6 THEN 支付金额 ELSE 0 END ) AS 折扣,
-			SUM ( CASE WHEN 支付方式 = 31 THEN 支付金额 ELSE 0 END ) AS 微信,
-			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝,
+			SUM ( CASE WHEN 支付方式 = 0 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 现金,
+			SUM ( CASE WHEN 支付方式 = 1 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS POS,
+			SUM ( CASE WHEN 支付方式 = 4 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 储值卡,
+			SUM ( CASE WHEN 支付方式 = 6 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 折扣,
+			SUM ( CASE WHEN 支付方式 = 31 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 微信,
+			SUM ( CASE WHEN 支付方式 = 32 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 支付宝,
             max(fghis5.dbo.ExtractFieldValue(备注, '备注')) AS 备注,
             max(fghis5.dbo.ExtractFieldValue(备注, '折扣比例')) AS 折扣比例
 		FROM
@@ -201,12 +203,15 @@ WITH sfrbb AS (
 		GROUP BY
 			结帐ID
 		) d ON b.结帐ID = d.结帐ID 
-			left join fghis5..门诊_挂号信息表 f on f.就诊ID =b.就诊ID
+	LEFT JOIN (SELECT 结帐ID, MAX(就诊id) AS 就诊id FROM fghis5..门诊_挂号明细表 GROUP BY 结帐ID) gm ON b.结帐ID = gm.结帐ID
+	LEFT JOIN (SELECT 结帐ID, MAX(就诊id) AS 就诊id FROM fghis5..门诊_挂号明细表 GROUP BY 结帐ID) gm2 ON gm2.结帐ID = ABS(b.结帐ID)
+	left join fghis5..门诊_挂号信息表 f on f.就诊ID = COALESCE(gm.就诊id, gm2.就诊id)
 	WHERE
-		b.操作工号 != '6666' 
-		AND b.结帐日期 BETWEEN @bdate AND @edate 
-		AND ( @name = '' OR a.姓名 = @name ) 
-		AND b.发票状态 = '2' 
+	(b.操作工号 != '6666' OR b.发票状态 IN ('0','1')) 
+	AND b.结帐日期 BETWEEN @bdate AND @edate 
+	AND ( @name = '' OR a.姓名 = @name ) 
+	AND b.发票状态 IN ('2','1','0') 
+	AND a.姓名 NOT LIKE '%测试%' 
 	) 
 
 SELECT
@@ -272,15 +277,22 @@ FROM
 
             string sqlQuery = @"
 with ksys as 
-(select a.结帐ID,a.处方ID,a.就诊ID,a.结帐日期,a.医生工号,d.医生姓名,c.科室名称,b.金额 
-from fghis5..门诊_收费处方表 a 
-INNER join (
-select 结帐ID,处方ID,sum(金额) as 金额 from  fghis5..门诊_收费明细表  where 结帐ID in 
-(select 结帐ID from fghis5..门诊_收费发票表  where 发票状态 =2 and 操作工号 !='6666' and 结帐日期 between @bdate and @edate ) 
+(select f.结帐ID, p.处方ID, p.就诊ID, f.结帐日期, p.医生工号, d.医生姓名, c.科室名称,
+       SIGN(f.结帐ID) * x.金额 AS 金额 
+from fghis5..门诊_收费发票表 f 
+left join fghis5..门诊_收费处方表 p ON p.结帐ID = ABS(f.结帐ID)
+left join (
+select 结帐ID, 处方ID, sum(金额) as 金额 from  fghis5..门诊_收费明细表  where 结帐ID in 
+(select ABS(结帐ID) from fghis5..门诊_收费发票表  where 发票状态 in ('2','1','0') and 结帐日期 between @bdate and @edate ) 
 group by 结帐ID,处方ID
-) b on a.结帐ID=b.结帐ID and a.处方ID=b.处方ID
-left join fghis5..代码_科室信息表 c on a.医生科室=c.科室ID
-left join fghis5..系统_医生信息表 d on a.医生ID=d.医生ID
+) x ON x.结帐ID = ABS(f.结帐ID) AND x.处方ID = p.处方ID
+left join fghis5..代码_科室信息表 c on p.医生科室 = c.科室ID
+left join fghis5..系统_医生信息表 d on p.医生ID = d.医生ID
+left join fghis5..系统_病人基本信息表 pat ON pat.门诊号 = f.门诊号
+where f.发票状态 in ('2','1','0') 
+  AND (f.操作工号 != '6666' OR f.发票状态 IN ('0','1')) 
+  AND f.结帐日期 between @bdate and @edate 
+  AND ISNULL(pat.姓名,'') NOT LIKE '%测试%' 
 )
 
 select 结帐日期,科室名称,sum(金额) as 科室总金额 from ksys where   (@name='' or 科室名称 = @name) group by 结帐日期,科室名称";
@@ -311,7 +323,7 @@ select 结帐日期,科室名称,sum(金额) as 科室总金额 from ksys where 
                        SET CONCAT_NULL_YIELDS_NULL ON;
 WITH sfrbb AS (
 	SELECT
-    m.就诊id,
+    COALESCE(m.就诊id, m2.就诊id) AS 就诊id,
     a.PID,
     a.门诊号,
     a.姓名,
@@ -333,22 +345,22 @@ WITH sfrbb AS (
                 fghis5..门诊_收费明细表 a1
                 LEFT JOIN fghis5..门诊_收费处方表 f1 ON f1.结帐ID = a1.结帐ID AND a1.处方id = f1.处方id
                 LEFT JOIN fghis5..系统_医生信息表 d1 ON f1.医生ID = d1.医生ID
-            WHERE a1.结帐ID = b.结帐ID
+            WHERE a1.结帐ID = ABS(b.结帐ID)
         ) c2
         WHERE c2.医生姓名 IS NOT NULL
         FOR XML PATH(''), TYPE
     ).value('.', 'NVARCHAR(MAX)'), 1, 1, '') as 接诊医生,
-    m.总金额,
-    SUM(CASE WHEN c.类别名称 = '诊查费' THEN c.金额 ELSE 0 END) AS 诊查费,
-    SUM(CASE WHEN c.类别名称 = '材料费' THEN c.金额 ELSE 0 END) AS 材料费,
-    SUM(CASE WHEN c.类别名称 = '检查费' THEN c.金额 ELSE 0 END) AS 检查费,
-    SUM(CASE WHEN c.类别名称 = '检验费' THEN c.金额 ELSE 0 END) AS 检验费,
-    SUM(CASE WHEN c.类别名称 = '治疗费' THEN c.金额 ELSE 0 END) AS 治疗费,
-    SUM(CASE WHEN c.类别名称 = '中草药' THEN c.金额 ELSE 0 END) AS 中草药,
-    SUM(CASE WHEN c.类别名称 = '工艺品' THEN c.金额 ELSE 0 END) AS 工艺品,
-    SUM(CASE WHEN c.类别名称 = '理疗费' THEN c.金额 ELSE 0 END) AS 理疗费,
-    SUM(CASE WHEN c.类别名称 = '加工费' THEN c.金额 ELSE 0 END) AS 加工费,
-    SUM(CASE WHEN c.类别名称 = '辨证论治费' THEN c.金额 ELSE 0 END) AS 辨证论治费,
+    b.总金额,
+    SUM(CASE WHEN c.类别名称 = '诊查费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 诊查费,
+    SUM(CASE WHEN c.类别名称 = '材料费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 材料费,
+    SUM(CASE WHEN c.类别名称 = '检查费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 检查费,
+    SUM(CASE WHEN c.类别名称 = '检验费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 检验费,
+    SUM(CASE WHEN c.类别名称 = '治疗费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 治疗费,
+    SUM(CASE WHEN c.类别名称 = '中草药' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 中草药,
+    SUM(CASE WHEN c.类别名称 = '工艺品' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 工艺品,
+    SUM(CASE WHEN c.类别名称 = '理疗费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 理疗费,
+    SUM(CASE WHEN c.类别名称 = '加工费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 加工费,
+    SUM(CASE WHEN c.类别名称 = '辨证论治费' THEN SIGN(b.结帐ID)*c.金额 ELSE 0 END) AS 辨证论治费,
     '收费' AS 类别,
     ISNULL(d.现金, 0) AS 现金,
     ISNULL(d.POS, 0) AS POS,
@@ -362,7 +374,8 @@ WITH sfrbb AS (
 FROM
     fghis5..系统_病人基本信息表 a
     LEFT JOIN fghis5..门诊_收费发票表 b ON a.门诊号 = b.门诊号
-    LEFT JOIN fghis5..门诊_收费发票表_结帐ID m ON b.结帐ID = m.结帐ID
+    LEFT JOIN (SELECT 结帐ID, MAX(就诊id) AS 就诊id FROM fghis5..门诊_收费发票表_结帐ID GROUP BY 结帐ID) m ON b.结帐ID = m.结帐ID
+    LEFT JOIN (SELECT 结帐ID, MAX(就诊id) AS 就诊id FROM fghis5..门诊_收费发票表_结帐ID GROUP BY 结帐ID) m2 ON m2.结帐ID = ABS(b.结帐ID)
     LEFT JOIN (
         SELECT
             a.结帐ID,
@@ -374,16 +387,16 @@ FROM
         GROUP BY
             a.结帐ID,
             b.类别名称
-    ) c ON b.结帐ID = c.结帐ID
+    ) c ON ABS(b.结帐ID) = c.结帐ID
     LEFT JOIN (
         SELECT
             结帐ID,
-            SUM(CASE WHEN 支付方式 = 0 THEN 支付金额 ELSE 0 END) AS 现金,
-            SUM(CASE WHEN 支付方式 = 1 THEN 支付金额 ELSE 0 END) AS POS,
-            SUM(CASE WHEN 支付方式 = 4 THEN 支付金额 ELSE 0 END) AS 储值卡,
-            SUM(CASE WHEN 支付方式 = 6 THEN 支付金额 ELSE 0 END) AS 折扣,
-            SUM(CASE WHEN 支付方式 = 31 THEN 支付金额 ELSE 0 END) AS 微信,
-            SUM(CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END) AS 支付宝 
+            SUM(CASE WHEN 支付方式 = 0 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END) AS 现金,
+            SUM(CASE WHEN 支付方式 = 1 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END) AS POS,
+            SUM(CASE WHEN 支付方式 = 4 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END) AS 储值卡,
+            SUM(CASE WHEN 支付方式 = 6 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END) AS 折扣,
+            SUM(CASE WHEN 支付方式 = 31 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END) AS 微信,
+            SUM(CASE WHEN 支付方式 = 32 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END) AS 支付宝 
         FROM
             fghis5..门诊_收费支付表 
         WHERE
@@ -392,12 +405,13 @@ FROM
             结帐ID 
     ) d ON b.结帐ID = d.结帐ID 
 WHERE
-    b.操作工号 != '6666' 
+    (b.操作工号 != '6666' OR b.发票状态 IN ('0','1')) 
     AND b.结帐日期 BETWEEN @bdate AND @edate 
-		AND ( @name = '' OR a.姓名 = @name ) 
-    AND b.发票状态 = '2' 
-GROUP BY
-    m.就诊id,
+    AND ( @name = '' OR a.姓名 = @name ) 
+    AND b.发票状态 IN ('2','1','0') 
+    AND a.姓名 NOT LIKE '%测试%' 
+    GROUP BY
+    COALESCE(m.就诊id, m2.就诊id),
     a.PID,
     a.门诊号,
     a.姓名,
@@ -409,7 +423,7 @@ GROUP BY
     b.发票状态,
     b.操作工号,
     b.工作组号,
-    m.总金额,
+    b.总金额,
     d.现金,
     d.POS,
     d.储值卡,
@@ -418,7 +432,7 @@ GROUP BY
     d.支付宝 
 		UNION ALL
 	SELECT
-		b.就诊id,
+		COALESCE(gm.就诊id, gm2.就诊id) AS 就诊id,
 		a.PID,
 		a.门诊号,
 		a.姓名,
@@ -455,16 +469,16 @@ GROUP BY
 		
 	FROM
 		fghis5..系统_病人基本信息表 a
-		LEFT JOIN fghis5..门诊_挂号发票表_结帐ID b ON a.门诊号 = b.门诊号
+	LEFT JOIN fghis5..门诊_挂号发票表 b ON a.门诊号 = b.门诊号
 		LEFT JOIN (
 		SELECT
 			结帐ID,
-			SUM ( CASE WHEN 支付方式 = 0 THEN 支付金额 ELSE 0 END ) AS 现金,
-			SUM ( CASE WHEN 支付方式 = 1 THEN 支付金额 ELSE 0 END ) AS POS,
-			SUM ( CASE WHEN 支付方式 = 4 THEN 支付金额 ELSE 0 END ) AS 储值卡,
-			SUM ( CASE WHEN 支付方式 = 6 THEN 支付金额 ELSE 0 END ) AS 折扣,
-			SUM ( CASE WHEN 支付方式 = 31 THEN 支付金额 ELSE 0 END ) AS 微信,
-			SUM ( CASE WHEN 支付方式 = 32 THEN 支付金额 ELSE 0 END ) AS 支付宝 
+			SUM ( CASE WHEN 支付方式 = 0 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 现金,
+			SUM ( CASE WHEN 支付方式 = 1 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS POS,
+			SUM ( CASE WHEN 支付方式 = 4 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 储值卡,
+			SUM ( CASE WHEN 支付方式 = 6 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 折扣,
+			SUM ( CASE WHEN 支付方式 = 31 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 微信,
+			SUM ( CASE WHEN 支付方式 = 32 AND ABS(支付金额) >= 0.01 THEN 支付金额 ELSE 0 END ) AS 支付宝 
 		FROM
 			fghis5..门诊_挂号支付表 
 		WHERE
@@ -472,12 +486,15 @@ GROUP BY
 		GROUP BY
 			结帐ID 
 		) d ON b.结帐ID = d.结帐ID 
-		left join fghis5..门诊_挂号信息表 f on f.就诊ID =b.就诊ID
+	LEFT JOIN (SELECT 结帐ID, MAX(就诊id) AS 就诊id FROM fghis5..门诊_挂号明细表 GROUP BY 结帐ID) gm ON b.结帐ID = gm.结帐ID
+	LEFT JOIN (SELECT 结帐ID, MAX(就诊id) AS 就诊id FROM fghis5..门诊_挂号明细表 GROUP BY 结帐ID) gm2 ON gm2.结帐ID = ABS(b.结帐ID)
+	left join fghis5..门诊_挂号信息表 f on f.就诊ID = COALESCE(gm.就诊id, gm2.就诊id)
 	WHERE
-		b.操作工号 != '6666' 
-		AND b.结帐日期 BETWEEN @bdate AND @edate 
-		AND ( @name = '' OR a.姓名 = @name ) 
-		AND b.发票状态 = '2' 
+	(b.操作工号 != '6666' OR b.发票状态 IN ('0','1')) 
+	AND b.结帐日期 BETWEEN @bdate AND @edate 
+	AND ( @name = '' OR a.姓名 = @name ) 
+	AND b.发票状态 IN ('2','1','0') 
+	AND a.姓名 NOT LIKE '%测试%' 
 	) 
 	
 SELECT * FROM (
