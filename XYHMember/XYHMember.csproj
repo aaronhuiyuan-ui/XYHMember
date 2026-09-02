@@ -325,6 +325,7 @@
     <Content Include="Views\ReportForms\Medicament.cshtml" />
     <Content Include="Views\ReportForms\MannerInfo.cshtml" />
     <Content Include="Views\ReportForms\Manner.cshtml" />
+    <Content Include="Views\ReportForms\PrescriptionFix.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="App_Data\" />

@@ -595,6 +595,19 @@ namespace XYHMember.Context
         public decimal 应付总金额 { get; set; }  // = 应付加工费 + 应付快递费 + 应付药品费（导入时重算）
     }
 
+    //处方对应关系修正（待修处方：发票状态2 但 处方结果本地表 无记录，含加工费/快递费）
+    public class UnmatchedPrescription
+    {
+        public int 处方ID { get; set; }
+        public string 日期 { get; set; }        // yyyy-MM-dd（收费日期）
+        public string 姓名 { get; set; }
+        public int? 门诊号 { get; set; }
+        public decimal? 收费加工费 { get; set; }
+        public decimal? 收费快递费 { get; set; }
+        public int? 候选原处方ID { get; set; }   // 自动推荐的复制来源（同门诊号退费原票）
+        public string 候选原处方日期 { get; set; }
+    }
+
     //金蝶EAS耗材入库（跨Oracle库查询用）
     public class MaterialInboundItem
     {

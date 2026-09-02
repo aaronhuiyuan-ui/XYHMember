@@ -1,0 +1,212 @@
+@{
+    ViewBag.Title = "处方对应关系修正";
+}
+
+@{
+    var bdatepicker = Request["bdatepicker"] ?? DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd");
+    var edatepicker = Request["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/my")
+    @Styles.Render("~/Content/flatpickr")
+    <style>
+        #dataTable {
+            width: 100% !important;
+            min-width: 900px !important;
+            table-layout: auto !important;
+        }
+        #dataTable th,
+        #dataTable td {
+            padding: 3px 8px !important;
+            white-space: nowrap;
+        }
+        #dataTable thead th {
+            background: #f0f0f0 !important;
+            color: #333 !important;
+            font-weight: 600;
+        }
+        .table-wrapper {
+            overflow: auto !important;
+            max-width: calc(100vw - 40px) !important;
+        }
+        .px-原处方输入 {
+            width: 90px;
+            height: 28px;
+            border: 1px solid #d0d0d0;
+            border-radius: 3px;
+            padding: 0 6px;
+            font-size: 13px;
+        }
+        .tip-bar {
+            padding: 8px 14px;
+            background: #fff7e6;
+            border: 1px solid #ffd591;
+            border-radius: 4px;
+            color: #874d00;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <div class="container">
+            <div>
+                <form onsubmit="return false;">
+                    <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;margin-left:10px;">
+                        <label style="margin:0 5px 0 10px;">收费日期</label>
+                        <input type="text" name="bdatepicker" id="bdatepicker"
+                               value="@bdatepicker" placeholder="开始日期" style="height:30px;">
+                        <label style="margin:0 5px;">—</label>
+                        <input type="text" name="edatepicker" id="edatepicker"
+                               value="@edatepicker" placeholder="结束日期" style="height:30px;">
+                        <span class="am-input-group-btn" style="margin-left:15px;">
+                            <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="tip-bar" style="margin:10px 10px 0;">
+            说明：这里列出「发票状态2（有效收费）、含加工费/快递费、但在 <b>处方结果本地表</b> 查不到发药信息」的处方
+            （通常是门诊退费后重新录入、新处方未发药导致）。<br>
+            选中后，把「原处方ID」改成能复制的那条（默认已自动推荐同患者退费原票），点「替换」，系统会用原处方在处方结果本地表补录当前处方，快递单号随之对上。操作结果会清楚提示。
+        </div>
+
+        <div class="am-g">
+            <div class="am-u-sm-12">
+                <div class="table-wrapper" style="overflow:auto;margin:10px;">
+                <table class="am-table am-table-striped am-table-hover table-main" id="dataTable" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>处方ID</th>
+                            <th>收费日期</th>
+                            <th>患者</th>
+                            <th>门诊号</th>
+                            <th>加工费</th>
+                            <th>快递费</th>
+                            <th>原处方ID（复制来源，可改）</th>
+                            <th>原处方日期</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr><td colspan="9" style="text-align:center;color:#999;">请选择日期范围后查询</td></tr>
+                    </tbody>
+                </table>
+                </div>
+                <div id="paginationContainer" style="margin-left:10px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/Scripts/pagination.js"></script>
+    <script src="~/Scripts/customDialog.js"></script>
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        flatpickr("#bdatepicker", { dateFormat: "Y-m-d", defaultDate: "@bdatepicker" });
+        flatpickr("#edatepicker", { dateFormat: "Y-m-d", defaultDate: "@edatepicker" });
+
+        function escapeHtml(s) {
+            if (s === null || s === undefined) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function doSearch() {
+            var b = document.getElementById('bdatepicker').value;
+            var e = document.getElementById('edatepicker').value;
+            if (!b || !e) { customDialog.info('请选择日期范围', '提示'); return; }
+            fetch('@Url.Action("GetUnmatchedPrescriptions", "ReportForms")?bdate=' + encodeURIComponent(b) +
+                  '&edate=' + encodeURIComponent(e))
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data && data.success === false) {
+                        document.getElementById('tableBody').innerHTML =
+                            '<tr><td colspan="9" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
+                        return;
+                    }
+                    renderTable(data || []);
+                })
+                .catch(function (err) {
+                    document.getElementById('tableBody').innerHTML =
+                        '<tr><td colspan="9" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
+                });
+        }
+
+        function renderTable(list) {
+            var tbody = document.getElementById('tableBody');
+            if (!list || list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">没有需要修正的处方</td></tr>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < list.length; i++) {
+                var p = list[i];
+                html += '<tr>' +
+                    '<td>' + escapeHtml(p.处方ID) + '</td>' +
+                    '<td>' + escapeHtml(p.日期) + '</td>' +
+                    '<td>' + escapeHtml(p.姓名) + '</td>' +
+                    '<td>' + escapeHtml(p.门诊号) + '</td>' +
+                    '<td>' + (p.收费加工费 != null ? Number(p.收费加工费).toFixed(2) : '') + '</td>' +
+                    '<td>' + (p.收费快递费 != null ? Number(p.收费快递费).toFixed(2) : '') + '</td>' +
+                    '<td><input type="number" class="px-原处方输入" value="' + escapeHtml(p.候选原处方ID || '') + '" data-cur="' + p.处方ID + '" placeholder="原处方ID"></td>' +
+                    '<td>' + escapeHtml(p.候选原处方日期 || '') + '</td>' +
+                    '<td><button class="am-btn am-btn-primary am-btn-xs" onclick="doReplace(' + p.处方ID + ', this)">替换</button></td>' +
+                    '</tr>';
+            }
+            tbody.innerHTML = html;
+            initTablePagination('dataTable');
+        }
+
+        function doReplace(curId, btn) {
+            var tr = btn.closest('tr');
+            var input = tr.querySelector('.px-原处方输入');
+            var srcId = (input.value || '').trim();
+            if (!srcId) { customDialog.info('请填写原处方ID', '提示'); return; }
+
+            customDialog.confirm('确认将处方 ' + curId + ' 用原处方 ' + srcId + ' 补录到处方结果本地表吗？', '替换确认', function () {
+                btn.disabled = true;
+                btn.innerText = '替换中...';
+                fetch('@Url.Action("ReplacePrescription", "ReportForms")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: '当前处方ID=' + encodeURIComponent(curId) + '&原处方ID=' + encodeURIComponent(srcId)
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    btn.disabled = false;
+                    btn.innerText = '替换';
+                    if (data && data.success) {
+                        customDialog.success(data.msg);
+                        // 补录成功后把这一行从待修列表移除（该处方已有记录了）
+                        tr.parentNode.removeChild(tr);
+                    } else {
+                        customDialog.error((data && data.msg) || '替换失败');
+                    }
+                })
+                .catch(function (err) {
+                    btn.disabled = false;
+                    btn.innerText = '替换';
+                    customDialog.error('替换失败：' + err.message);
+                });
+            });
+        }
+
+        document.getElementById('edatepicker').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+        });
+        document.getElementById('bdatepicker').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+        });
+    </script>
+</body>
+</html>

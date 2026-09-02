@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Web;
 using System.Web.Mvc;
 using XYHMember.Context;
@@ -300,6 +301,155 @@ select 结帐日期,科室名称,sum(金额) as 科室总金额 from ksys where 
             var result = db.Database.SqlQuery<Departments>(sqlQuery, QueryHelper.BuildReportParams(name, bdate, edate)).ToList();
 
             return View("Department", result);
+        }
+
+        // =====================================================================
+        //  处方对应关系修正（发票状态2 但 处方结果本地表 无记录 → 用退费原处方补录）
+        // =====================================================================
+
+        /// <summary>
+        /// 处方对应关系修正页面（GET）
+        /// </summary>
+        public ActionResult PrescriptionFix()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// 待修处方列表：发票状态2、含加工费/快递费(类别99/91)、且 处方结果本地表 无记录。
+        /// 自动推荐「候选原处方」：同门诊号、已退费(状态1)、处方结果本地表有记录、日期最近的一条。
+        /// GET /ReportForms/GetUnmatchedPrescriptions?bdate=&edate=
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetUnmatchedPrescriptions(string bdate, string edate)
+        {
+            try
+            {
+                var b = QueryHelper.ParseDate(string.IsNullOrWhiteSpace(bdate) ? DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd") : bdate.Trim());
+                var e = QueryHelper.ParseDate(string.IsNullOrWhiteSpace(edate) ? DateTime.Today.ToString("yyyy-MM-dd") : edate.Trim());
+
+                var list = db.Database.SqlQuery<UnmatchedPrescription>(
+                    @"SELECT b.处方ID,
+                             CONVERT(varchar(10), CONVERT(date, MAX(b.日期)), 23) AS 日期,
+                             MAX(a.姓名) AS 姓名, MAX(a.门诊号) AS 门诊号,
+                             SUM(CASE WHEN b.项目类别=99 THEN b.金额 ELSE 0 END) AS 收费加工费,
+                             SUM(CASE WHEN b.项目类别=91 THEN b.金额 ELSE 0 END) AS 收费快递费
+                      FROM fghis5..门诊_收费明细表 b
+                      JOIN fghis5..门诊_收费发票表 a ON a.结帐ID = b.结帐ID
+                      WHERE a.发票状态 = '2'
+                        AND b.日期 BETWEEN @b AND @e
+                        AND EXISTS (SELECT 1 FROM fghis5..门诊_收费明细表 d WHERE d.处方ID = b.处方ID AND d.项目类别 IN (99,91))
+                        AND NOT EXISTS (SELECT 1 FROM fghis5..处方结果本地表 r
+                                        WHERE r.outcfcode IS NOT NULL AND CAST(r.outcfcode AS INT) = b.处方ID
+                                          AND ISNULL(r.json_data,'') <> '')
+                      GROUP BY b.处方ID
+                      ORDER BY 日期 DESC, b.处方ID",
+                    new SqlParameter("@b", b),
+                    new SqlParameter("@e", e)).ToList();
+
+                // 逐条推荐候选原处方（同门诊号、发票状态1、处方结果本地表有记录、日期最近）
+                foreach (var p in list)
+                {
+                    var cand = db.Database.SqlQuery<UnmatchedPrescription>(
+                        @"SELECT TOP 1 b2.处方ID AS 候选原处方ID,
+                                  CONVERT(varchar(10), CONVERT(date, MAX(b2.日期)), 23) AS 候选原处方日期
+                           FROM fghis5..门诊_收费明细表 b2
+                           JOIN fghis5..门诊_收费发票表 a2 ON a2.结帐ID = b2.结帐ID
+                           WHERE a2.发票状态 = '1' AND a2.门诊号 = @门诊号 AND b2.处方ID <> @处方ID
+                             AND EXISTS (SELECT 1 FROM fghis5..处方结果本地表 r
+                                         WHERE r.outcfcode IS NOT NULL AND CAST(r.outcfcode AS INT) = b2.处方ID
+                                           AND ISNULL(r.json_data,'') <> '')
+                           GROUP BY b2.处方ID
+                           ORDER BY MAX(b2.日期) DESC, b2.处方ID",
+                        new SqlParameter("@门诊号", (object)p.门诊号 ?? DBNull.Value),
+                        new SqlParameter("@处方ID", p.处方ID)).FirstOrDefault();
+                    if (cand != null)
+                    {
+                        p.候选原处方ID = cand.候选原处方ID;
+                        p.候选原处方日期 = cand.候选原处方日期;
+                    }
+                }
+
+                return Json(list, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 替换：把「当前处方ID」用「原处方ID」在 处方结果本地表 补一条记录（复制原方 json，改 outcfcode/billdate）。
+        /// POST /ReportForms/ReplacePrescription
+        /// </summary>
+        [HttpPost]
+        public ActionResult ReplacePrescription(int 当前处方ID, int 原处方ID)
+        {
+            try
+            {
+                if (当前处方ID <= 0 || 原处方ID <= 0 || 当前处方ID == 原处方ID)
+                    return Json(new { success = false, msg = "参数不正确" });
+
+                // 1. 原处方必须有处方结果记录
+                var src = db.Database.SqlQuery<DispenseJsonRecord>(
+                    @"SELECT CAST(outcfcode AS INT) AS 处方ID, json_data AS content_json
+                      FROM fghis5..处方结果本地表 WHERE outcfcode = @原",
+                    new SqlParameter("@原", 原处方ID.ToString())).FirstOrDefault();
+                if (src == null || string.IsNullOrWhiteSpace(src.content_json))
+                    return Json(new { success = false, msg = "原处方 " + 原处方ID + " 在处方结果本地表没有记录，无法复制" });
+
+                // 2. 当前处方不能已有记录（避免重复补）
+                var exists = db.Database.SqlQuery<int>(
+                    "SELECT COUNT(*) FROM fghis5..处方结果本地表 WHERE outcfcode = @当前",
+                    new SqlParameter("@当前", 当前处方ID.ToString())).FirstOrDefault();
+                if (exists > 0)
+                    return Json(new { success = false, msg = "处方 " + 当前处方ID + " 已有处方结果记录，无需替换" });
+
+                // 3. 当前处方的收费日期（作为 billdate）
+                var 日期 = db.Database.SqlQuery<string>(
+                    @"SELECT TOP 1 CONVERT(varchar(10), CONVERT(date, b.日期), 23)
+                      FROM fghis5..门诊_收费明细表 b WHERE b.处方ID = @处方ID",
+                    new SqlParameter("@处方ID", 当前处方ID)).FirstOrDefault();
+                if (string.IsNullOrEmpty(日期))
+                    日期 = DateTime.Today.ToString("yyyy-MM-dd");
+
+                // 4. 复制 json：outcfcode 换成当前处方ID，billdate 换成当前日期
+                var 新json = src.content_json;
+                新json = Regex.Replace(新json, "\"outcfcode\"\\s*:\\s*\"[^\"]*\"", "\"outcfcode\":\"" + 当前处方ID + "\"");
+                新json = Regex.Replace(新json, "\"billdate\"\\s*:\\s*\"[^\"]*\"", "\"billdate\":\"" + 日期 + "\"");
+
+                // 5. 插入
+                db.Database.ExecuteSqlCommand(
+                    @"INSERT INTO fghis5..处方结果本地表 (outcfcode, billdate, json_data, 查询时间)
+                      VALUES (@outcfcode, @billdate, @json_data, GETDATE())",
+                    new SqlParameter("@outcfcode", 当前处方ID.ToString()),
+                    new SqlParameter("@billdate", 日期),
+                    new SqlParameter("@json_data", 新json));
+
+                var expr = ExtractExpressNumber(新json);
+                return Json(new { success = true, msg = "补录成功：处方 " + 当前处方ID +
+                    " 已复制自 " + 原处方ID +
+                    (string.IsNullOrEmpty(expr) ? "" : "，快递单号 " + expr) +
+                    "（billdate " + 日期 + "）" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = "替换失败：" + inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 从处方结果 JSON 提取快递单号 expressnumber
+        /// </summary>
+        private string ExtractExpressNumber(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return "";
+            var m = Regex.Match(json, "\"expressnumber\"\\s*:\\s*\"([^\"]*)\"");
+            return m.Success ? m.Groups[1].Value : "";
         }
 
 
