@@ -289,7 +289,26 @@
                 <input type="hidden" id="reg_套餐名称">
                 <div class="field">
                     <label>参与执行人（按岗位提成比例）</label>
-                    <div id="reg_执行人区" style="max-height:132px;overflow:auto;border:1px solid #eee;border-radius:3px;padding:6px;font-size:13px;color:#333;">加载中...</div>
+                    <div id="reg_执行人区" style="border:1px solid #eee;border-radius:3px;padding:8px;font-size:13px;color:#333;">
+                        <div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
+                            <span style="width:56px;font-weight:600;color:#0e90d2;">医师</span>
+                            <select id="reg_医师" class="reg-exec-sel" style="flex:1;height:28px;padding:0 6px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;background:#fff;">
+                                <option value="">（未参与）</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
+                            <span style="width:56px;font-weight:600;color:#0e90d2;">理疗师</span>
+                            <select id="reg_理疗师" class="reg-exec-sel" style="flex:1;height:28px;padding:0 6px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;background:#fff;">
+                                <option value="">（未参与）</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
+                            <span style="width:56px;font-weight:600;color:#0e90d2;">护士</span>
+                            <select id="reg_护士" class="reg-exec-sel" style="flex:1;height:28px;padding:0 6px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;background:#fff;">
+                                <option value="">（未参与）</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -756,11 +775,14 @@
             openModal('registerModal');
         }
 
-        // 登记弹窗：加载参与执行人，按岗位三列（医师/理疗师/护士）展示，人员可勾选，默认勾当前登录人
+        // 登记弹窗：参与执行人按岗位三行下拉选择（医师/理疗师/护士），默认选中当前登录人
         function loadRegisterExecutors() {
-            var box = document.getElementById('reg_执行人区');
-            if (!box) return;
-            box.innerHTML = '加载中...';
+            var selIds = { '医师': 'reg_医师', '理疗师': 'reg_理疗师', '护士': 'reg_护士' };
+            // 重置三个下拉
+            for (var k in selIds) {
+                var sel = document.getElementById(selIds[k]);
+                if (sel) sel.innerHTML = '<option value="">（未参与）</option>';
+            }
             fetch('@Url.Action("GetCurrentUser", "MedicalTech")')
                 .then(function(r) { return r.json(); })
                 .then(function(u) {
@@ -769,35 +791,24 @@
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(list) {
-                    if (!list || list.success === false || list.length === 0) {
-                        box.innerHTML = '<span style="color:#999;">暂无执行人员（请先到「执行人员信息维护」添加）</span>';
-                        return;
-                    }
-                    var cols = ['医师', '理疗师', '护士'];
-                    var groups = { '医师': [], '理疗师': [], '护士': [] };
+                    if (!list || list.success === false || list.length === 0) return;
                     for (var i = 0; i < list.length; i++) {
-                        var p = (list[i].岗位 || '').trim();
-                        if (groups[p]) groups[p].push(list[i]);
+                        var s = list[i];
+                        var p = (s.岗位 || '').trim();
+                        var sel = document.getElementById(selIds[p]);
+                        if (!sel) continue;
+                        var opt = document.createElement('option');
+                        opt.value = s.工号;
+                        opt.textContent = s.姓名 || s.工号;
+                        sel.appendChild(opt);
                     }
-                    var html = '<div style="display:flex;gap:8px;">';
-                    for (var c = 0; c < cols.length; c++) {
-                        var arr = groups[cols[c]] || [];
-                        var sub = '';
-                        for (var k = 0; k < arr.length; k++) {
-                            var s = arr[k];
-                            var checked = (s.工号 === window._currentJob) ? ' checked' : '';
-                            sub += '<label style="display:flex;align-items:center;gap:4px;margin:2px 0;cursor:pointer;font-weight:normal;font-size:13px;">' +
-                                   '<input type="checkbox" class="reg-exec" value="' + escapeHtml(s.工号) + '"' + checked + '>' +
-                                   '<span>' + escapeHtml(s.姓名 || s.工号) + '</span></label>';
-                        }
-                        html += '<div style="flex:1;border:1px solid #e3e3e3;border-radius:3px;padding:4px 8px;min-width:88px;">' +
-                                '<div style="font-weight:600;color:#0e90d2;border-bottom:1px solid #eee;padding-bottom:3px;margin-bottom:2px;">' + cols[c] + '</div>' +
-                                (sub || '<div style="color:#ccc;font-size:12px;">（无）</div>') + '</div>';
+                    // 默认每个下拉选中该岗位第一个人员
+                    for (var k in selIds) {
+                        var sel3 = document.getElementById(selIds[k]);
+                        if (sel3 && sel3.options.length > 1) sel3.selectedIndex = 1;
                     }
-                    html += '</div>';
-                    box.innerHTML = html;
                 })
-                .catch(function() { box.innerHTML = '<span style="color:#999;">加载失败</span>'; });
+                .catch(function() {});
         }
 
         function submitRegister() {
@@ -811,9 +822,12 @@
                 总次数: parseInt(document.getElementById('reg_总次数').value) || 1,
                 套餐名称: document.getElementById('reg_套餐名称').value
             };
-            // 收集勾选的参与执行人工号
+            // 收集各岗位下拉选中的参与执行人工号
             var execJobs = [];
-            document.querySelectorAll('#reg_执行人区 .reg-exec:checked').forEach(function(cb) { execJobs.push(cb.value); });
+            ['reg_医师', 'reg_理疗师', 'reg_护士'].forEach(function(id) {
+                var v = document.getElementById(id).value;
+                if (v) execJobs.push(v);
+            });
             data.执行人工号 = execJobs.join(',');
 
             var isSupp = window._regMode === 'supplement';

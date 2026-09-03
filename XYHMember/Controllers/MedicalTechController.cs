@@ -375,11 +375,12 @@ namespace XYHMember.Controllers
         /// <summary>
         /// 生成套餐岗位提成明细：按参与执行人岗位×整单实际支付；先清该登记旧明细再重建（登记/补登记共用）。
         /// </summary>
-        private void WritePackageCommission(int 登记ID, int 结帐ID, int 处方ID, string 执行人工号, string 套餐名称 = null)
+        private int WritePackageCommission(int 登记ID, int 结帐ID, int 处方ID, string 执行人工号, string 套餐名称 = null)
         {
-            if (string.IsNullOrWhiteSpace(执行人工号)) return;
+            int 生成数 = 0;
+            if (string.IsNullOrWhiteSpace(执行人工号)) return 0;
             var 实际支付 = Get实际支付(结帐ID);
-            if (实际支付 <= 0) return;
+            if (实际支付 <= 0) return 0;
 
             // 套餐名称：优先用页面传入的「套餐名称」列值；为空再兜底按 结帐ID+处方ID 查明细
             var 套餐名称值 = (套餐名称 ?? "").Trim();
@@ -389,10 +390,10 @@ namespace XYHMember.Controllers
                       FROM fghis5..门诊_收费明细表 b
                       WHERE b.结帐ID = @结帐ID AND b.处方ID = @处方ID
                         AND LTRIM(RTRIM(ISNULL(b.套餐名称,''))) <> ''
-                      ORDER BY b.序号",
+                      ORDER BY b.明细序号",
                     new SqlParameter("@结帐ID", 结帐ID),
                     new SqlParameter("@处方ID", 处方ID)).FirstOrDefault();
-            if (string.IsNullOrEmpty(套餐名称值)) return;
+            if (string.IsNullOrEmpty(套餐名称值)) return 0;
 
             // 该套餐配置的各岗位比例
             var pkg = db.Database.SqlQuery<MedicalTechPackageCommission>(
@@ -427,7 +428,9 @@ namespace XYHMember.Controllers
                     new SqlParameter("@比例", 岗位比例),
                     new SqlParameter("@基数", 实际支付),
                     new SqlParameter("@金额", 提成额));
+                生成数++;
             }
+            return 生成数;
         }
 
         /// <summary>
@@ -449,8 +452,10 @@ namespace XYHMember.Controllers
                 if (string.IsNullOrWhiteSpace(执行人工号))
                     return Json(new { success = false, msg = "请勾选参与执行人" });
 
-                WritePackageCommission(reg.登记ID, 结帐ID, 处方ID, 执行人工号, 套餐名称);
-                return Json(new { success = true, msg = "补登记成功，套餐提成已生成（登记ID " + reg.登记ID + "）" });
+                int cnt = WritePackageCommission(reg.登记ID, 结帐ID, 处方ID, 执行人工号, 套餐名称);
+                if (cnt == 0)
+                    return Json(new { success = true, msg = "补登记完成，但未生成提成明细。可能原因：该套餐在「套餐岗位比例表」未配置，或所选执行人不在「医技执行人员信息表」、或其岗位未配比例，或整单实际支付为0。" });
+                return Json(new { success = true, msg = "补登记成功，生成套餐提成 " + cnt + " 笔（登记ID " + reg.登记ID + "）" });
             }
             catch (Exception ex)
             {
