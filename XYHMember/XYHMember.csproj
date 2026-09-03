@@ -304,6 +304,7 @@
     <Content Include="Views\MedicalTech\StaffList.cshtml" />
     <Content Include="Views\MedicalTech\DefaultCount.cshtml" />
     <Content Include="Views\MedicalTech\Commission.cshtml" />
+    <Content Include="Views\MedicalTech\CommissionSummary.cshtml" />
     <Content Include="Views\MedicalTech\ExecutionRecords.cshtml" />
     <Content Include="Views\MedicalTech\MaterialInbound.cshtml" />
     <Content Include="Views\MedicalTech\MaterialOutbound.cshtml" />

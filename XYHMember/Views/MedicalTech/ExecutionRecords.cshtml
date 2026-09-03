@@ -154,6 +154,9 @@
                             <th>进度</th>
                             <th>本次执行金额</th>
                             <th>操作人提成</th>
+                            <th>套餐-医师提成</th>
+                            <th>套餐-理疗师提成</th>
+                            <th>套餐-护士提成</th>
                             <th>执行人<span class="hdr-filter-trigger" data-col="执行人">▼</span>
                                 <div class="hdr-filter-dropdown" id="hdrDropdown执行人"></div>
                             </th>
@@ -162,7 +165,7 @@
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="15" style="text-align:center;color:#999;">加载中...</td></tr>
+                        <tr><td colspan="18" style="text-align:center;color:#999;">加载中...</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -193,7 +196,7 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="15" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="18" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         window._queryDataFull = data;
                         renderTable(data);
@@ -201,14 +204,14 @@
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="15" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="18" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:#999;">暂无执行记录</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="18" style="text-align:center;color:#999;">暂无执行记录</td></tr>';
                 return;
             }
 
@@ -229,6 +232,9 @@
                     '<td>' + d.最新本次次数 + '/' + (d.总次数 != null ? d.总次数 : '?') + '</td>' +
                     '<td>' + (d.本次执行金额 != null ? Number(d.本次执行金额).toFixed(2) : '') + '</td>' +
                     '<td>' + (d.操作人提成 != null ? Number(d.操作人提成).toFixed(2) : '') + '</td>' +
+                    '<td>' + (d.医师提成 != null ? Number(d.医师提成).toFixed(2) : '') + '</td>' +
+                    '<td>' + (d.理疗师提成 != null ? Number(d.理疗师提成).toFixed(2) : '') + '</td>' +
+                    '<td>' + (d.护士提成 != null ? Number(d.护士提成).toFixed(2) : '') + '</td>' +
                     '<td>' + escapeHtml(d.执行人姓名) + '</td>' +
                     '<td>' + escapeHtml(d.岗位) + '</td>' +
                     '<td>' + escapeHtml(d.备注) + '</td>' +
@@ -237,11 +243,15 @@
 
             // 计算合计
             var total次数 = 0, total数量 = 0, total金额 = 0, total提成 = 0;
+            var total医师 = 0, total理疗师 = 0, total护士 = 0;
             for (var j = 0; j < data.length; j++) {
                 total次数 += data[j].本次执行次数 || 0;
                 total数量 += data[j].数量 || 0;
                 total金额 += data[j].本次执行金额 || 0;
                 total提成 += data[j].操作人提成 || 0;
+                total医师 += data[j].医师提成 || 0;
+                total理疗师 += data[j].理疗师提成 || 0;
+                total护士 += data[j].护士提成 || 0;
             }
 
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
@@ -257,6 +267,9 @@
                 '<td></td>' +
                 '<td>' + total金额.toFixed(2) + '</td>' +
                 '<td>' + total提成.toFixed(2) + '</td>' +
+                '<td>' + total医师.toFixed(2) + '</td>' +
+                '<td>' + total理疗师.toFixed(2) + '</td>' +
+                '<td>' + total护士.toFixed(2) + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
@@ -541,7 +554,7 @@
 
         // ===== 导出到Excel =====
         document.getElementById('exportBtn').addEventListener('click', function() {
-            var headers = ['执行时间', '病人姓名', '套餐名称', '项目名称', '本次执行次数', '数量', '默认次数', '总次数', '进度', '本次执行金额', '操作人提成', '执行人', '岗位', '备注'];
+            var headers = ['执行时间', '病人姓名', '套餐名称', '项目名称', '本次执行次数', '数量', '默认次数', '总次数', '进度', '本次执行金额', '操作人提成', '医师提成', '理疗师提成', '护士提成', '执行人', '岗位', '备注'];
             var rows = [];
             var trs = document.querySelectorAll('#dataTable tbody tr');
             for (var i = 0; i < trs.length; i++) {
