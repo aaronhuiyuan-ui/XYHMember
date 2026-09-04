@@ -475,6 +475,52 @@ namespace XYHMember.Controllers
         }
 
         /// <summary>
+        /// 取消执行记录（仅可取消当前最新且未取消的一条）
+        /// </summary>
+        [HttpPost]
+        public ActionResult CancelExecution(int 登记ID, int 本次次数)
+        {
+            try
+            {
+                // 验证只能取消最新的一条（与历史弹窗里"仅最新一条可勾选"保持一致）
+                var maxSql = @"SELECT ISNULL(MAX(本次次数), 0) FROM fghis5..医技执行记录表
+                               WHERE 登记ID = @登记ID AND delete_flag = 'f'";
+                var maxCount = db.Database.SqlQuery<int>(maxSql,
+                    new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
+
+                if (maxCount <= 0)
+                    return Json(new { success = false, msg = "没有可取消的执行记录" });
+                if (本次次数 != maxCount)
+                    return Json(new { success = false, msg = "只能取消最新的一条执行记录" });
+
+                var jobNumber = GetCurrentJobNumber();
+                var now = DateTime.Now;
+
+                var sql = @"UPDATE fghis5..医技执行记录表
+                            SET delete_flag = 't', 执行人工号 = @取消人工号, 执行时间 = @取消时间
+                            WHERE 登记ID = @登记ID AND 本次次数 = @本次次数 AND delete_flag = 'f'";
+
+                var affected = db.Database.ExecuteSqlCommand(sql,
+                    new SqlParameter("@登记ID", 登记ID),
+                    new SqlParameter("@本次次数", 本次次数),
+                    new SqlParameter("@取消人工号", jobNumber ?? ""),
+                    new SqlParameter("@取消时间", now));
+
+                if (affected <= 0)
+                    return Json(new { success = false, msg = "取消失败，记录不存在或已被取消" });
+
+                // 提成金额在登记时已核算，取消执行不影响提成金额
+                return Json(new { success = true, msg = "取消成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
         /// 查看执行历史
         /// </summary>
         [HttpGet]
