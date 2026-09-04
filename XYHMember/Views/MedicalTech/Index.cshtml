@@ -189,7 +189,7 @@
                         <input type="text" name="edatepicker" id="edatepicker"
                                value="@edatepicker" placeholder="结束日期" style="height:30px;">
                         <span style="margin-left:40px;display:inline-flex;align-items:center;gap:6px;">
-                            <input type="text" class="am-form-field" name="name" value="@name" placeholder="病人姓名或项目名称" style="width:200px;">
+                            <input type="text" class="am-form-field" name="name" value="@name" placeholder="病人姓名/项目名称/套餐名称" style="width:230px;">
                             <span class="am-input-group-btn">
                                 <button class="am-btn am-btn-default" type="button" onclick="doSearch()">查询</button>
                                 <button class="am-btn am-btn-primary" type="button" id="batchRegBtn" style="margin-left:10px;background:#0e90d2!important;border-color:#0e90d2!important;color:#fff!important;">批量登记</button>
@@ -244,14 +244,11 @@
                                 </div>
                             </th>
                             <th>操作人员提成</th>
-                            <th>套餐-医师提成</th>
-                            <th>套餐-理疗师提成</th>
-                            <th>套餐-护士提成</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="20" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
+                        <tr><td colspan="17" style="text-align:center;color:#999;">请输入查询条件后点击查询</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -286,30 +283,6 @@
                 <input type="hidden" id="reg_处方ID">
                 <input type="hidden" id="reg_就诊ID">
                 <input type="hidden" id="reg_门诊号">
-                <input type="hidden" id="reg_套餐名称">
-                <div class="field">
-                    <label>参与执行人（按岗位提成比例）</label>
-                    <div id="reg_执行人区" style="border:1px solid #eee;border-radius:3px;padding:8px;font-size:13px;color:#333;">
-                        <div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
-                            <span style="width:56px;font-weight:600;color:#0e90d2;">医师</span>
-                            <select id="reg_医师" class="reg-exec-sel" style="flex:1;height:28px;padding:0 6px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;background:#fff;">
-                                <option value="">（未参与）</option>
-                            </select>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
-                            <span style="width:56px;font-weight:600;color:#0e90d2;">理疗师</span>
-                            <select id="reg_理疗师" class="reg-exec-sel" style="flex:1;height:28px;padding:0 6px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;background:#fff;">
-                                <option value="">（未参与）</option>
-                            </select>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
-                            <span style="width:56px;font-weight:600;color:#0e90d2;">护士</span>
-                            <select id="reg_护士" class="reg-exec-sel" style="flex:1;height:28px;padding:0 6px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;background:#fff;">
-                                <option value="">（未参与）</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
             </div>
             <div class="modal-footer">
                 <button onclick="closeModal('registerModal')">取消</button>
@@ -413,13 +386,6 @@
                     </thead>
                     <tbody id="historyBody"></tbody>
                 </table>
-                <table class="history-table" id="historyTcTable" style="display:none;margin-top:8px;">
-                    <thead>
-                        <tr><th colspan="6" style="background:#e8f4fd;">套餐岗位提成明细（基数=整张收费单实际支付）</th></tr>
-                        <tr><th>执行人</th><th>岗位</th><th>提成比例</th><th>提成基数</th><th>提成金额</th><th>登记时间</th></tr>
-                    </thead>
-                    <tbody id="historyTcBody"></tbody>
-                </table>
             </div>
             <div class="modal-footer">
                 <button id="cancelExecBtnInHistory" class="am-btn am-btn-danger am-btn-xs" style="display:none;margin-right:auto;" onclick="doCancelExecution()">取消执行</button>
@@ -449,7 +415,7 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="20" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         window._queryDataFull = data;
                         applyHdrFilters();
@@ -457,14 +423,14 @@
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="20" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="20" style="text-align:center;color:#999;">未找到数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#999;">未找到数据</td></tr>';
                 return;
             }
 
@@ -483,14 +449,12 @@
                     statusClass = 'status-active';
                     progressText = d.已执行次数 + '/' + d.总次数 + '次';
                     actionHtml = '<button class="btn-action btn-exec" onclick="openExecute(' + i + ')">执行</button>' +
-                                 '<button class="btn-action btn-reg" onclick="openRegister(' + i + ', true)">补登记</button>' +
                                  '<button class="btn-action btn-view" onclick="openHistory(' + i + ')">查看</button>';
                 } else {
                     statusText = '已完成';
                     statusClass = 'status-done';
                     progressText = d.已执行次数 + '/' + d.总次数 + '次';
-                    actionHtml = '<button class="btn-action btn-reg" onclick="openRegister(' + i + ', true)">补登记</button>' +
-                                 '<button class="btn-action btn-view" onclick="openHistory(' + i + ')">查看</button>';
+                    actionHtml = '<button class="btn-action btn-view" onclick="openHistory(' + i + ')">查看</button>';
                 }
 
                 // 计算已执行金额和未执行金额
@@ -519,15 +483,11 @@
                     '<td>' + 未执行金额.toFixed(2) + '</td>' +
                     '<td>' + escapeHtml(d.执行人) + '</td>' +
                     '<td>' + (d.提成金额 != null ? d.提成金额.toFixed(2) : '0.00') + '</td>' +
-                    '<td>' + (d.医师提成 != null ? d.医师提成.toFixed(2) : '') + '</td>' +
-                    '<td>' + (d.理疗师提成 != null ? d.理疗师提成.toFixed(2) : '') + '</td>' +
-                    '<td>' + (d.护士提成 != null ? d.护士提成.toFixed(2) : '') + '</td>' +
                     '<td>' + actionHtml + '</td>' +
                     '</tr>';
             }
             // 计算合计
             var sum项目金额 = 0, sum实收金额 = 0, sum已执行金额 = 0, sum未执行金额 = 0, sum提成金额 = 0;
-            var sum医师 = 0, sum理疗师 = 0, sum护士 = 0;
             for (var i = 0; i < data.length; i++) {
                 var d = data[i];
                 var 项目金额 = d.金额 != null ? d.金额 : 0;
@@ -542,9 +502,6 @@
                 sum已执行金额 += 已执行金额;
                 sum未执行金额 += 未执行金额;
                 sum提成金额 += (d.提成金额 != null ? d.提成金额 : 0);
-                sum医师 += (d.医师提成 != null ? d.医师提成 : 0);
-                sum理疗师 += (d.理疗师提成 != null ? d.理疗师提成 : 0);
-                sum护士 += (d.护士提成 != null ? d.护士提成 : 0);
             }
 
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
@@ -564,9 +521,6 @@
                 '<td>' + sum未执行金额.toFixed(2) + '</td>' +
                 '<td></td>' +
                 '<td>' + sum提成金额.toFixed(2) + '</td>' +
-                '<td>' + sum医师.toFixed(2) + '</td>' +
-                '<td>' + sum理疗师.toFixed(2) + '</td>' +
-                '<td>' + sum护士.toFixed(2) + '</td>' +
                 '<td></td>' +
                 '</tr>';
 
@@ -741,8 +695,7 @@
         document.addEventListener('click', function() { closeAllHdrDropdowns(); });
 
         // ===== 登记 =====
-        function openRegister(idx, isSupplement) {
-            window._regMode = isSupplement ? 'supplement' : 'register';
+        function openRegister(idx) {
             var d = window._queryData[idx];
             document.getElementById('reg_姓名').value = d.姓名;
             document.getElementById('reg_项目名称').value = d.项目名称;
@@ -750,12 +703,9 @@
             document.getElementById('reg_处方ID').value = d.处方ID;
             document.getElementById('reg_就诊ID').value = d.就诊ID;
             document.getElementById('reg_门诊号').value = d.门诊号;
-            document.getElementById('reg_套餐名称').value = d.套餐名称 || '';
-            loadRegisterExecutors();
 
             var qty = (d.数量 != null && d.数量 > 0) ? d.数量 : 1;
 
-            // 根据项目ID查询默认次数
             var pid = (d.项目ID != null ? d.项目ID : '');
             fetch('@Url.Action("GetDefaultCountList", "MedicalTech")?项目ID=' + encodeURIComponent(pid))
                 .then(function(r) { return r.json(); })
@@ -768,48 +718,9 @@
                 })
                 .catch(function() {});
 
-            document.getElementById('regModalTitle').textContent =
-                (window._regMode === 'supplement') ? '补登记（补套餐提成）' : '医技登记';
-            document.getElementById('regSubmitBtn').textContent =
-                (window._regMode === 'supplement') ? '确认补登记' : '确认登记';
             openModal('registerModal');
         }
 
-        // 登记弹窗：参与执行人按岗位三行下拉选择（医师/理疗师/护士），默认选中当前登录人
-        function loadRegisterExecutors() {
-            var selIds = { '医师': 'reg_医师', '理疗师': 'reg_理疗师', '护士': 'reg_护士' };
-            // 重置三个下拉
-            for (var k in selIds) {
-                var sel = document.getElementById(selIds[k]);
-                if (sel) sel.innerHTML = '<option value="">（未参与）</option>';
-            }
-            fetch('@Url.Action("GetCurrentUser", "MedicalTech")')
-                .then(function(r) { return r.json(); })
-                .then(function(u) {
-                    window._currentJob = (u && u.jobNumber) ? u.jobNumber : '';
-                    return fetch('@Url.Action("GetStaffList", "MedicalTech")?name=');
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(list) {
-                    if (!list || list.success === false || list.length === 0) return;
-                    for (var i = 0; i < list.length; i++) {
-                        var s = list[i];
-                        var p = (s.岗位 || '').trim();
-                        var sel = document.getElementById(selIds[p]);
-                        if (!sel) continue;
-                        var opt = document.createElement('option');
-                        opt.value = s.工号;
-                        opt.textContent = s.姓名 || s.工号;
-                        sel.appendChild(opt);
-                    }
-                    // 默认每个下拉选中该岗位第一个人员
-                    for (var k in selIds) {
-                        var sel3 = document.getElementById(selIds[k]);
-                        if (sel3 && sel3.options.length > 1) sel3.selectedIndex = 1;
-                    }
-                })
-                .catch(function() {});
-        }
 
         function submitRegister() {
             var data = {
@@ -819,32 +730,10 @@
                 门诊号: parseInt(document.getElementById('reg_门诊号').value),
                 病人姓名: document.getElementById('reg_姓名').value,
                 项目名称: document.getElementById('reg_项目名称').value,
-                总次数: parseInt(document.getElementById('reg_总次数').value) || 1,
-                套餐名称: document.getElementById('reg_套餐名称').value
+                总次数: parseInt(document.getElementById('reg_总次数').value) || 1
             };
-            // 收集各岗位下拉选中的参与执行人工号
-            var execJobs = [];
-            ['reg_医师', 'reg_理疗师', 'reg_护士'].forEach(function(id) {
-                var v = document.getElementById(id).value;
-                if (v) execJobs.push(v);
-            });
-            data.执行人工号 = execJobs.join(',');
 
-            var isSupp = window._regMode === 'supplement';
-            var url = isSupp
-                ? '@Url.Action("SupplementRegister", "MedicalTech")'
-                : '@Url.Action("Register", "MedicalTech")';
-            if (isSupp) {
-                // 补登记只提交 结帐ID/处方ID/项目名称/执行人工号（不重复建登记）
-                data = {
-                    结帐ID: data.结帐ID,
-                    处方ID: data.处方ID,
-                    项目名称: data.项目名称,
-                    执行人工号: data.执行人工号,
-                    套餐名称: data.套餐名称
-                };
-            }
-            fetch(url, {
+            fetch('@Url.Action("Register", "MedicalTech")', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
@@ -855,7 +744,7 @@
                     closeModal('registerModal');
                     doSearch();
                 } else {
-                    customDialog.error(res.msg, isSupp ? '补登记失败' : '登记失败');
+                    customDialog.error(res.msg, '登记失败');
                 }
             })
             .catch(function(err) { customDialog.error(err.message, '请求失败'); });
@@ -1056,25 +945,6 @@
                     }
                     document.getElementById('historyBody').innerHTML = html;
 
-                    // 套餐岗位提成明细
-                    var tcHtml = '';
-                    var tcArr = res.套餐提成明细 || [];
-                    if (tcArr.length > 0) {
-                        for (var j = 0; j < tcArr.length; j++) {
-                            var tc = tcArr[j];
-                            tcHtml += '<tr>' +
-                                '<td>' + escapeHtml(tc.执行人姓名 || '') + '</td>' +
-                                '<td>' + escapeHtml(tc.岗位 || '') + '</td>' +
-                                '<td>' + (tc.提成比例 != null ? tc.提成比例 + '%' : '') + '</td>' +
-                                '<td>' + (tc.提成基数 != null ? Number(tc.提成基数).toFixed(2) : '') + '</td>' +
-                                '<td>' + (tc.提成金额 != null ? Number(tc.提成金额).toFixed(2) : '') + '</td>' +
-                                '<td>' + escapeHtml(tc.登记时间 || '') + '</td></tr>';
-                        }
-                    } else {
-                        tcHtml = '<tr><td colspan="6" style="color:#999;">该登记未生成套餐提成</td></tr>';
-                    }
-                    document.getElementById('historyTcBody').innerHTML = tcHtml;
-                    document.getElementById('historyTcTable').style.display = '';
 
                     // 若有记录，最新一条默认选中，显示取消按钮
                     var cancelBtn = document.getElementById('cancelExecBtnInHistory');
@@ -1170,12 +1040,6 @@
         }
 
         // ===== 批量登记 =====
-        // 预取当前登录人工号（批量登记默认执行人）
-        fetch('@Url.Action("GetCurrentUser", "MedicalTech")')
-            .then(function(r) { return r.json(); })
-            .then(function(u) { window._currentJob = (u && u.jobNumber) ? u.jobNumber : ''; })
-            .catch(function() {});
-
         document.getElementById('batchRegBtn').addEventListener('click', function() {
             var checked = getCheckedData();
             if (checked.length === 0) { customDialog.info('请先勾选要登记的项目', '提示'); return; }
@@ -1217,8 +1081,6 @@
                                 门诊号: d.门诊号,
                                 项目名称: d.项目名称,
                                 总次数: 总次数,
-                                执行人工号: (window._currentJob || ''),
-                                套餐名称: d.套餐名称 || ''
                             })
                         });
                     })

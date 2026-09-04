@@ -139,6 +139,7 @@
                         <thead>
                             <tr>
                                 <th style="width:60px;">序号</th>
+                                <th>套餐名称</th>
                                 <th>项目ID</th>
                                 <th>项目名称</th>
                                 <th>岗位</th>
@@ -147,76 +148,10 @@
                             </tr>
                         </thead>
                         <tbody id="tableBody">
-                            <tr><td colspan="6" style="text-align:center;color:#999;">加载中...</td></tr>
+                            <tr><td colspan="7" style="text-align:center;color:#999;">加载中...</td></tr>
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ========== 套餐岗位提成比例（登记时按参与执行人岗位提成） ========== -->
-    <hr style="margin:26px 0 14px;border-color:#e0e0e0;">
-    <div class="admin-content-body">
-        <div class="am-g">
-            <div class="am-u-sm-12">
-                <h4 style="margin:6px 0 6px;color:#333;">套餐岗位提成比例（登记时勾选参与执行人，按岗位比例逐人提成，基数=整张收费单实际支付）</h4>
-                <div style="margin:8px 0;">
-                    <button type="button" class="am-btn am-btn-default am-btn-xs" onclick="openPkgAdd()">新增套餐岗位比例</button>
-                    <input type="text" id="pkgKw" placeholder="按套餐名称搜索" style="height:24px;width:180px;margin-left:12px;padding:0 6px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;">
-                    <button type="button" class="am-btn am-btn-default am-btn-xs" onclick="loadPkg()">搜索</button>
-                </div>
-                <div class="table-wrapper">
-                    <table class="am-table am-table-striped am-table-hover table-main" id="pkgTable" style="width:100%;">
-                        <thead>
-                            <tr>
-                                <th style="width:50px;">序号</th>
-                                <th>套餐名称</th>
-                                <th style="width:120px;">岗位</th>
-                                <th style="width:120px;">提成比例</th>
-                                <th style="width:140px;">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pkgTableBody">
-                            <tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ========== 套餐岗位比例 新增/编辑弹窗 ========== -->
-    <div class="modal-overlay" id="pkgModal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <span id="pkgTitle">新增套餐岗位比例</span>
-                <span class="close" onclick="closePkgModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="field">
-                    <label>套餐名称 <span style="color:red;">*</span>（下拉选择或手工输入）</label>
-                    <input type="text" id="pf_套餐名称" list="dl_pkgname" maxlength="200" placeholder="如：三伏贴">
-                    <datalist id="dl_pkgname"></datalist>
-                </div>
-                <div class="field">
-                    <label>岗位 <span style="color:red;">*</span></label>
-                    <select id="pf_岗位">
-                        <option value="">请选择</option>
-                        <option value="医师">医师</option>
-                        <option value="理疗师">理疗师</option>
-                        <option value="护士">护士</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <label>提成比例(%) <span style="color:red;">*</span></label>
-                    <input type="number" id="pf_提成比例" step="0.0001" min="0.0001" max="100" placeholder="如 8 表示 8%">
-                </div>
-                <input type="hidden" id="pf_序号" value="">
-            </div>
-            <div class="modal-footer">
-                <button onclick="closePkgModal()">取消</button>
-                <button class="btn-primary" onclick="pkgSave()">保存</button>
             </div>
         </div>
     </div>
@@ -229,6 +164,10 @@
                 <span class="close" onclick="closeModal('dataModal')">&times;</span>
             </div>
             <div class="modal-body">
+                <div class="field">
+                    <label>套餐名称 <span style="color:#999;font-weight:normal;">（留空=该项目的通用提成）</span></label>
+                    <input type="text" id="f_套餐名称" maxlength="200" placeholder="如：部位推拿调理（透达筋膜）疗程（共4次）">
+                </div>
                 <div class="field">
                     <label>项目ID <span style="color:#999;font-weight:normal;">（项目编码，可空）</span></label>
                     <input type="text" id="f_项目ID" maxlength="50" placeholder="请输入项目ID">
@@ -267,21 +206,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('tableBody').innerHTML =
-                            '<tr><td colspan="6" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
+                            '<tr><td colspan="7" style="text-align:center;color:red;">查询失败：' + data.msg + '</td></tr>';
                     } else {
                         renderTable(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('tableBody').innerHTML =
-                        '<tr><td colspan="6" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
+                        '<tr><td colspan="7" style="text-align:center;color:red;">查询失败：' + err.message + '</td></tr>';
                 });
         }
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">暂无数据</td></tr>';
                 return;
             }
 
@@ -290,6 +229,7 @@
                 var d = data[i];
                 html += '<tr>' +
                     '<td>' + d.序号 + '</td>' +
+                    '<td>' + escapeHtml(d.套餐名称) + '</td>' +
                     '<td>' + escapeHtml(d.项目ID) + '</td>' +
                     '<td>' + escapeHtml(d.项目名称) + '</td>' +
                     '<td>' + escapeHtml(d.岗位 || '') + '</td>' +
@@ -313,6 +253,7 @@
         document.getElementById('addButton').addEventListener('click', function() {
             document.getElementById('modalTitle').textContent = '新增配置';
             document.getElementById('f_序号').value = '';
+            document.getElementById('f_套餐名称').value = '';
             document.getElementById('f_项目ID').value = '';
             document.getElementById('f_项目名称').value = '';
             document.getElementById('f_岗位').value = '';
@@ -331,6 +272,7 @@
 
             document.getElementById('modalTitle').textContent = '编辑配置';
             document.getElementById('f_序号').value = item.序号;
+            document.getElementById('f_套餐名称').value = item.套餐名称 || '';
             document.getElementById('f_项目ID').value = item.项目ID || '';
             document.getElementById('f_项目名称').value = item.项目名称;
             document.getElementById('f_岗位').value = item.岗位 || '';
@@ -342,6 +284,7 @@
         function submitSave() {
             var data = {
                 序号: document.getElementById('f_序号').value ? parseInt(document.getElementById('f_序号').value) : null,
+                套餐名称: document.getElementById('f_套餐名称').value.trim(),
                 项目ID: document.getElementById('f_项目ID').value.trim(),
                 项目名称: document.getElementById('f_项目名称').value.trim(),
                 岗位: document.getElementById('f_岗位').value,
@@ -404,120 +347,7 @@
             if (e.key === 'Enter') { doSearch(); e.preventDefault(); }
         });
 
-        // ============ 套餐岗位提成比例 ============
-        function renderPkgTable(data) {
-            var tbody = document.getElementById('pkgTableBody');
-            if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">暂无数据</td></tr>'; return; }
-            var html = '';
-            for (var i = 0; i < data.length; i++) {
-                var d = data[i];
-                html += '<tr>' +
-                    '<td>' + d.序号 + '</td>' +
-                    '<td>' + escapeHtml(d.套餐名称) + '</td>' +
-                    '<td>' + escapeHtml(d.岗位 || '') + '</td>' +
-                    '<td>' + (d.提成比例 == null ? '' : d.提成比例 + '%') + '</td>' +
-                    '<td>' +
-                        '<button class="btn-action btn-edit" onclick="openPkgEdit(' + d.序号 + ')">编辑</button>' +
-                        '<button class="btn-action btn-del" onclick="pkgDelete(' + d.序号 + ')">删除</button>' +
-                    '</td></tr>';
-            }
-            tbody.innerHTML = html;
-            window._pkgData = data;
-        }
-
-        function loadPkg() {
-            var kw = document.getElementById('pkgKw') ? document.getElementById('pkgKw').value : '';
-            fetch('@Url.Action("GetPackageCommissionList", "MedicalTech")?name=' + encodeURIComponent(kw))
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (data && data.success === false) {
-                        document.getElementById('pkgTableBody').innerHTML =
-                            '<tr><td colspan="5" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
-                    } else renderPkgTable(data);
-                })
-                .catch(function(err) {
-                    document.getElementById('pkgTableBody').innerHTML =
-                        '<tr><td colspan="5" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
-                });
-        }
-
-        function loadPkgNames() {
-            fetch('@Url.Action("GetCommissionPackageNames", "MedicalTech")')
-                .then(function(r) { return r.json(); })
-                .then(function(names) {
-                    var dl = document.getElementById('dl_pkgname');
-                    if (!dl || !names || names.success === false) return;
-                    var html = '';
-                    for (var i = 0; i < names.length; i++) { html += '<option value="' + escapeHtml(names[i]) + '"></option>'; }
-                    dl.innerHTML = html;
-                })
-                .catch(function() {});
-        }
-
-        function openPkgAdd() {
-            document.getElementById('pkgTitle').textContent = '新增套餐岗位比例';
-            document.getElementById('pf_序号').value = '';
-            document.getElementById('pf_套餐名称').value = '';
-            document.getElementById('pf_岗位').value = '';
-            document.getElementById('pf_提成比例').value = '';
-            loadPkgNames();
-            document.getElementById('pkgModal').classList.add('active');
-        }
-
-        function openPkgEdit(id) {
-            var rows = window._pkgData || [];
-            var item = null;
-            for (var i = 0; i < rows.length; i++) { if (rows[i].序号 === id) { item = rows[i]; break; } }
-            if (!item) return;
-            document.getElementById('pkgTitle').textContent = '编辑套餐岗位比例';
-            document.getElementById('pf_序号').value = item.序号;
-            document.getElementById('pf_套餐名称').value = item.套餐名称;
-            document.getElementById('pf_岗位').value = item.岗位 || '';
-            document.getElementById('pf_提成比例').value = item.提成比例 == null ? '' : item.提成比例;
-            loadPkgNames();
-            document.getElementById('pkgModal').classList.add('active');
-        }
-
-        function closePkgModal() { document.getElementById('pkgModal').classList.remove('active'); }
-
-        function pkgSave() {
-            var data = {
-                序号: document.getElementById('pf_序号').value ? parseInt(document.getElementById('pf_序号').value) : null,
-                套餐名称: document.getElementById('pf_套餐名称').value.trim(),
-                岗位: document.getElementById('pf_岗位').value,
-                提成比例: parseFloat(document.getElementById('pf_提成比例').value)
-            };
-            if (!data.套餐名称) { alert('套餐名称不能为空'); return; }
-            if (!data.岗位) { alert('请选择岗位'); return; }
-            if (isNaN(data.提成比例) || data.提成比例 <= 0) { alert('提成比例必须大于0'); return; }
-
-            fetch('@Url.Action("SavePackageCommission", "MedicalTech")', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(res) {
-                if (res.success) { closePkgModal(); loadPkg(); }
-                else alert('保存失败：' + res.msg);
-            })
-            .catch(function(err) { alert('请求失败：' + err.message); });
-        }
-
-        function pkgDelete(id) {
-            if (!confirm('确定要删除该套餐岗位比例吗？')) return;
-            fetch('@Url.Action("DeletePackageCommission", "MedicalTech")', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ 序号: id })
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(res) { if (res.success) loadPkg(); else alert('删除失败：' + res.msg); })
-            .catch(function(err) { alert('请求失败：' + err.message); });
-        }
-
-        document.getElementById('pkgModal').addEventListener('click', function(e) { if (e.target === this) this.classList.remove('active'); });
-        document.getElementById('pkgKw').addEventListener('keydown', function(e) { if (e.key === 'Enter') { loadPkg(); e.preventDefault(); } });
-
-        // 初始化
         doSearch();
-        loadPkg();
     </script>
 
 </body>

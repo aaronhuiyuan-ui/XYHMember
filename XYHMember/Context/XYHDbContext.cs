@@ -421,52 +421,16 @@ namespace XYHMember.Context
         public int 默认总次数 { get; set; }
     }
 
-    //医技项目操作人员提成
+    //医技项目操作人员提成（项目ID/名称 + 套餐名称(可空=通用) + 岗位）
     public class MedicalTechCommission
     {
         [Key]
         public int 序号 { get; set; }
+        public string 套餐名称 { get; set; }
         public string 项目ID { get; set; }
         public string 项目名称 { get; set; }
         public string 岗位 { get; set; }
         public decimal? 提成比例 { get; set; }
-    }
-
-    //医技套餐岗位提成比例（按 套餐名称+岗位，登记时用套餐名称匹配）
-    public class MedicalTechPackageCommission
-    {
-        [Key]
-        public int 序号 { get; set; }
-        public string 套餐名称 { get; set; }
-        public string 岗位 { get; set; }
-        public decimal? 提成比例 { get; set; }
-    }
-
-    //医技套餐提成明细（登记时按参与执行人逐人一笔）
-    public class MedicalTechCommissionDetail
-    {
-        [Key]
-        public int 序号 { get; set; }
-        public int? 登记ID { get; set; }
-        public string 执行人工号 { get; set; }
-        public string 执行人姓名 { get; set; }
-        public string 岗位 { get; set; }
-        public decimal? 提成比例 { get; set; }
-        public decimal? 提成基数 { get; set; }
-        public decimal? 提成金额 { get; set; }
-        public DateTime? 登记时间 { get; set; }
-    }
-
-    //套餐提成汇总（按月份+执行人）
-    public class MedicalTechCommissionSummary
-    {
-        public string 执行人姓名 { get; set; }
-        public string 执行人工号 { get; set; }
-        public string 岗位 { get; set; }
-        public string 月份 { get; set; }      // yyyy-MM
-        public int 笔数 { get; set; }
-        public decimal 提成金额 { get; set; }
-        public decimal 提成基数 { get; set; }
     }
 
     //HIS收费明细查询结果（医技登记页面用）
@@ -491,10 +455,6 @@ namespace XYHMember.Context
         public int? 登记ID { get; set; }
         public int? 总次数 { get; set; }
         public int? 已执行次数 { get; set; }
-        // 该登记套餐岗位提成（分岗位，来自 医技提成明细表）
-        public decimal? 医师提成 { get; set; }
-        public decimal? 理疗师提成 { get; set; }
-        public decimal? 护士提成 { get; set; }
     }
 
     //处方结果本地缓存
@@ -792,9 +752,5 @@ namespace XYHMember.Context
         public string 执行人姓名 { get; set; }
         public string 岗位 { get; set; }
         public string 备注 { get; set; }
-        // 该登记套餐岗位提成（分岗位，来自 医技提成明细表）
-        public decimal? 医师提成 { get; set; }
-        public decimal? 理疗师提成 { get; set; }
-        public decimal? 护士提成 { get; set; }
     }
 }

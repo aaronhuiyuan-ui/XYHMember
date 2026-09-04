@@ -73,14 +73,6 @@ namespace XYHMember.Controllers
                     FROM fghis5..医技执行记录表 e
                     WHERE e.delete_flag = 'f'
                     GROUP BY e.登记ID
-                ),
-                套餐提成汇总 AS (
-                    SELECT 登记ID,
-                           SUM(CASE WHEN 岗位 = '医师'   THEN 提成金额 ELSE 0 END) AS 医师提成,
-                           SUM(CASE WHEN 岗位 = '理疗师' THEN 提成金额 ELSE 0 END) AS 理疗师提成,
-                           SUM(CASE WHEN 岗位 = '护士'   THEN 提成金额 ELSE 0 END) AS 护士提成
-                    FROM fghis5..医技提成明细表
-                    GROUP BY 登记ID
                 )
                 SELECT a.结帐ID, a.门诊号, a.姓名, b.就诊ID, b.处方ID,
                        CONVERT(varchar, b.日期, 23) AS 日期,
@@ -92,8 +84,7 @@ namespace XYHMember.Controllers
                        -- 提成金额：项目金额 × 提成比例（不依赖登记与完成状态，实时按当前比例计算）
                        ROUND(ISNULL(b.金额, 0) * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额,
                        r.登记ID, r.总次数,
-                       ISNULL(e.已执行次数, 0) AS 已执行次数,
-                       pc.医师提成, pc.理疗师提成, pc.护士提成
+                       ISNULL(e.已执行次数, 0) AS 已执行次数
                 FROM fghis5..门诊_收费发票表 a
                 JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
                 LEFT JOIN fghis5..医技登记表 r ON r.流水号 = CAST(a.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR)
@@ -101,15 +92,19 @@ namespace XYHMember.Controllers
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
                 LEFT JOIN 执行汇总 e ON e.登记ID = r.登记ID
                 LEFT JOIN 执行人汇总 pe ON pe.登记ID = r.登记ID
-                LEFT JOIN 套餐提成汇总 pc ON pc.登记ID = r.登记ID
-                LEFT JOIN (SELECT CAST(项目ID AS NVARCHAR(50)) AS 项目ID, MAX(提成比例) AS 提成比例
-                           FROM fghis5..医技项目操作人员提成表
-                           WHERE 项目ID IS NOT NULL AND 项目ID != ''
-                           GROUP BY CAST(项目ID AS NVARCHAR(50))) c ON c.项目ID = CAST(b.项目ID AS NVARCHAR(50))
+                OUTER APPLY (SELECT TOP 1 提成比例
+                             FROM fghis5..医技项目操作人员提成表 cc
+                             WHERE cc.项目ID = CAST(b.项目ID AS NVARCHAR(50))
+                               AND cc.项目ID IS NOT NULL AND cc.项目ID != ''
+                               AND (ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
+                                    OR ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = '')
+                             ORDER BY CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
+                                           THEN 0 ELSE 1 END) c
                 WHERE a.发票状态 = '2'
                   AND b.项目类别 IN (6, 59)
                   AND b.日期 BETWEEN @bdate AND @edate
-                  AND (@name = '' OR a.姓名 LIKE '%' + @name + '%' OR b.项目名称 LIKE '%' + @name + '%')
+                  AND (@name = '' OR a.姓名 LIKE '%' + @name + '%' OR b.项目名称 LIKE '%' + @name + '%'
+                       OR b.套餐名称 LIKE '%' + @name + '%')
                 ORDER BY b.日期 DESC, b.时间 DESC, b.套餐名称";
 
             return db.Database.SqlQuery<MedicalTechChargeItem>(sql,
@@ -154,10 +149,9 @@ namespace XYHMember.Controllers
                 {
                     "门诊号", "姓名", "套餐名称", "项目ID", "项目名称", "数量", "项目金额", "实收金额", "收费日期",
                     "状态", "执行进度", "已执行金额", "未执行金额", "执行人", "操作人员提成",
-                    "医师提成", "理疗师提成", "护士提成",
                     "执行次数", "执行时间", "执行人工号", "执行人姓名", "岗位", "备注"
                 };
-                int mainCols = 18;
+                int mainCols = 15;
 
                 var rows = new List<List<string>>();
                 foreach (var d in items)
@@ -188,10 +182,7 @@ namespace XYHMember.Controllers
                         已执行金额.ToString("F2"),
                         未执行金额.ToString("F2"),
                         d.执行人 ?? "",
-                        d.提成金额?.ToString("F2") ?? "0.00",
-                        d.医师提成?.ToString("F2") ?? "",
-                        d.理疗师提成?.ToString("F2") ?? "",
-                        d.护士提成?.ToString("F2") ?? ""
+                        d.提成金额?.ToString("F2") ?? "0.00"
                     };
                     while (mainRow.Count < headers.Count) mainRow.Add(""); // 执行次数/执行时间/执行人工号/执行人姓名/岗位/备注 留空
                     rows.Add(mainRow);
@@ -278,8 +269,7 @@ namespace XYHMember.Controllers
         /// 登记医技（新疗程）
         /// </summary>
         [HttpPost]
-        public ActionResult Register(int 结帐ID, int 处方ID, int 就诊ID, string 病人姓名, int 门诊号, string 项目名称, int 总次数,
-                                     string 执行人工号 = null, string 套餐名称 = null)
+        public ActionResult Register(int 结帐ID, int 处方ID, int 就诊ID, string 病人姓名, int 门诊号, string 项目名称, int 总次数)
         {
             try
             {
@@ -315,10 +305,24 @@ namespace XYHMember.Controllers
                     new SqlParameter("@处方ID", 处方ID),
                     new SqlParameter("@项目名称", 项目名称 ?? "")).FirstOrDefault();
 
+                // 该收费单所属套餐名：登记提成按「套餐+项目」优先匹配，未配套餐(套餐名空)通用兜底
+                var 套餐名 = db.Database.SqlQuery<string>(
+                    @"SELECT TOP 1 LTRIM(RTRIM(b.套餐名称))
+                      FROM fghis5..门诊_收费明细表 b
+                      WHERE b.结帐ID = @结帐ID AND b.处方ID = @处方ID
+                        AND LTRIM(RTRIM(ISNULL(b.套餐名称,''))) <> ''
+                      ORDER BY b.明细序号",
+                    new SqlParameter("@结帐ID", 结帐ID),
+                    new SqlParameter("@处方ID", 处方ID)).FirstOrDefault();
+
                 var 比例 = db.Database.SqlQuery<decimal?>(
                     @"SELECT TOP 1 提成比例 FROM fghis5..医技项目操作人员提成表
-                      WHERE 项目ID = CAST(@项目ID AS NVARCHAR(50))",
-                    new SqlParameter("@项目ID", 项目ID.HasValue ? 项目ID.Value.ToString() : "")).FirstOrDefault();
+                      WHERE 项目ID = CAST(@项目ID AS NVARCHAR(50))
+                        AND (LTRIM(RTRIM(ISNULL(套餐名称,''))) = @套餐名
+                             OR LTRIM(RTRIM(ISNULL(套餐名称,''))) = '')
+                      ORDER BY CASE WHEN LTRIM(RTRIM(ISNULL(套餐名称,''))) = @套餐名 THEN 0 ELSE 1 END",
+                    new SqlParameter("@项目ID", 项目ID.HasValue ? 项目ID.Value.ToString() : ""),
+                    new SqlParameter("@套餐名", 套餐名 ?? "")).FirstOrDefault();
 
                 var 提成金额 = Math.Round((金额 ?? 0) * (比例 ?? 0) / 100m, 2);
 
@@ -337,20 +341,6 @@ namespace XYHMember.Controllers
                     new SqlParameter("@提成金额", 提成金额)
                 ).FirstOrDefault();
 
-                // ===== 套餐岗位提成（新旧并存：登记表.提成金额=旧项目Commission，套餐提成存 医技提成明细表）=====
-                // 由前端登记时勾选的参与执行人触发；按 套餐名称匹配配置表，逐人按岗位比例算。
-                try
-                {
-                    WritePackageCommission(登记ID, 结帐ID, 处方ID, 执行人工号, 套餐名称);
-                }
-                catch (Exception ex2)
-                {
-                    // 套餐提成写入失败不阻断登记主流程，但要在提示里告知
-                    var inner2 = ex2;
-                    while (inner2.InnerException != null) inner2 = inner2.InnerException;
-                    return Json(new { success = true, msg = "登记成功（套餐提成写入失败：" + inner2.Message + "）", 登记ID = 登记ID });
-                }
-
                 return Json(new { success = true, msg = "登记成功", 登记ID = 登记ID });
             }
             catch (Exception ex)
@@ -358,110 +348,6 @@ namespace XYHMember.Controllers
                 var inner = ex;
                 while (inner.InnerException != null) inner = inner.InnerException;
                 return Json(new { success = false, msg = inner.Message });
-            }
-        }
-
-        /// <summary>
-        /// 获取某结帐ID 的实际支付金额（现金+POS+微信+支付宝，支付方式 0/1/31/32，不含折扣6、不含储值卡4）
-        /// </summary>
-        private decimal Get实际支付(int 结帐ID)
-        {
-            return db.Database.SqlQuery<decimal>(
-                @"SELECT ISNULL(SUM(CASE WHEN 支付方式 IN (0,1,31,32) THEN 支付金额 ELSE 0 END),0)
-                  FROM fghis5..门诊_收费支付表 WHERE 结帐ID = @结帐ID",
-                new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault();
-        }
-
-        /// <summary>
-        /// 生成套餐岗位提成明细：按参与执行人岗位×整单实际支付；先清该登记旧明细再重建（登记/补登记共用）。
-        /// </summary>
-        private int WritePackageCommission(int 登记ID, int 结帐ID, int 处方ID, string 执行人工号, string 套餐名称 = null)
-        {
-            int 生成数 = 0;
-            if (string.IsNullOrWhiteSpace(执行人工号)) return 0;
-            var 实际支付 = Get实际支付(结帐ID);
-            if (实际支付 <= 0) return 0;
-
-            // 套餐名称：优先用页面传入的「套餐名称」列值；为空再兜底按 结帐ID+处方ID 查明细
-            var 套餐名称值 = (套餐名称 ?? "").Trim();
-            if (string.IsNullOrEmpty(套餐名称值))
-                套餐名称值 = db.Database.SqlQuery<string>(
-                    @"SELECT TOP 1 LTRIM(RTRIM(b.套餐名称))
-                      FROM fghis5..门诊_收费明细表 b
-                      WHERE b.结帐ID = @结帐ID AND b.处方ID = @处方ID
-                        AND LTRIM(RTRIM(ISNULL(b.套餐名称,''))) <> ''
-                      ORDER BY b.明细序号",
-                    new SqlParameter("@结帐ID", 结帐ID),
-                    new SqlParameter("@处方ID", 处方ID)).FirstOrDefault();
-            if (string.IsNullOrEmpty(套餐名称值)) return 0;
-
-            // 该套餐配置的各岗位比例
-            var pkg = db.Database.SqlQuery<MedicalTechPackageCommission>(
-                @"SELECT 序号, 套餐名称, 岗位, 提成比例 FROM fghis5..医技套餐提成比例表
-                  WHERE 套餐名称 = @套餐名称",
-                new SqlParameter("@套餐名称", 套餐名称值)).ToList();
-            var pkgByPos = pkg.ToDictionary(x => (x.岗位 ?? "").Trim(), x => x.提成比例 ?? 0m);
-
-            // 补登/改执行人：先清该登记既有明细再重建
-            db.Database.ExecuteSqlCommand(
-                "DELETE FROM fghis5..医技提成明细表 WHERE 登记ID = @登记ID",
-                new SqlParameter("@登记ID", 登记ID));
-
-            foreach (var 工号 in 执行人工号.Split(new[] { ',', '，' }, StringSplitOptions.RemoveEmptyEntries)
-                         .Select(x => x.Trim()).Distinct())
-            {
-                var staff = db.Database.SqlQuery<MedicalTechStaff>(
-                    @"SELECT 序号, 工号, 姓名, 岗位, 备注 FROM fghis5..医技执行人员信息表 WHERE 工号 = @工号",
-                    new SqlParameter("@工号", 工号)).FirstOrDefault();
-                if (staff == null) continue;
-                var 岗位key = (staff.岗位 ?? "").Trim();
-                if (!pkgByPos.TryGetValue(岗位key, out var 岗位比例) || 岗位比例 <= 0) continue;
-
-                var 提成额 = Math.Round(实际支付 * 岗位比例 / 100m, 2);
-                db.Database.ExecuteSqlCommand(
-                    @"INSERT INTO fghis5..医技提成明细表 (登记ID, 执行人工号, 执行人姓名, 岗位, 提成比例, 提成基数, 提成金额, 登记时间)
-                      VALUES (@登记ID, @工号, @姓名, @岗位, @比例, @基数, @金额, GETDATE())",
-                    new SqlParameter("@登记ID", 登记ID),
-                    new SqlParameter("@工号", staff.工号 ?? ""),
-                    new SqlParameter("@姓名", staff.姓名 ?? ""),
-                    new SqlParameter("@岗位", staff.岗位 ?? ""),
-                    new SqlParameter("@比例", 岗位比例),
-                    new SqlParameter("@基数", 实际支付),
-                    new SqlParameter("@金额", 提成额));
-                生成数++;
-            }
-            return 生成数;
-        }
-
-        /// <summary>
-        /// 补登记：历史已登记（旧流程未选执行人）的套餐，重选参与执行人补生成套餐岗位提成（不重复建登记）。
-        /// POST /MedicalTech/SupplementRegister
-        /// </summary>
-        [HttpPost]
-        public ActionResult SupplementRegister(int 结帐ID, int 处方ID, string 项目名称, string 执行人工号 = null, string 套餐名称 = null)
-        {
-            try
-            {
-                var 流水号 = 结帐ID + "_" + 处方ID;
-                var reg = db.Database.SqlQuery<MedicalTechRegistration>(
-                    @"SELECT * FROM fghis5..医技登记表 WHERE 流水号 = @流水号 AND 项目名称 = @项目名称",
-                    new SqlParameter("@流水号", 流水号),
-                    new SqlParameter("@项目名称", (项目名称 ?? "").Trim())).FirstOrDefault();
-                if (reg == null)
-                    return Json(new { success = false, msg = "该记录尚未登记，请直接在列表点「登记」" });
-                if (string.IsNullOrWhiteSpace(执行人工号))
-                    return Json(new { success = false, msg = "请勾选参与执行人" });
-
-                int cnt = WritePackageCommission(reg.登记ID, 结帐ID, 处方ID, 执行人工号, 套餐名称);
-                if (cnt == 0)
-                    return Json(new { success = true, msg = "补登记完成，但未生成提成明细。可能原因：该套餐在「套餐岗位比例表」未配置，或所选执行人不在「医技执行人员信息表」、或其岗位未配比例，或整单实际支付为0。" });
-                return Json(new { success = true, msg = "补登记成功，生成套餐提成 " + cnt + " 笔（登记ID " + reg.登记ID + "）" });
-            }
-            catch (Exception ex)
-            {
-                var inner = ex;
-                while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = "补登记失败：" + inner.Message });
             }
         }
 
@@ -557,10 +443,14 @@ namespace XYHMember.Controllers
                                 FROM fghis5..医技登记表 r
                                 LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
                                     AND b.项目名称 = r.项目名称
-                                LEFT JOIN (SELECT CAST(项目ID AS NVARCHAR(50)) AS 项目ID, MAX(提成比例) AS 提成比例
-                                           FROM fghis5..医技项目操作人员提成表
-                                           WHERE 项目ID IS NOT NULL AND 项目ID != ''
-                                           GROUP BY CAST(项目ID AS NVARCHAR(50))) c ON c.项目ID = CAST(b.项目ID AS NVARCHAR(50))
+                                OUTER APPLY (SELECT TOP 1 提成比例
+                                             FROM fghis5..医技项目操作人员提成表 cc
+                                             WHERE cc.项目ID = CAST(b.项目ID AS NVARCHAR(50))
+                                               AND cc.项目ID IS NOT NULL AND cc.项目ID != ''
+                                               AND (ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
+                                                    OR ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = '')
+                                             ORDER BY CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
+                                                           THEN 0 ELSE 1 END) c
                                 WHERE r.登记ID = @登记ID";
                 var reg = db.Database.SqlQuery<MedicalTechRegistration>(regSql,
                     new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
@@ -589,12 +479,6 @@ namespace XYHMember.Controllers
                     r.备注
                 }).ToList();
 
-                // 该登记的套餐岗位提成明细（登记时按参与执行人生成）
-                var 套餐提成明细 = db.Database.SqlQuery<MedicalTechCommissionDetail>(
-                    @"SELECT 序号, 登记ID, 执行人工号, 执行人姓名, 岗位, 提成比例, 提成基数, 提成金额, 登记时间
-                      FROM fghis5..医技提成明细表 WHERE 登记ID = @登记ID ORDER BY 序号",
-                    new SqlParameter("@登记ID", 登记ID)).ToList();
-
                 return Json(new
                 {
                     success = true,
@@ -603,15 +487,6 @@ namespace XYHMember.Controllers
                     总次数 = reg.总次数,
                     已执行次数 = records.Count,
                     提成金额 = reg.提成金额,
-                    套餐提成明细 = 套餐提成明细.Select(d => new
-                    {
-                        d.执行人姓名,
-                        d.岗位,
-                        d.提成比例,
-                        d.提成基数,
-                        d.提成金额,
-                        登记时间 = d.登记时间?.ToString("yyyy-MM-dd HH:mm")
-                    }).ToList(),
                     records = formattedRecords
                 }, JsonRequestBehavior.AllowGet);
             }
@@ -884,7 +759,7 @@ namespace XYHMember.Controllers
         /// 新增/修改提成配置
         /// </summary>
         [HttpPost]
-        public ActionResult SaveCommission(int? 序号, string 项目ID, string 项目名称, string 岗位, decimal 提成比例)
+        public ActionResult SaveCommission(int? 序号, string 套餐名称, string 项目ID, string 项目名称, string 岗位, decimal 提成比例)
         {
             try
             {
@@ -895,16 +770,20 @@ namespace XYHMember.Controllers
                 if (提成比例 <= 0)
                     return Json(new { success = false, msg = "提成比例必须大于0" });
 
+                套餐名称 = (套餐名称 ?? "").Trim();
+                object 套餐名称Value = string.IsNullOrEmpty(套餐名称) ? (object)DBNull.Value : 套餐名称;
                 项目ID = (项目ID ?? "").Trim();
                 object 项目IDValue = string.IsNullOrEmpty(项目ID) ? (object)DBNull.Value : 项目ID;
 
-                // 查重：有项目ID按 项目ID+岗位，无则按 项目名称+岗位（排除自身）
+                // 查重：套餐名(空=通用) + 项目ID/名称 + 岗位（排除自身）
                 var checkSql = @"SELECT COUNT(*) FROM fghis5..医技项目操作人员提成表
                                 WHERE 岗位 = @岗位
+                                  AND ISNULL(LTRIM(RTRIM(套餐名称)),'') = @套餐名
                                   AND ((@项目ID != '' AND 项目ID = @项目ID)
                                        OR (@项目ID = '' AND 项目名称 = @项目名称))
                                   AND (@序号 IS NULL OR 序号 != @序号)";
                 var exists = db.Database.SqlQuery<int>(checkSql,
+                    new SqlParameter("@套餐名", 套餐名称 ?? ""),
                     new SqlParameter("@项目ID", 项目ID ?? ""),
                     new SqlParameter("@项目名称", 项目名称 ?? ""),
                     new SqlParameter("@岗位", 岗位 ?? ""),
@@ -912,15 +791,17 @@ namespace XYHMember.Controllers
                 ).FirstOrDefault() > 0;
 
                 if (exists)
-                    return Json(new { success = false, msg = "该项目在该岗位下已配置提成比例，请勿重复" });
+                    return Json(new { success = false, msg = "该套餐该项目在该岗位下已配置提成比例，请勿重复" });
 
                 if (序号.HasValue)
                 {
                     var sql = @"UPDATE fghis5..医技项目操作人员提成表
-                                SET 项目ID = @项目ID, 项目名称 = @项目名称, 岗位 = @岗位, 提成比例 = @提成比例
+                                SET 套餐名称 = @套餐名称, 项目ID = @项目ID, 项目名称 = @项目名称,
+                                    岗位 = @岗位, 提成比例 = @提成比例
                                 WHERE 序号 = @序号";
                     db.Database.ExecuteSqlCommand(sql,
                         new SqlParameter("@序号", 序号.Value),
+                        new SqlParameter("@套餐名称", 套餐名称Value),
                         new SqlParameter("@项目ID", 项目IDValue),
                         new SqlParameter("@项目名称", 项目名称 ?? ""),
                         new SqlParameter("@岗位", 岗位 ?? ""),
@@ -928,9 +809,10 @@ namespace XYHMember.Controllers
                 }
                 else
                 {
-                    var sql = @"INSERT INTO fghis5..医技项目操作人员提成表 (项目ID, 项目名称, 岗位, 提成比例)
-                                VALUES (@项目ID, @项目名称, @岗位, @提成比例)";
+                    var sql = @"INSERT INTO fghis5..医技项目操作人员提成表 (套餐名称, 项目ID, 项目名称, 岗位, 提成比例)
+                                VALUES (@套餐名称, @项目ID, @项目名称, @岗位, @提成比例)";
                     db.Database.ExecuteSqlCommand(sql,
+                        new SqlParameter("@套餐名称", 套餐名称Value),
                         new SqlParameter("@项目ID", 项目IDValue),
                         new SqlParameter("@项目名称", 项目名称 ?? ""),
                         new SqlParameter("@岗位", 岗位 ?? ""),
@@ -966,230 +848,6 @@ namespace XYHMember.Controllers
                 return Json(new { success = false, msg = inner.Message });
             }
         }
-
-        // ========== 套餐岗位提成比例维护 ==========
-
-        /// <summary>
-        /// 套餐岗位提成比例列表
-        /// GET /MedicalTech/GetPackageCommissionList?name=
-        /// </summary>
-        [HttpGet]
-        public ActionResult GetPackageCommissionList(string name)
-        {
-            try
-            {
-                var sql = @"SELECT 序号, 套餐名称, 岗位, 提成比例 FROM fghis5..医技套餐提成比例表
-                            WHERE @name = '' OR 套餐名称 LIKE '%' + @name + '%'
-                            ORDER BY 序号 ASC";
-                var result = db.Database.SqlQuery<MedicalTechPackageCommission>(sql,
-                    new SqlParameter("@name", (name ?? "").Trim())).ToList();
-                return Json(result, JsonRequestBehavior.AllowGet);
-            }
-            catch (Exception ex)
-            {
-                var inner = ex;
-                while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
-            }
-        }
-
-        /// <summary>
-        /// 新增/修改套餐岗位提成比例（套餐名称+岗位 唯一）
-        /// POST /MedicalTech/SavePackageCommission
-        /// </summary>
-        [HttpPost]
-        public ActionResult SavePackageCommission(int? 序号, string 套餐名称, string 岗位, decimal 提成比例)
-        {
-            try
-            {
-                var tc = (套餐名称 ?? "").Trim();
-                var gw = (岗位 ?? "").Trim();
-                if (string.IsNullOrEmpty(tc)) return Json(new { success = false, msg = "套餐名称不能为空" });
-                if (string.IsNullOrEmpty(gw)) return Json(new { success = false, msg = "岗位不能为空" });
-                if (提成比例 <= 0) return Json(new { success = false, msg = "提成比例必须大于0" });
-
-                var exists = db.Database.SqlQuery<int>(
-                    @"SELECT COUNT(*) FROM fghis5..医技套餐提成比例表
-                      WHERE 套餐名称 = @套餐名称 AND 岗位 = @岗位 AND (@序号 IS NULL OR 序号 != @序号)",
-                    new SqlParameter("@套餐名称", tc),
-                    new SqlParameter("@岗位", gw),
-                    new SqlParameter("@序号", (object)序号 ?? DBNull.Value)).FirstOrDefault() > 0;
-                if (exists)
-                    return Json(new { success = false, msg = "该套餐在该岗位下已配置，请勿重复" });
-
-                if (序号.HasValue)
-                {
-                    db.Database.ExecuteSqlCommand(
-                        @"UPDATE fghis5..医技套餐提成比例表 SET 套餐名称=@套餐名称, 岗位=@岗位, 提成比例=@提成比例 WHERE 序号=@序号",
-                        new SqlParameter("@序号", 序号.Value),
-                        new SqlParameter("@套餐名称", tc),
-                        new SqlParameter("@岗位", gw),
-                        new SqlParameter("@提成比例", 提成比例));
-                }
-                else
-                {
-                    db.Database.ExecuteSqlCommand(
-                        @"INSERT INTO fghis5..医技套餐提成比例表 (套餐名称, 岗位, 提成比例) VALUES (@套餐名称, @岗位, @提成比例)",
-                        new SqlParameter("@套餐名称", tc),
-                        new SqlParameter("@岗位", gw),
-                        new SqlParameter("@提成比例", 提成比例));
-                }
-                return Json(new { success = true, msg = "保存成功" });
-            }
-            catch (Exception ex)
-            {
-                var inner = ex;
-                while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = inner.Message });
-            }
-        }
-
-        /// <summary>
-        /// 删除套餐岗位提成比例
-        /// POST /MedicalTech/DeletePackageCommission
-        /// </summary>
-        [HttpPost]
-        public ActionResult DeletePackageCommission(int 序号)
-        {
-            try
-            {
-                db.Database.ExecuteSqlCommand(
-                    "DELETE FROM fghis5..医技套餐提成比例表 WHERE 序号 = @序号",
-                    new SqlParameter("@序号", 序号));
-                return Json(new { success = true, msg = "删除成功" });
-            }
-            catch (Exception ex)
-            {
-                var inner = ex;
-                while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = inner.Message });
-            }
-        }
-
-        /// <summary>
-        /// 套餐提成「套餐名称」下拉数据源：已维护的 + HIS 门诊收费里出现过的套餐名（去重）
-        /// GET /MedicalTech/GetCommissionPackageNames
-        /// </summary>
-        [HttpGet]
-        public ActionResult GetCommissionPackageNames()
-        {
-            try
-            {
-                var names = db.Database.SqlQuery<string>(
-                    @"SELECT DISTINCT LTRIM(RTRIM(套餐名称)) AS 名称
-                      FROM (
-                          SELECT 套餐名称 FROM fghis5..医技套餐提成比例表
-                          UNION
-                          SELECT DISTINCT LTRIM(RTRIM(b.套餐名称)) AS 套餐名称
-                          FROM fghis5..门诊_收费明细表 b
-                          WHERE b.套餐名称 IS NOT NULL AND LTRIM(RTRIM(b.套餐名称)) <> ''
-                      ) t WHERE LTRIM(RTRIM(套餐名称)) <> ''
-                      ORDER BY 套餐名称").ToList();
-                return Json(names, JsonRequestBehavior.AllowGet);
-            }
-            catch (Exception ex)
-            {
-                var inner = ex;
-                while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
-            }
-        }
-
-        // ========== 套餐提成汇总 ==========
-
-        /// <summary>
-        /// 套餐提成汇总页面
-        /// </summary>
-        public ActionResult CommissionSummary()
-        {
-            return View();
-        }
-
-        /// <summary>
-        /// 按 月份+执行人 汇总 医技提成明细表
-        /// GET /MedicalTech/GetCommissionSummary?bdate=&edate=&岗位=
-        /// </summary>
-        [HttpGet]
-        public ActionResult GetCommissionSummary(string bdate, string edate, string 岗位)
-        {
-            try
-            {
-                var sql = @"SELECT 执行人姓名, 执行人工号, 岗位,
-                                   CONVERT(varchar(7), 登记时间, 23) AS 月份,
-                                   COUNT(*) AS 笔数,
-                                   SUM(提成金额) AS 提成金额,
-                                   SUM(提成基数) AS 提成基数
-                            FROM fghis5..医技提成明细表
-                            WHERE (@bdate = '' OR CONVERT(date, 登记时间) >= @bdate)
-                              AND (@edate = '' OR CONVERT(date, 登记时间) < DATEADD(day, 1, @edate))
-                              AND (@岗位 = '' OR 岗位 = @岗位)
-                            GROUP BY 执行人姓名, 执行人工号, 岗位, CONVERT(varchar(7), 登记时间, 23)
-                            ORDER BY 月份 DESC, 执行人姓名, 岗位";
-
-                var result = db.Database.SqlQuery<MedicalTechCommissionSummary>(sql,
-                    new SqlParameter("@bdate", string.IsNullOrWhiteSpace(bdate) ? "" : bdate.Trim()),
-                    new SqlParameter("@edate", string.IsNullOrWhiteSpace(edate) ? "" : edate.Trim()),
-                    new SqlParameter("@岗位", string.IsNullOrWhiteSpace(岗位) ? "" : 岗位.Trim())).ToList();
-                return Json(result, JsonRequestBehavior.AllowGet);
-            }
-            catch (Exception ex)
-            {
-                var inner = ex;
-                while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = inner.Message }, JsonRequestBehavior.AllowGet);
-            }
-        }
-
-        // ========== 取消执行 ==========
-
-        /// <summary>
-        /// 取消最新的一条执行记录（仅可取消当前最新且未取消的）
-        /// </summary>
-        [HttpPost]
-        public ActionResult CancelExecution(int 登记ID, int 本次次数)
-        {
-            try
-            {
-                // 验证只能取消最新的一条
-                var maxSql = @"SELECT ISNULL(MAX(本次次数), 0) FROM fghis5..医技执行记录表
-                               WHERE 登记ID = @登记ID AND delete_flag = 'f'";
-                var maxCount = db.Database.SqlQuery<int>(maxSql,
-                    new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
-
-                if (本次次数 != maxCount)
-                    return Json(new { success = false, msg = "只能取消最新的一条执行记录" });
-                if (maxCount <= 0)
-                    return Json(new { success = false, msg = "没有可取消的执行记录" });
-
-                var jobNumber = GetCurrentJobNumber();
-                var now = DateTime.Now;
-
-                var sql = @"UPDATE fghis5..医技执行记录表
-                            SET delete_flag = 't', 执行人工号 = @取消人工号, 执行时间 = @取消时间
-                            WHERE 登记ID = @登记ID AND 本次次数 = @本次次数 AND delete_flag = 'f'";
-
-                var affected = db.Database.ExecuteSqlCommand(sql,
-                    new SqlParameter("@登记ID", 登记ID),
-                    new SqlParameter("@本次次数", 本次次数),
-                    new SqlParameter("@取消人工号", jobNumber ?? ""),
-                    new SqlParameter("@取消时间", now));
-
-                if (affected <= 0)
-                    return Json(new { success = false, msg = "取消失败，记录不存在或已被取消" });
-
-                // 提成金额不依赖完成状态（登记时已按「项目金额 × 提成比例」核算），取消执行不影响提成
-
-                return Json(new { success = true, msg = "取消成功" });
-            }
-            catch (Exception ex)
-            {
-                var inner = ex;
-                while (inner.InnerException != null) inner = inner.InnerException;
-                return Json(new { success = false, msg = inner.Message });
-            }
-        }
-
-        // ========== 医技执行记录查询 ==========
 
         /// <summary>
         /// 执行记录查询页面
@@ -1231,10 +889,7 @@ namespace XYHMember.Controllers
                        MAX(e.本次次数) AS 最新本次次数,
                        MAX(e.执行人姓名) AS 执行人姓名,
                        MAX(e.岗位) AS 岗位,
-                       MAX(e.备注) AS 备注,
-                       (SELECT SUM(提成金额) FROM fghis5..医技提成明细表 d WHERE d.登记ID = r.登记ID AND d.岗位 = '医师') AS 医师提成,
-                       (SELECT SUM(提成金额) FROM fghis5..医技提成明细表 d WHERE d.登记ID = r.登记ID AND d.岗位 = '理疗师') AS 理疗师提成,
-                       (SELECT SUM(提成金额) FROM fghis5..医技提成明细表 d WHERE d.登记ID = r.登记ID AND d.岗位 = '护士') AS 护士提成
+                       MAX(e.备注) AS 备注
                 FROM fghis5..医技执行记录表 e
                 JOIN fghis5..医技登记表 r ON e.登记ID = r.登记ID
                 LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
