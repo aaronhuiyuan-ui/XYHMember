@@ -382,6 +382,9 @@ namespace XYHMember.Context
         public int? 总次数 { get; set; }
         public DateTime? 登记时间 { get; set; }
         public string 登记人工号 { get; set; }
+        public string 执行人工号 { get; set; }
+        public string 执行人姓名 { get; set; }
+        public string 执行人岗位 { get; set; }
         public decimal? 提成金额 { get; set; }
     }
 
@@ -452,6 +455,9 @@ namespace XYHMember.Context
         public decimal? 实收金额 { get; set; }
         public decimal? 提成金额 { get; set; }
         public string 执行人 { get; set; }
+        public string 默认执行人工号 { get; set; }
+        public string 默认执行人姓名 { get; set; }
+        public string 默认执行人岗位 { get; set; }
         public int? 登记ID { get; set; }
         public int? 总次数 { get; set; }
         public int? 已执行次数 { get; set; }

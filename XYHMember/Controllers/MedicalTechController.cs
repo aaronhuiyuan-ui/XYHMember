@@ -58,6 +58,11 @@ namespace XYHMember.Controllers
                     WHERE 支付方式 != '6'
                     GROUP BY 结帐ID
                 ),
+                实付汇总 AS (
+                    SELECT 结帐ID, CAST(SUM(CASE WHEN 支付方式 IN (0,1,31,32) THEN 支付金额 ELSE 0 END) AS DECIMAL(28,10)) AS 实付金额
+                    FROM fghis5..门诊_收费支付表
+                    GROUP BY 结帐ID
+                ),
                 执行汇总 AS (
                     SELECT 登记ID, COUNT(*) AS 已执行次数
                     FROM fghis5..医技执行记录表
@@ -81,15 +86,19 @@ namespace XYHMember.Controllers
                        ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额, 0), 0) AS 实收金额,
                        -- 执行人：同一登记下的去重执行人，多个用分号隔开
                        ISNULL(pe.执行人, '') AS 执行人,
-                       -- 提成金额：项目金额 × 提成比例（不依赖登记与完成状态，实时按当前比例计算）
-                       ROUND(ISNULL(b.金额, 0) * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额,
+                       -- 提成金额：该项目占整单比例分摊实付 × 提成比例（实付=现金+POS+微信+支付宝）
+                       ROUND(ISNULL(ROUND(ISNULL(sp.实付金额, 0) * b.金额 / NULLIF(a.总金额, 0), 2), 0)
+                             * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额,
                        r.登记ID, r.总次数,
+                       -- 整单默认执行人（登记时指定；未登记/旧数据为空）
+                       r.执行人工号 AS 默认执行人工号, r.执行人姓名 AS 默认执行人姓名, r.执行人岗位 AS 默认执行人岗位,
                        ISNULL(e.已执行次数, 0) AS 已执行次数
                 FROM fghis5..门诊_收费发票表 a
                 JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
                 LEFT JOIN fghis5..医技登记表 r ON r.流水号 = CAST(a.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR)
                     AND r.项目名称 = b.项目名称
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
+                LEFT JOIN 实付汇总 sp ON sp.结帐ID = a.结帐ID
                 LEFT JOIN 执行汇总 e ON e.登记ID = r.登记ID
                 LEFT JOIN 执行人汇总 pe ON pe.登记ID = r.登记ID
                 OUTER APPLY (SELECT TOP 1 提成比例
@@ -98,7 +107,13 @@ namespace XYHMember.Controllers
                                AND cc.项目ID IS NOT NULL AND cc.项目ID != ''
                                AND (ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
                                     OR ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = '')
-                             ORDER BY CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
+                               -- 登记已指定执行人岗位 → 必须岗位相等；未指定/未登记 → 不按岗位
+                               AND (ISNULL(LTRIM(RTRIM(r.执行人岗位)),'') = ''
+                                    OR LTRIM(RTRIM(ISNULL(cc.岗位,''))) = LTRIM(RTRIM(ISNULL(r.执行人岗位,''))))
+                             ORDER BY CASE WHEN ISNULL(LTRIM(RTRIM(r.执行人岗位)),'') <> ''
+                                            AND LTRIM(RTRIM(ISNULL(cc.岗位,''))) = LTRIM(RTRIM(ISNULL(r.执行人岗位,'')))
+                                           THEN 0 ELSE 1 END,
+                                      CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
                                            THEN 0 ELSE 1 END) c
                 WHERE a.发票状态 = '2'
                   AND b.项目类别 IN (6, 59)
@@ -269,7 +284,8 @@ namespace XYHMember.Controllers
         /// 登记医技（新疗程）
         /// </summary>
         [HttpPost]
-        public ActionResult Register(int 结帐ID, int 处方ID, int 就诊ID, string 病人姓名, int 门诊号, string 项目名称, int 总次数)
+        public ActionResult Register(int 结帐ID, int 处方ID, int 就诊ID, string 病人姓名, int 门诊号, string 项目名称, int 总次数,
+                                     string 执行人工号, string 执行人姓名, string 执行人岗位)
         {
             try
             {
@@ -278,6 +294,11 @@ namespace XYHMember.Controllers
 
                 var 流水号 = 结帐ID + "_" + 处方ID;
                 var 登记人工号 = GetCurrentJobNumber();
+
+                // 整单默认执行人：未显式传则回退当前登录人（工号/姓名从登录取，岗位留空）
+                执行人工号 = string.IsNullOrWhiteSpace(执行人工号) ? 登记人工号 : 执行人工号.Trim();
+                执行人姓名 = string.IsNullOrWhiteSpace(执行人姓名) ? GetCurrentUserName() : 执行人姓名.Trim();
+                执行人岗位 = string.IsNullOrWhiteSpace(执行人岗位) ? "" : 执行人岗位.Trim();
 
                 // 检查是否已存在相同流水号+项目名称的记录
                 var checkSql = @"SELECT COUNT(*) FROM fghis5..医技登记表
@@ -290,7 +311,7 @@ namespace XYHMember.Controllers
                 if (exists)
                     return Json(new { success = false, msg = "该项目已登记，请勿重复登记" });
 
-                // 提成金额 = 项目收费金额 × 提成比例（不依赖完成状态，登记时即核算）
+                // 登记时即核算提成，不依赖完成状态；提成 = 实付分摊金额 × 该执行人岗位对应比例
                 var 项目ID = db.Database.SqlQuery<int?>(
                     @"SELECT TOP 1 b.项目ID FROM fghis5..门诊_收费明细表 b
                       WHERE b.结帐ID = @结帐ID AND b.处方ID = @处方ID AND b.项目名称 = @项目名称",
@@ -315,19 +336,39 @@ namespace XYHMember.Controllers
                     new SqlParameter("@结帐ID", 结帐ID),
                     new SqlParameter("@处方ID", 处方ID)).FirstOrDefault();
 
-                var 比例 = db.Database.SqlQuery<decimal?>(
-                    @"SELECT TOP 1 提成比例 FROM fghis5..医技项目操作人员提成表
-                      WHERE 项目ID = CAST(@项目ID AS NVARCHAR(50))
-                        AND (LTRIM(RTRIM(ISNULL(套餐名称,''))) = @套餐名
-                             OR LTRIM(RTRIM(ISNULL(套餐名称,''))) = '')
-                      ORDER BY CASE WHEN LTRIM(RTRIM(ISNULL(套餐名称,''))) = @套餐名 THEN 0 ELSE 1 END",
+                // 提成比例：登记已指定执行人岗位 → 必须岗位相等才命中（该岗位未配置则比例为0，不套用别的岗位）；
+                // 未指定岗位 → 维持原按「项目+套餐」TOP1
+                var has岗位 = 执行人岗位 != "";
+                var 比例Sql = @"SELECT TOP 1 提成比例 FROM fghis5..医技项目操作人员提成表
+                                WHERE 项目ID = CAST(@项目ID AS NVARCHAR(50))
+                                  AND (LTRIM(RTRIM(ISNULL(套餐名称,''))) = @套餐名
+                                       OR LTRIM(RTRIM(ISNULL(套餐名称,''))) = '')
+                                  " + (has岗位 ? "AND LTRIM(RTRIM(ISNULL(岗位,''))) = @执行人岗位" : "") + @"
+                                ORDER BY CASE WHEN LTRIM(RTRIM(ISNULL(套餐名称,''))) = @套餐名 THEN 0 ELSE 1 END";
+                var 比例Params = new List<object>
+                {
                     new SqlParameter("@项目ID", 项目ID.HasValue ? 项目ID.Value.ToString() : ""),
-                    new SqlParameter("@套餐名", 套餐名 ?? "")).FirstOrDefault();
+                    new SqlParameter("@套餐名", 套餐名 ?? "")
+                };
+                if (has岗位)
+                    比例Params.Add(new SqlParameter("@执行人岗位", 执行人岗位));
+                var 比例 = db.Database.SqlQuery<decimal?>(比例Sql, 比例Params.ToArray()).FirstOrDefault();
 
-                var 提成金额 = Math.Round((金额 ?? 0) * (比例 ?? 0) / 100m, 2);
+                // 提成按实际支付核算：该项目占整单比例分摊实付 × 比例（实付=现金+POS+微信+支付宝 0/1/31/32，不含折扣6/储值卡4）
+                var 整单实付 = db.Database.SqlQuery<decimal>(
+                    @"SELECT ISNULL(SUM(CASE WHEN 支付方式 IN (0,1,31,32) THEN 支付金额 ELSE 0 END),0)
+                      FROM fghis5..门诊_收费支付表 WHERE 结帐ID = @结帐ID",
+                    new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault();
+                var 整单总金额 = db.Database.SqlQuery<decimal?>(
+                    "SELECT 总金额 FROM fghis5..门诊_收费发票表 WHERE 结帐ID = @结帐ID",
+                    new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() ?? 0m;
+                var 分摊实付 = 整单总金额 > 0
+                    ? Math.Round(整单实付 * (金额 ?? 0m) / 整单总金额, 2, MidpointRounding.AwayFromZero)
+                    : 整单实付;
+                var 提成金额 = Math.Round(分摊实付 * (比例 ?? 0) / 100m, 2, MidpointRounding.AwayFromZero);
 
-                var sql = @"INSERT INTO fghis5..医技登记表 (流水号, 门诊号, 就诊ID, 病人姓名, 项目名称, 总次数, 登记时间, 登记人工号, 提成金额)
-                            VALUES (@流水号, @门诊号, @就诊ID, @病人姓名, @项目名称, @总次数, GETDATE(), @登记人工号, @提成金额);
+                var sql = @"INSERT INTO fghis5..医技登记表 (流水号, 门诊号, 就诊ID, 病人姓名, 项目名称, 总次数, 登记时间, 登记人工号, 执行人工号, 执行人姓名, 执行人岗位, 提成金额)
+                            VALUES (@流水号, @门诊号, @就诊ID, @病人姓名, @项目名称, @总次数, GETDATE(), @登记人工号, @执行人工号, @执行人姓名, @执行人岗位, @提成金额);
                             SELECT CAST(SCOPE_IDENTITY() AS INT)";
 
                 var 登记ID = db.Database.SqlQuery<int>(sql,
@@ -338,6 +379,9 @@ namespace XYHMember.Controllers
                     new SqlParameter("@项目名称", 项目名称 ?? ""),
                     new SqlParameter("@总次数", 总次数),
                     new SqlParameter("@登记人工号", 登记人工号 ?? ""),
+                    new SqlParameter("@执行人工号", 执行人工号 ?? ""),
+                    new SqlParameter("@执行人姓名", 执行人姓名 ?? ""),
+                    new SqlParameter("@执行人岗位", 执行人岗位 ?? ""),
                     new SqlParameter("@提成金额", 提成金额)
                 ).FirstOrDefault();
 
@@ -439,7 +483,9 @@ namespace XYHMember.Controllers
             try
             {
                 var regSql = @"SELECT r.登记ID, r.流水号, r.门诊号, r.就诊ID, r.病人姓名, r.项目名称, r.总次数, r.登记时间, r.登记人工号,
-                                       ROUND(ISNULL(b.金额, 0) * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额
+                                       r.执行人工号, r.执行人姓名, r.执行人岗位,
+                                       ROUND(ISNULL(ROUND(fee.实付 * b.金额 / NULLIF(fee.总金额, 0), 2), 0)
+                                             * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额
                                 FROM fghis5..医技登记表 r
                                 LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
                                     AND b.项目名称 = r.项目名称
@@ -449,8 +495,19 @@ namespace XYHMember.Controllers
                                                AND cc.项目ID IS NOT NULL AND cc.项目ID != ''
                                                AND (ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
                                                     OR ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = '')
-                                             ORDER BY CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
+                                               -- 登记已指定执行人岗位 → 必须岗位相等；未指定/旧数据 → 不按岗位
+                                               AND (ISNULL(LTRIM(RTRIM(r.执行人岗位)),'') = ''
+                                                    OR LTRIM(RTRIM(ISNULL(cc.岗位,''))) = LTRIM(RTRIM(ISNULL(r.执行人岗位,''))))
+                                             ORDER BY CASE WHEN ISNULL(LTRIM(RTRIM(r.执行人岗位)),'') <> ''
+                                                            AND LTRIM(RTRIM(ISNULL(cc.岗位,''))) = LTRIM(RTRIM(ISNULL(r.执行人岗位,'')))
+                                                           THEN 0 ELSE 1 END,
+                                                      CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
                                                            THEN 0 ELSE 1 END) c
+                                OUTER APPLY (
+                                    SELECT (SELECT ISNULL(SUM(CASE WHEN 支付方式 IN (0,1,31,32) THEN 支付金额 ELSE 0 END), 0)
+                                            FROM fghis5..门诊_收费支付表 pp WHERE pp.结帐ID = b.结帐ID) AS 实付,
+                                           (SELECT ISNULL(总金额, 0) FROM fghis5..门诊_收费发票表 xx WHERE xx.结帐ID = b.结帐ID) AS 总金额
+                                ) fee
                                 WHERE r.登记ID = @登记ID";
                 var reg = db.Database.SqlQuery<MedicalTechRegistration>(regSql,
                     new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
@@ -486,6 +543,9 @@ namespace XYHMember.Controllers
                     项目名称 = reg.项目名称,
                     总次数 = reg.总次数,
                     已执行次数 = records.Count,
+                    执行人工号 = reg.执行人工号,
+                    执行人姓名 = reg.执行人姓名,
+                    执行人岗位 = reg.执行人岗位,
                     提成金额 = reg.提成金额,
                     records = formattedRecords
                 }, JsonRequestBehavior.AllowGet);

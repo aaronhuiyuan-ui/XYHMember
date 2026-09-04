@@ -279,6 +279,24 @@
                     <label>总次数 <span style="color:#999;font-weight:normal;">（疗程总次数）</span></label>
                     <input type="number" id="reg_总次数" min="1" max="99" placeholder="请输入或留空">
                 </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label>执行人工号 <span style="color:red;">*</span></label>
+                        <select id="reg_工号" style="width:100%;padding:6px 8px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;box-sizing:border-box;">
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>执行人姓名 <span style="color:red;">*</span></label>
+                        <select id="reg_姓名_" style="width:100%;padding:6px 8px;border:1px solid #d0d0d0;border-radius:3px;font-size:13px;box-sizing:border-box;">
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>岗位 <span style="color:#999;font-weight:normal;">（整单默认执行人的岗位，用于匹配提成比例）</span></label>
+                    <input type="text" id="reg_岗位" readonly style="background:#f4f4f4;">
+                </div>
                 <input type="hidden" id="reg_结帐ID">
                 <input type="hidden" id="reg_处方ID">
                 <input type="hidden" id="reg_就诊ID">
@@ -718,11 +736,67 @@
                 })
                 .catch(function() {});
 
+            // 整单默认执行人：默认当前登录人（可改），岗位随人员联动
+            var regJob = document.getElementById('reg_工号');
+            var regName = document.getElementById('reg_姓名_');
+            regJob.innerHTML = '<option value="">请选择</option>';
+            regName.innerHTML = '<option value="">请选择</option>';
+            document.getElementById('reg_岗位').value = '';
+
+            fetch('@Url.Action("GetCurrentUser", "MedicalTech")')
+                .then(function(r) { return r.json(); })
+                .then(function(u) {
+                    return fetch('@Url.Action("GetStaffList", "MedicalTech")?name=')
+                        .then(function(r) { return r.json(); })
+                        .then(function(list) { return { u: u, list: list }; });
+                })
+                .then(function(ctx) {
+                    var staffList = ctx.list;
+                    if (!staffList || staffList.success === false) return;
+
+                    for (var i = 0; i < staffList.length; i++) {
+                        var s = staffList[i];
+                        var jobOpt = document.createElement('option');
+                        jobOpt.value = s.工号;
+                        jobOpt.textContent = s.工号;
+                        jobOpt.dataset.name = s.姓名;
+                        jobOpt.dataset.position = s.岗位 || '';
+                        regJob.appendChild(jobOpt);
+
+                        var nameOpt = document.createElement('option');
+                        nameOpt.value = s.姓名;
+                        nameOpt.textContent = s.姓名;
+                        nameOpt.dataset.job = s.工号;
+                        nameOpt.dataset.position = s.岗位 || '';
+                        regName.appendChild(nameOpt);
+                    }
+
+                    var selIdx = -1;
+                    if (ctx.u && ctx.u.jobNumber) {
+                        for (var i = 0; i < regJob.options.length; i++) {
+                            if (regJob.options[i].value === ctx.u.jobNumber) { selIdx = i; break; }
+                        }
+                        if (selIdx < 0) {
+                            // 登录人不在执行人员表时，退而按姓名匹配
+                            for (var i = 0; i < regName.options.length; i++) {
+                                if (regName.options[i].value === ctx.u.userName) { selIdx = i; break; }
+                            }
+                        }
+                        if (selIdx >= 0) { regJob.selectedIndex = selIdx; syncRegExecFromJob(); }
+                    }
+                })
+                .catch(function() {});
+
             openModal('registerModal');
         }
 
 
         function submitRegister() {
+            var 工号 = document.getElementById('reg_工号').value;
+            var 姓名 = document.getElementById('reg_姓名_').value;
+            if (!工号) { alert('请选择执行人工号'); return; }
+            if (!姓名) { alert('请选择执行人姓名'); return; }
+
             var data = {
                 结帐ID: parseInt(document.getElementById('reg_结帐ID').value),
                 处方ID: parseInt(document.getElementById('reg_处方ID').value),
@@ -730,7 +804,10 @@
                 门诊号: parseInt(document.getElementById('reg_门诊号').value),
                 病人姓名: document.getElementById('reg_姓名').value,
                 项目名称: document.getElementById('reg_项目名称').value,
-                总次数: parseInt(document.getElementById('reg_总次数').value) || 1
+                总次数: parseInt(document.getElementById('reg_总次数').value) || 1,
+                执行人工号: 工号,
+                执行人姓名: 姓名,
+                执行人岗位: document.getElementById('reg_岗位').value
             };
 
             fetch('@Url.Action("Register", "MedicalTech")', {
@@ -803,28 +880,70 @@
                         nameSelect.appendChild(nameOpt);
                     }
 
-                    // 默认选中当前登录用户
-                    if (currentUser && currentUser.jobNumber) {
-                        for (var i = 0; i < jobSelect.options.length; i++) {
-                            if (jobSelect.options[i].value === currentUser.jobNumber) {
-                                jobSelect.selectedIndex = i;
-                                break;
-                            }
-                        }
-                        // 同步姓名
-                        var selOpt = jobSelect.options[jobSelect.selectedIndex];
-                        if (selOpt && selOpt.dataset.name) {
-                            for (var j = 0; j < nameSelect.options.length; j++) {
-                                if (nameSelect.options[j].value === selOpt.dataset.name) {
-                                    nameSelect.selectedIndex = j;
+                    // 默认执行人：优先登记时指定的整单默认执行人，其次当前登录用户
+                    var presetJob = d.默认执行人工号 || '';
+                    var presetName = d.默认执行人姓名 || '';
+                    var presetPos = d.默认执行人岗位 || '';
+                    var usePreset = (presetJob !== '' || presetName !== '');
+
+                    var defaultCurrentLogin = function() {
+                        if (currentUser && currentUser.jobNumber) {
+                            for (var i = 0; i < jobSelect.options.length; i++) {
+                                if (jobSelect.options[i].value === currentUser.jobNumber) {
+                                    jobSelect.selectedIndex = i;
                                     break;
                                 }
                             }
+                            // 同步姓名
+                            var selOpt = jobSelect.options[jobSelect.selectedIndex];
+                            if (selOpt && selOpt.dataset.name) {
+                                for (var j = 0; j < nameSelect.options.length; j++) {
+                                    if (nameSelect.options[j].value === selOpt.dataset.name) {
+                                        nameSelect.selectedIndex = j;
+                                        break;
+                                    }
+                                }
+                            }
+                            // 自动填充岗位
+                            if (selOpt && selOpt.dataset.position) {
+                                document.getElementById('exec_岗位').value = selOpt.dataset.position;
+                            }
                         }
-                        // 自动填充岗位
-                        if (selOpt && selOpt.dataset.position) {
-                            document.getElementById('exec_岗位').value = selOpt.dataset.position;
+                    };
+
+                    if (usePreset) {
+                        var presetIdx = -1;
+                        if (presetJob !== '') {
+                            for (var i = 0; i < jobSelect.options.length; i++) {
+                                if (jobSelect.options[i].value === presetJob) { presetIdx = i; break; }
+                            }
                         }
+                        if (presetIdx < 0 && presetName !== '') {
+                            // 工号对不上时按姓名找（工号/姓名两个下拉同序）
+                            for (var i = 0; i < nameSelect.options.length; i++) {
+                                if (nameSelect.options[i].value === presetName) { presetIdx = i; break; }
+                            }
+                        }
+                        if (presetIdx >= 0) {
+                            jobSelect.selectedIndex = presetIdx;
+                            var selOpt = jobSelect.options[presetIdx];
+                            if (selOpt && selOpt.dataset.name) {
+                                for (var j = 0; j < nameSelect.options.length; j++) {
+                                    if (nameSelect.options[j].value === selOpt.dataset.name) {
+                                        nameSelect.selectedIndex = j;
+                                        break;
+                                    }
+                                }
+                            }
+                            // 岗位：优先人员表信息，其次用登记时存的值
+                            document.getElementById('exec_岗位').value =
+                                (selOpt && selOpt.dataset.position) ? selOpt.dataset.position : presetPos;
+                        } else {
+                            // 登记执行人已不在人员表：回退当前登录用户
+                            defaultCurrentLogin();
+                        }
+                    } else {
+                        defaultCurrentLogin();
                     }
                 })
                 .catch(function() {});
@@ -907,6 +1026,44 @@
             }
         });
 
+        // ===== 登记弹窗：执行人级联 =====
+        function syncRegExecFromJob() {
+            var jobSelect = document.getElementById('reg_工号');
+            var selOpt = jobSelect.options[jobSelect.selectedIndex];
+            var nameSelect = document.getElementById('reg_姓名_');
+            if (selOpt && selOpt.dataset.name) {
+                for (var i = 0; i < nameSelect.options.length; i++) {
+                    if (nameSelect.options[i].value === selOpt.dataset.name) {
+                        nameSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+                document.getElementById('reg_岗位').value = selOpt.dataset.position || '';
+            } else {
+                nameSelect.selectedIndex = 0;
+                document.getElementById('reg_岗位').value = '';
+            }
+        }
+        function syncRegExecFromName() {
+            var nameSelect = document.getElementById('reg_姓名_');
+            var selOpt = nameSelect.options[nameSelect.selectedIndex];
+            var jobSelect = document.getElementById('reg_工号');
+            if (selOpt && selOpt.dataset.job) {
+                for (var i = 0; i < jobSelect.options.length; i++) {
+                    if (jobSelect.options[i].value === selOpt.dataset.job) {
+                        jobSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+                document.getElementById('reg_岗位').value = selOpt.dataset.position || '';
+            } else {
+                jobSelect.selectedIndex = 0;
+                document.getElementById('reg_岗位').value = '';
+            }
+        }
+        document.getElementById('reg_工号').addEventListener('change', syncRegExecFromJob);
+        document.getElementById('reg_姓名_').addEventListener('change', syncRegExecFromName);
+
         // ===== 历史 =====
         function openHistory(idx) {
             var d = window._queryData[idx];
@@ -920,6 +1077,7 @@
                     document.getElementById('historySummary').innerHTML =
                         '病人：' + res.病人姓名 + ' ｜ 项目：' + res.项目名称 +
                         ' ｜ 进度：' + res.已执行次数 + '/' + res.总次数 + '次' +
+                        ' ｜ 默认执行人：' + (res.执行人姓名 || '-') +
                         ' ｜ 提成：' + (res.提成金额 != null ? res.提成金额.toFixed(2) : '0.00') + '元';
 
                     var html = '';
