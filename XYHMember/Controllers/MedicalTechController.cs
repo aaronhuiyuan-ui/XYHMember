@@ -84,8 +84,10 @@ namespace XYHMember.Controllers
                        CONVERT(varchar, b.时间, 8) AS 时间,
                        b.套餐名称, b.项目ID, b.项目名称, b.单价, b.数量, b.金额,
                        ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额, 0), 0) AS 实收金额,
-                       -- 执行人：同一登记下的去重执行人，多个用分号隔开
-                       ISNULL(pe.执行人, '') AS 执行人,
+                       -- 执行人：有实际执行记录→显示实际执行人；否则显示登记默认执行人
+                       CASE WHEN pe.登记ID IS NOT NULL
+                            THEN ISNULL(pe.执行人, ISNULL(r.执行人姓名, ''))
+                            ELSE ISNULL(r.执行人姓名, '') END AS 执行人,
                        -- 提成金额：该项目占整单比例分摊实付 × 提成比例（实付=现金+POS+微信+支付宝）
                        ROUND(ISNULL(ROUND(ISNULL(sp.实付金额, 0) * b.金额 / NULLIF(a.总金额, 0), 2), 0)
                              * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额,
