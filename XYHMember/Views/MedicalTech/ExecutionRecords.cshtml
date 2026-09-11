@@ -228,7 +228,7 @@
                     '<td>' + (d.总次数 != null ? d.总次数 : '-') + '</td>' +
                     '<td>' + d.最新本次次数 + '/' + (d.总次数 != null ? d.总次数 : '?') + '</td>' +
                     '<td>' + (d.本次执行金额 != null ? Number(d.本次执行金额).toFixed(2) : '') + '</td>' +
-                    '<td>' + (d.操作人提成 != null ? Number(d.操作人提成).toFixed(2) : '') + '</td>' +
+                    '<td>' + (d.操作人提成 != null ? Number(d.操作人提成).toFixed(4) : '') + '</td>' +
                     '<td>' + escapeHtml(d.执行人姓名) + '</td>' +
                     '<td>' + escapeHtml(d.岗位) + '</td>' +
                     '<td>' + escapeHtml(d.备注) + '</td>' +
@@ -256,7 +256,7 @@
                 '<td></td>' +
                 '<td></td>' +
                 '<td>' + total金额.toFixed(2) + '</td>' +
-                '<td>' + total提成.toFixed(2) + '</td>' +
+                '<td>' + total提成.toFixed(4) + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +

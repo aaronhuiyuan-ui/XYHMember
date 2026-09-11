@@ -88,9 +88,21 @@ namespace XYHMember.Controllers
                        CASE WHEN pe.登记ID IS NOT NULL
                             THEN ISNULL(pe.执行人, ISNULL(r.执行人姓名, ''))
                             ELSE ISNULL(r.执行人姓名, '') END AS 执行人,
-                       -- 提成金额：该项目占整单比例分摊实付 × 提成比例（实付=现金+POS+微信+支付宝）
-                       ROUND(ISNULL(ROUND(ISNULL(sp.实付金额, 0) * b.金额 / NULLIF(a.总金额, 0), 2), 0)
-                             * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额,
+                       -- 提成金额：该项目占整单比例分摊 × 提成比例。分摊基数默认实付（现金/POS/微信/支付宝）；
+                       -- 套餐名含「免单专用」时不按实际支付，按整单总金额计；
+                       -- 整单尾差平衡：先按 4 位舍入，残差(±0.0001/单)补到该单金额最大项目，保证每单合计=该单理论额
+                       ROUND(ROUND((ISNULL((ISNULL(CASE WHEN b.套餐名称 LIKE N'%免单专用%' THEN a.总金额 ELSE sp.实付金额 END, 0)
+                                        * b.金额 / NULLIF(a.总金额, 0)), 0)
+                              * ISNULL(c.提成比例, 0) / 100.0), 4)
+                             + CASE WHEN ROW_NUMBER() OVER (PARTITION BY a.结帐ID ORDER BY b.金额 DESC, b.项目ID) = 1
+                                    THEN ROUND(SUM((ISNULL((ISNULL(CASE WHEN b.套餐名称 LIKE N'%免单专用%' THEN a.总金额 ELSE sp.实付金额 END, 0)
+                                                        * b.金额 / NULLIF(a.总金额, 0)), 0)
+                                            * ISNULL(c.提成比例, 0) / 100.0)) OVER (PARTITION BY a.结帐ID), 4)
+                                         - SUM(ROUND((ISNULL((ISNULL(CASE WHEN b.套餐名称 LIKE N'%免单专用%' THEN a.总金额 ELSE sp.实付金额 END, 0)
+                                                            * b.金额 / NULLIF(a.总金额, 0)), 0)
+                                            * ISNULL(c.提成比例, 0) / 100.0), 4)) OVER (PARTITION BY a.结帐ID)
+                                    ELSE 0 END
+                             , 4) AS 提成金额,
                        r.登记ID, r.总次数,
                        -- 整单默认执行人（登记时指定；未登记/旧数据为空）
                        r.执行人工号 AS 默认执行人工号, r.执行人姓名 AS 默认执行人姓名, r.执行人岗位 AS 默认执行人岗位,
@@ -103,17 +115,25 @@ namespace XYHMember.Controllers
                 LEFT JOIN 实付汇总 sp ON sp.结帐ID = a.结帐ID
                 LEFT JOIN 执行汇总 e ON e.登记ID = r.登记ID
                 LEFT JOIN 执行人汇总 pe ON pe.登记ID = r.登记ID
+                -- 提成岗位锚点：实际执行人岗位优先（谁做归谁，取最近一次有效执行记录）；
+                -- 没有实际执行记录时用登记默认执行人岗位
+                OUTER APPLY (SELECT ISNULL(
+                                        NULLIF(LTRIM(RTRIM(ISNULL((SELECT TOP 1 ee.岗位
+                                                                     FROM fghis5..医技执行记录表 ee
+                                                                     WHERE ee.登记ID = r.登记ID AND ee.delete_flag = 'f'
+                                                                     ORDER BY ee.执行ID DESC),''))), ''),
+                                        LTRIM(RTRIM(ISNULL(r.执行人岗位,''))))
+                                   AS 岗位) x
                 OUTER APPLY (SELECT TOP 1 提成比例
                              FROM fghis5..医技项目操作人员提成表 cc
                              WHERE cc.项目ID = CAST(b.项目ID AS NVARCHAR(50))
                                AND cc.项目ID IS NOT NULL AND cc.项目ID != ''
                                AND (ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
                                     OR ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = '')
-                               -- 登记已指定执行人岗位 → 必须岗位相等；未指定/未登记 → 不按岗位
-                               AND (ISNULL(LTRIM(RTRIM(r.执行人岗位)),'') = ''
-                                    OR LTRIM(RTRIM(ISNULL(cc.岗位,''))) = LTRIM(RTRIM(ISNULL(r.执行人岗位,''))))
-                             ORDER BY CASE WHEN ISNULL(LTRIM(RTRIM(r.执行人岗位)),'') <> ''
-                                            AND LTRIM(RTRIM(ISNULL(cc.岗位,''))) = LTRIM(RTRIM(ISNULL(r.执行人岗位,'')))
+                               AND (x.岗位 = ''
+                                    OR LTRIM(RTRIM(ISNULL(cc.岗位,''))) = x.岗位)
+                             ORDER BY CASE WHEN x.岗位 <> ''
+                                            AND LTRIM(RTRIM(ISNULL(cc.岗位,''))) = x.岗位
                                            THEN 0 ELSE 1 END,
                                       CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
                                            THEN 0 ELSE 1 END) c
@@ -199,7 +219,7 @@ namespace XYHMember.Controllers
                         已执行金额.ToString("F2"),
                         未执行金额.ToString("F2"),
                         d.执行人 ?? "",
-                        d.提成金额?.ToString("F2") ?? "0.00"
+                        d.提成金额?.ToString("F4") ?? "0.0000"
                     };
                     while (mainRow.Count < headers.Count) mainRow.Add(""); // 执行次数/执行时间/执行人工号/执行人姓名/岗位/备注 留空
                     rows.Add(mainRow);
@@ -356,7 +376,8 @@ namespace XYHMember.Controllers
                     比例Params.Add(new SqlParameter("@执行人岗位", 执行人岗位));
                 var 比例 = db.Database.SqlQuery<decimal?>(比例Sql, 比例Params.ToArray()).FirstOrDefault();
 
-                // 提成按实际支付核算：该项目占整单比例分摊实付 × 比例（实付=现金+POS+微信+支付宝 0/1/31/32，不含折扣6/储值卡4）
+                // 提成基数：该项目占整单比例分摊。默认按实际支付（实付=现金/POS/微信/支付宝 0/1/31/32，不含折扣6/储值卡4）；
+                // 套餐名含"免单专用"时不按实际支付，按整单总金额计
                 var 整单实付 = db.Database.SqlQuery<decimal>(
                     @"SELECT ISNULL(SUM(CASE WHEN 支付方式 IN (0,1,31,32) THEN 支付金额 ELSE 0 END),0)
                       FROM fghis5..门诊_收费支付表 WHERE 结帐ID = @结帐ID",
@@ -364,10 +385,13 @@ namespace XYHMember.Controllers
                 var 整单总金额 = db.Database.SqlQuery<decimal?>(
                     "SELECT 总金额 FROM fghis5..门诊_收费发票表 WHERE 结帐ID = @结帐ID",
                     new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() ?? 0m;
+                var 是否免单 = (套餐名 ?? "").IndexOf("免单专用", StringComparison.Ordinal) >= 0;
+                var 分摊基数 = 是否免单 ? 整单总金额 : 整单实付;
+                // 分摊不提前舍位（保留高精度），最终提成只保留 4 位，避免逐行舍入累积误差
                 var 分摊实付 = 整单总金额 > 0
-                    ? Math.Round(整单实付 * (金额 ?? 0m) / 整单总金额, 2, MidpointRounding.AwayFromZero)
-                    : 整单实付;
-                var 提成金额 = Math.Round(分摊实付 * (比例 ?? 0) / 100m, 2, MidpointRounding.AwayFromZero);
+                    ? 分摊基数 * (金额 ?? 0m) / 整单总金额
+                    : 分摊基数;
+                var 提成金额 = Math.Round(分摊实付 * (比例 ?? 0) / 100m, 4, MidpointRounding.AwayFromZero);
 
                 var sql = @"INSERT INTO fghis5..医技登记表 (流水号, 门诊号, 就诊ID, 病人姓名, 项目名称, 总次数, 登记时间, 登记人工号, 执行人工号, 执行人姓名, 执行人岗位, 提成金额)
                             VALUES (@流水号, @门诊号, @就诊ID, @病人姓名, @项目名称, @总次数, GETDATE(), @登记人工号, @执行人工号, @执行人姓名, @执行人岗位, @提成金额);
@@ -456,7 +480,8 @@ namespace XYHMember.Controllers
 
                 var isCompleted = (maxCount + 执行次数) >= 总次数;
 
-                // 提成金额在登记时已按「项目金额 × 提成比例」核算，执行阶段不再处理
+                // 提成按实际执行人岗位（谁做归谁）口径核算：执行后同步该单存档提成
+                SyncStoredCommission(登记ID);
 
                 return Json(new
                 {
@@ -511,7 +536,8 @@ namespace XYHMember.Controllers
                 if (affected <= 0)
                     return Json(new { success = false, msg = "取消失败，记录不存在或已被取消" });
 
-                // 提成金额在登记时已核算，取消执行不影响提成金额
+                // 取消后实际执行人/岗位可能变化，同步重算该单存档提成
+                SyncStoredCommission(登记ID);
                 return Json(new { success = true, msg = "取消成功" });
             }
             catch (Exception ex)
@@ -520,6 +546,58 @@ namespace XYHMember.Controllers
                 while (inner.InnerException != null) inner = inner.InnerException;
                 return Json(new { success = false, msg = inner.Message });
             }
+        }
+
+        /// <summary>
+        /// 按界面实时口径计算某登记当前应记提成
+        /// （分摊不舍位、最终4位；免单专用按总金额；实际执行人岗位优先、无则默认执行人岗位）
+        /// </summary>
+        private decimal? GetLiveCommission(int 登记ID)
+        {
+            var sql = @"SELECT ROUND(ISNULL((CASE WHEN b.套餐名称 LIKE N'%免单专用%' THEN fee.总金额 ELSE fee.实付 END
+                                                 * b.金额 / NULLIF(fee.总金额, 0)), 0)
+                                * ISNULL(c.提成比例, 0) / 100.0, 4)
+                        FROM fghis5..医技登记表 r
+                        LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
+                            AND b.项目名称 = r.项目名称
+                        OUTER APPLY (SELECT ISNULL(
+                                                NULLIF(LTRIM(RTRIM(ISNULL((SELECT TOP 1 ee.岗位
+                                                                             FROM fghis5..医技执行记录表 ee
+                                                                             WHERE ee.登记ID = r.登记ID AND ee.delete_flag = 'f'
+                                                                             ORDER BY ee.执行ID DESC),''))), ''),
+                                                LTRIM(RTRIM(ISNULL(r.执行人岗位,''))))
+                                           AS 岗位) x
+                        OUTER APPLY (SELECT TOP 1 提成比例
+                                     FROM fghis5..医技项目操作人员提成表 cc
+                                     WHERE cc.项目ID = CAST(b.项目ID AS NVARCHAR(50))
+                                       AND cc.项目ID IS NOT NULL AND cc.项目ID != ''
+                                       AND (ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
+                                            OR ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = '')
+                                       AND (x.岗位 = ''
+                                            OR LTRIM(RTRIM(ISNULL(cc.岗位,''))) = x.岗位)
+                                     ORDER BY CASE WHEN x.岗位 <> '' AND LTRIM(RTRIM(ISNULL(cc.岗位,''))) = x.岗位 THEN 0 ELSE 1 END,
+                                                CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
+                                                     THEN 0 ELSE 1 END) c
+                        OUTER APPLY (SELECT (SELECT ISNULL(SUM(CASE WHEN 支付方式 IN (0,1,31,32) THEN 支付金额 ELSE 0 END), 0)
+                                             FROM fghis5..门诊_收费支付表 pp WHERE pp.结帐ID = b.结帐ID) AS 实付,
+                                            (SELECT ISNULL(总金额, 0) FROM fghis5..门诊_收费发票表 xx WHERE xx.结帐ID = b.结帐ID) AS 总金额
+                                     ) fee
+                        WHERE r.登记ID = @登记ID";
+            return db.Database.SqlQuery<decimal?>(sql,
+                new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
+        }
+
+        /// <summary>
+        /// 用实时口径刷新某登记的存档提成（用于执行/取消执行后保持一致）
+        /// </summary>
+        private void SyncStoredCommission(int 登记ID)
+        {
+            var v = GetLiveCommission(登记ID);
+            if (v.HasValue)
+                db.Database.ExecuteSqlCommand(
+                    "UPDATE fghis5..医技登记表 SET 提成金额 = @提成金额 WHERE 登记ID = @登记ID",
+                    new SqlParameter("@提成金额", v.Value),
+                    new SqlParameter("@登记ID", 登记ID));
         }
 
         /// <summary>
@@ -532,22 +610,31 @@ namespace XYHMember.Controllers
             {
                 var regSql = @"SELECT r.登记ID, r.流水号, r.门诊号, r.就诊ID, r.病人姓名, r.项目名称, r.总次数, r.登记时间, r.登记人工号,
                                        r.执行人工号, r.执行人姓名, r.执行人岗位,
-                                       ROUND(ISNULL(ROUND(fee.实付 * b.金额 / NULLIF(fee.总金额, 0), 2), 0)
-                                             * ISNULL(c.提成比例, 0) / 100.0, 2) AS 提成金额
+                                       ROUND(ISNULL((CASE WHEN b.套餐名称 LIKE N'%免单专用%' THEN fee.总金额 ELSE fee.实付 END
+                                                           * b.金额 / NULLIF(fee.总金额, 0)), 0)
+                                             * ISNULL(c.提成比例, 0) / 100.0, 4) AS 提成金额
                                 FROM fghis5..医技登记表 r
                                 LEFT JOIN fghis5..门诊_收费明细表 b ON CAST(b.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR) = r.流水号
                                     AND b.项目名称 = r.项目名称
+                                -- 提成岗位锚点：实际执行人岗位优先（谁做归谁，取最近一次有效执行记录）；
+                                -- 没有实际执行记录时用登记默认执行人岗位
+                                OUTER APPLY (SELECT ISNULL(
+                                                        NULLIF(LTRIM(RTRIM(ISNULL((SELECT TOP 1 ee.岗位
+                                                                                     FROM fghis5..医技执行记录表 ee
+                                                                                     WHERE ee.登记ID = r.登记ID AND ee.delete_flag = 'f'
+                                                                                     ORDER BY ee.执行ID DESC),''))), ''),
+                                                        LTRIM(RTRIM(ISNULL(r.执行人岗位,''))))
+                                                   AS 岗位) x
                                 OUTER APPLY (SELECT TOP 1 提成比例
                                              FROM fghis5..医技项目操作人员提成表 cc
                                              WHERE cc.项目ID = CAST(b.项目ID AS NVARCHAR(50))
                                                AND cc.项目ID IS NOT NULL AND cc.项目ID != ''
                                                AND (ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
                                                     OR ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = '')
-                                               -- 登记已指定执行人岗位 → 必须岗位相等；未指定/旧数据 → 不按岗位
-                                               AND (ISNULL(LTRIM(RTRIM(r.执行人岗位)),'') = ''
-                                                    OR LTRIM(RTRIM(ISNULL(cc.岗位,''))) = LTRIM(RTRIM(ISNULL(r.执行人岗位,''))))
-                                             ORDER BY CASE WHEN ISNULL(LTRIM(RTRIM(r.执行人岗位)),'') <> ''
-                                                            AND LTRIM(RTRIM(ISNULL(cc.岗位,''))) = LTRIM(RTRIM(ISNULL(r.执行人岗位,'')))
+                                               AND (x.岗位 = ''
+                                                    OR LTRIM(RTRIM(ISNULL(cc.岗位,''))) = x.岗位)
+                                             ORDER BY CASE WHEN x.岗位 <> ''
+                                                            AND LTRIM(RTRIM(ISNULL(cc.岗位,''))) = x.岗位
                                                            THEN 0 ELSE 1 END,
                                                       CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
                                                            THEN 0 ELSE 1 END) c

@@ -500,7 +500,7 @@
                     '<td>' + 已执行金额.toFixed(2) + '</td>' +
                     '<td>' + 未执行金额.toFixed(2) + '</td>' +
                     '<td>' + escapeHtml(d.执行人) + '</td>' +
-                    '<td>' + (d.提成金额 != null ? d.提成金额.toFixed(2) : '0.00') + '</td>' +
+                    '<td>' + (d.提成金额 != null ? d.提成金额.toFixed(4) : '0.0000') + '</td>' +
                     '<td>' + actionHtml + '</td>' +
                     '</tr>';
             }
@@ -538,7 +538,7 @@
                 '<td>' + sum已执行金额.toFixed(2) + '</td>' +
                 '<td>' + sum未执行金额.toFixed(2) + '</td>' +
                 '<td></td>' +
-                '<td>' + sum提成金额.toFixed(2) + '</td>' +
+                '<td>' + sum提成金额.toFixed(4) + '</td>' +
                 '<td></td>' +
                 '</tr>';
 
@@ -1078,7 +1078,7 @@
                         '病人：' + res.病人姓名 + ' ｜ 项目：' + res.项目名称 +
                         ' ｜ 进度：' + res.已执行次数 + '/' + res.总次数 + '次' +
                         ' ｜ 默认执行人：' + (res.执行人姓名 || '-') +
-                        ' ｜ 提成：' + (res.提成金额 != null ? res.提成金额.toFixed(2) : '0.00') + '元';
+                        ' ｜ 提成：' + (res.提成金额 != null ? res.提成金额.toFixed(4) : '0.0000') + '元';
 
                     var html = '';
                     if (res.records && res.records.length > 0) {
