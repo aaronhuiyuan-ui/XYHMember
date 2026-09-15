@@ -475,14 +475,11 @@
                     actionHtml = '<button class="btn-action btn-view" onclick="openHistory(' + i + ')">查看</button>';
                 }
 
-                // 计算已执行金额和未执行金额
+                // 金额列由服务端算好并取整到分，这里只做展示，保证列求和与合计一致
                 var 项目金额 = d.金额 != null ? d.金额 : 0;
                 var 实收金额 = d.实收金额 != null ? d.实收金额 : 项目金额;
-                var 已执行金额 = 0, 未执行金额 = 0;
-                if (d.登记ID != null && d.总次数 > 0 && d.已执行次数 > 0) {
-                    已执行金额 = 实收金额 / d.总次数 * d.已执行次数;
-                }
-                未执行金额 = 实收金额 - 已执行金额;
+                var 已执行金额 = d.已执行金额 != null ? d.已执行金额 : 0;
+                var 未执行金额 = d.未执行金额 != null ? d.未执行金额 : 实收金额;
 
                 html += '<tr>' +
                     '<td><input type="checkbox" data-idx="' + i + '"></td>' +
@@ -510,11 +507,8 @@
                 var d = data[i];
                 var 项目金额 = d.金额 != null ? d.金额 : 0;
                 var 实收金额 = d.实收金额 != null ? d.实收金额 : 项目金额;
-                var 已执行金额 = 0;
-                if (d.登记ID != null && d.总次数 > 0 && d.已执行次数 > 0) {
-                    已执行金额 = 实收金额 / d.总次数 * d.已执行次数;
-                }
-                var 未执行金额 = 实收金额 - 已执行金额;
+                var 已执行金额 = d.已执行金额 != null ? d.已执行金额 : 0;
+                var 未执行金额 = d.未执行金额 != null ? d.未执行金额 : 实收金额;
                 sum项目金额 += 项目金额;
                 sum实收金额 += 实收金额;
                 sum已执行金额 += 已执行金额;
@@ -522,6 +516,7 @@
                 sum提成金额 += (d.提成金额 != null ? d.提成金额 : 0);
             }
 
+            // 提成合计按分显示：逐项取整后相加会带 0.0001 级尾差（如 119.9999），在分位上没有意义
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
                 '<td></td>' +
                 '<td>合计</td>' +
@@ -538,7 +533,7 @@
                 '<td>' + sum已执行金额.toFixed(2) + '</td>' +
                 '<td>' + sum未执行金额.toFixed(2) + '</td>' +
                 '<td></td>' +
-                '<td>' + sum提成金额.toFixed(4) + '</td>' +
+                '<td>' + sum提成金额.toFixed(2) + '</td>' +
                 '<td></td>' +
                 '</tr>';
 

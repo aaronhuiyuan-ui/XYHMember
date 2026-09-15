@@ -453,6 +453,8 @@ namespace XYHMember.Context
         public decimal? 数量 { get; set; }
         public decimal? 金额 { get; set; }
         public decimal? 实收金额 { get; set; }
+        public decimal? 已执行金额 { get; set; }
+        public decimal? 未执行金额 { get; set; }
         public decimal? 提成金额 { get; set; }
         public string 执行人 { get; set; }
         public string 默认执行人工号 { get; set; }

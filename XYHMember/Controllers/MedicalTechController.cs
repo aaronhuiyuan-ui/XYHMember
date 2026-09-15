@@ -52,15 +52,14 @@ namespace XYHMember.Controllers
             if (string.IsNullOrEmpty(edate))
                 edate = DateTime.Today.ToString("yyyy-MM-dd");
 
-            var sql = @"WITH 支付汇总 AS (
+            // 分摊原始值本身带小数，逐行取整后相加会和单据总额差几分钱，统一用最大余数法平衡（见 MoneyAllocationSql）
+            var 实收平衡 = MoneyAllocationSql.Balanced("sh.实收原始", "a.结帐ID", "b.金额 DESC, b.处方ID, b.项目ID", 2);
+            var 已执行平衡 = MoneyAllocationSql.Balanced("ex.已执行原始", "t.结帐ID", "t.金额 DESC, t.处方ID, t.项目ID", 2);
+
+            var sql = $@"WITH 支付汇总 AS (
                     SELECT 结帐ID, CAST(SUM(支付金额) AS DECIMAL(28,10)) AS 实收金额
                     FROM fghis5..门诊_收费支付表
                     WHERE 支付方式 != '6'
-                    GROUP BY 结帐ID
-                ),
-                实付汇总 AS (
-                    SELECT 结帐ID, CAST(SUM(CASE WHEN 支付方式 IN (0,1,31,32) THEN 支付金额 ELSE 0 END) AS DECIMAL(28,10)) AS 实付金额
-                    FROM fghis5..门诊_收费支付表
                     GROUP BY 结帐ID
                 ),
                 执行汇总 AS (
@@ -79,30 +78,27 @@ namespace XYHMember.Controllers
                     WHERE e.delete_flag = 'f'
                     GROUP BY e.登记ID
                 )
+                SELECT u.*,
+                       -- 未执行金额 = 实收金额 - 已执行金额，保证逐行相加严格等于实收金额
+                       CAST(u.实收金额 - u.已执行金额 AS DECIMAL(28,2)) AS 未执行金额
+                FROM (
+                    -- 已执行金额：该行实收金额 × 已执行次数/总次数，并按单平衡到分。
+                    -- 平衡用的窗口函数必须待在 FROM 是整张结果集这一层，放进 APPLY 里只会看到当前一行
+                    SELECT t.*, CAST({已执行平衡} AS DECIMAL(28,2)) AS 已执行金额
+                    FROM (
                 SELECT a.结帐ID, a.门诊号, a.姓名, b.就诊ID, b.处方ID,
                        CONVERT(varchar, b.日期, 23) AS 日期,
                        CONVERT(varchar, b.时间, 8) AS 时间,
                        b.套餐名称, b.项目ID, b.项目名称, b.单价, b.数量, b.金额,
-                       ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额, 0), 0) AS 实收金额,
+                       -- 实收金额：各项目按金额占比分摊整单实收，余额按最大余数法平衡到分
+                       {实收平衡} AS 实收金额,
                        -- 执行人：有实际执行记录→显示实际执行人；否则显示登记默认执行人
                        CASE WHEN pe.登记ID IS NOT NULL
                             THEN ISNULL(pe.执行人, ISNULL(r.执行人姓名, ''))
                             ELSE ISNULL(r.执行人姓名, '') END AS 执行人,
-                       -- 提成金额：该项目占整单比例分摊 × 提成比例。分摊基数默认实付（现金/POS/微信/支付宝）；
-                       -- 套餐名含「免单专用」时不按实际支付，按整单总金额计；
-                       -- 整单尾差平衡：先按 4 位舍入，残差(±0.0001/单)补到该单金额最大项目，保证每单合计=该单理论额
-                       ROUND(ROUND((ISNULL((ISNULL(CASE WHEN b.套餐名称 LIKE N'%免单专用%' THEN a.总金额 ELSE sp.实付金额 END, 0)
-                                        * b.金额 / NULLIF(a.总金额, 0)), 0)
-                              * ISNULL(c.提成比例, 0) / 100.0), 4)
-                             + CASE WHEN ROW_NUMBER() OVER (PARTITION BY a.结帐ID ORDER BY b.金额 DESC, b.项目ID) = 1
-                                    THEN ROUND(SUM((ISNULL((ISNULL(CASE WHEN b.套餐名称 LIKE N'%免单专用%' THEN a.总金额 ELSE sp.实付金额 END, 0)
-                                                        * b.金额 / NULLIF(a.总金额, 0)), 0)
-                                            * ISNULL(c.提成比例, 0) / 100.0)) OVER (PARTITION BY a.结帐ID), 4)
-                                         - SUM(ROUND((ISNULL((ISNULL(CASE WHEN b.套餐名称 LIKE N'%免单专用%' THEN a.总金额 ELSE sp.实付金额 END, 0)
-                                                            * b.金额 / NULLIF(a.总金额, 0)), 0)
-                                            * ISNULL(c.提成比例, 0) / 100.0), 4)) OVER (PARTITION BY a.结帐ID)
-                                    ELSE 0 END
-                             , 4) AS 提成金额,
+                       -- 提成金额：直接取登记时存档的金额。登记与执行页、执行记录页、执行历史共用这一个口径；
+                       -- 未登记的项目不计提成
+                       ISNULL(r.提成金额, 0) AS 提成金额,
                        r.登记ID, r.总次数,
                        -- 整单默认执行人（登记时指定；未登记/旧数据为空）
                        r.执行人工号 AS 默认执行人工号, r.执行人姓名 AS 默认执行人姓名, r.执行人岗位 AS 默认执行人岗位,
@@ -112,37 +108,21 @@ namespace XYHMember.Controllers
                 LEFT JOIN fghis5..医技登记表 r ON r.流水号 = CAST(a.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR)
                     AND r.项目名称 = b.项目名称
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
-                LEFT JOIN 实付汇总 sp ON sp.结帐ID = a.结帐ID
                 LEFT JOIN 执行汇总 e ON e.登记ID = r.登记ID
                 LEFT JOIN 执行人汇总 pe ON pe.登记ID = r.登记ID
-                -- 提成岗位锚点：实际执行人岗位优先（谁做归谁，取最近一次有效执行记录）；
-                -- 没有实际执行记录时用登记默认执行人岗位
-                OUTER APPLY (SELECT ISNULL(
-                                        NULLIF(LTRIM(RTRIM(ISNULL((SELECT TOP 1 ee.岗位
-                                                                     FROM fghis5..医技执行记录表 ee
-                                                                     WHERE ee.登记ID = r.登记ID AND ee.delete_flag = 'f'
-                                                                     ORDER BY ee.执行ID DESC),''))), ''),
-                                        LTRIM(RTRIM(ISNULL(r.执行人岗位,''))))
-                                   AS 岗位) x
-                OUTER APPLY (SELECT TOP 1 提成比例
-                             FROM fghis5..医技项目操作人员提成表 cc
-                             WHERE cc.项目ID = CAST(b.项目ID AS NVARCHAR(50))
-                               AND cc.项目ID IS NOT NULL AND cc.项目ID != ''
-                               AND (ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
-                                    OR ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = '')
-                               AND (x.岗位 = ''
-                                    OR LTRIM(RTRIM(ISNULL(cc.岗位,''))) = x.岗位)
-                             ORDER BY CASE WHEN x.岗位 <> ''
-                                            AND LTRIM(RTRIM(ISNULL(cc.岗位,''))) = x.岗位
-                                           THEN 0 ELSE 1 END,
-                                      CASE WHEN ISNULL(LTRIM(RTRIM(cc.套餐名称)),'') = ISNULL(LTRIM(RTRIM(b.套餐名称)),'')
-                                           THEN 0 ELSE 1 END) c
+                -- 分摊原始值先起短别名，平衡表达式里要多次引用
+                CROSS APPLY (SELECT ISNULL(p.实收金额 * b.金额 / NULLIF(a.总金额, 0), 0) AS 实收原始) sh
                 WHERE a.发票状态 = '2'
                   AND b.项目类别 IN (6, 59)
                   AND b.日期 BETWEEN @bdate AND @edate
                   AND (@name = '' OR a.姓名 LIKE '%' + @name + '%' OR b.项目名称 LIKE '%' + @name + '%'
                        OR b.套餐名称 LIKE '%' + @name + '%')
-                ORDER BY b.日期 DESC, b.时间 DESC, b.套餐名称";
+                ) t
+                CROSS APPLY (SELECT CASE WHEN t.登记ID IS NOT NULL AND ISNULL(t.总次数, 0) > 0
+                                         THEN t.实收金额 * ISNULL(t.已执行次数, 0) / t.总次数
+                                         ELSE 0 END AS 已执行原始) ex
+                ) u
+                ORDER BY u.日期 DESC, u.时间 DESC, u.套餐名称";
 
             return db.Database.SqlQuery<MedicalTechChargeItem>(sql,
                 new SqlParameter("@name", (name ?? "").Trim()),
@@ -203,10 +183,8 @@ namespace XYHMember.Controllers
                 {
                     var 项目金额 = d.金额 ?? 0m;
                     var 实收金额 = d.实收金额 ?? 项目金额;
-                    var 已执行金额 = 0m;
-                    if (d.登记ID.HasValue && (d.总次数 ?? 0) > 0 && (d.已执行次数 ?? 0) > 0)
-                        已执行金额 = 实收金额 / d.总次数.Value * d.已执行次数.Value;
-                    var 未执行金额 = 实收金额 - 已执行金额;
+                    var 已执行金额 = d.已执行金额 ?? 0m;
+                    var 未执行金额 = d.未执行金额 ?? 实收金额;
 
                     sum项目金额 += 项目金额;
                     sum实收金额 += 实收金额;
@@ -306,6 +284,8 @@ namespace XYHMember.Controllers
                         {
                             for (int c = 0; c < headers.Count; c++)
                                 ws.Cell(r + 2, c + 1).Style.Font.Bold = true;
+                            // 提成合计按分显示，与页面一致（逐项取整相加的 0.0001 级尾差在分位上没有意义）
+                            ws.Cell(r + 2, headers.IndexOf("操作人员提成") + 1).Style.NumberFormat.Format = "0.00";
                         }
                     }
 
@@ -1099,18 +1079,24 @@ namespace XYHMember.Controllers
 
             try
             {
-                var sql = @"WITH 支付汇总 AS (
+                var 本次执行平衡 = MoneyAllocationSql.Balanced("本次执行金额原始", "g.登记ID", "g.执行时间 DESC", 2);
+
+                var sql = $@"WITH 支付汇总 AS (
                     SELECT 结帐ID, CAST(SUM(支付金额) AS DECIMAL(28,10)) AS 实收金额
                     FROM fghis5..门诊_收费支付表
                     WHERE 支付方式 != '6'
                     GROUP BY 结帐ID
                 )
+                -- 本次执行金额：每次执行按 实收 × 项目金额 /（整单总金额 × 登记总次数）分摊。
+                -- 分摊值带小数，逐行取整后相加会和合计差几分钱，所以按登记ID平衡到分（最大余数法）
+                SELECT g.*, {本次执行平衡} AS 本次执行金额
+                FROM (
                 SELECT r.登记ID,
                        CONVERT(varchar, MAX(e.执行时间), 20) AS 执行时间,
                        r.病人姓名, r.项目名称,
                        MAX(b.套餐名称) AS 套餐名称,
                        COUNT(*) AS 本次执行次数,
-                       SUM(ISNULL(CAST(p.实收金额 AS DECIMAL(28,10)) * CAST(b.金额 AS DECIMAL(28,10)) / NULLIF(CAST(a.总金额 AS DECIMAL(28,10)) * r.总次数, 0), 0)) AS 本次执行金额,
+                       SUM(ISNULL(CAST(p.实收金额 AS DECIMAL(28,10)) * CAST(b.金额 AS DECIMAL(28,10)) / NULLIF(CAST(a.总金额 AS DECIMAL(28,10)) * r.总次数, 0), 0)) AS 本次执行金额原始,
                        MAX(r.提成金额) AS 操作人提成,
                        MAX(b.数量) AS 数量,
                        ISNULL(MAX(dc.默认总次数), 1) AS 默认次数,
@@ -1130,7 +1116,8 @@ namespace XYHMember.Controllers
                   AND CONVERT(date, e.执行时间) BETWEEN @bdate AND @edate
                   AND (@name = '' OR r.病人姓名 LIKE '%' + @name + '%' OR r.项目名称 LIKE '%' + @name + '%')
                 GROUP BY r.登记ID,e.执行时间, r.病人姓名, r.项目名称, r.总次数
-                ORDER BY MAX(e.执行时间) DESC";
+                ) g
+                ORDER BY g.执行时间 DESC";
 
                 var result = db.Database.SqlQuery<ExecutionRecordQuery>(sql,
                     new SqlParameter("@bdate", QueryHelper.ParseDate(bdate)),

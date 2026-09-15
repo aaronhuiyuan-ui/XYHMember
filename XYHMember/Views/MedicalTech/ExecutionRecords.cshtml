@@ -237,14 +237,20 @@
             }
 
             // 计算合计
+            // 提成是整个登记的金额，同一登记有多次执行时会在每行都显示一遍，合计只按登记算一次
             var total次数 = 0, total数量 = 0, total金额 = 0, total提成 = 0;
+            var 已计提成登记 = {};
             for (var j = 0; j < data.length; j++) {
                 total次数 += data[j].本次执行次数 || 0;
                 total数量 += data[j].数量 || 0;
                 total金额 += data[j].本次执行金额 || 0;
-                total提成 += data[j].操作人提成 || 0;
+                if (!已计提成登记[data[j].登记ID]) {
+                    已计提成登记[data[j].登记ID] = true;
+                    total提成 += data[j].操作人提成 || 0;
+                }
             }
 
+            // 提成合计按分显示：逐项取整后相加会带 0.0001 级尾差，在分位上没有意义
             html += '<tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">' +
                 '<td></td>' +
                 '<td>合计</td>' +
@@ -257,7 +263,7 @@
                 '<td></td>' +
                 '<td></td>' +
                 '<td>' + total金额.toFixed(2) + '</td>' +
-                '<td>' + total提成.toFixed(4) + '</td>' +
+                '<td>' + total提成.toFixed(2) + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
