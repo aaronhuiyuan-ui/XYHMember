@@ -207,6 +207,7 @@
 
         function renderTable(data) {
             var tbody = document.getElementById('tableBody');
+            window._queryData = data || [];
             if (!data || data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:#999;">暂无执行记录</td></tr>';
                 return;
@@ -263,7 +264,6 @@
                 '</tr>';
 
             tbody.innerHTML = html;
-            window._queryData = data;
             initTablePagination('dataTable', { summaryRows: 1 });
         }
 
@@ -542,17 +542,29 @@
         // ===== 导出到Excel =====
         document.getElementById('exportBtn').addEventListener('click', function() {
             var headers = ['执行时间', '病人姓名', '套餐名称', '项目名称', '本次执行次数', '数量', '默认次数', '总次数', '进度', '本次执行金额', '操作人提成', '执行人', '岗位', '备注'];
+            // 金额列写原始值，由后端按格式取整显示；页面上的值是取整过的，直接拿去求和会和合计对不上
+            var formats = [null, null, null, null, null, null, null, null, null, '0.00', '0.0000', null, null, null];
+
+            var data = window._queryData || [];
             var rows = [];
-            var trs = document.querySelectorAll('#dataTable tbody tr');
-            for (var i = 0; i < trs.length; i++) {
-                if (trs[i].classList.contains('summary-row')) continue;
-                var tds = trs[i].querySelectorAll('td');
-                if (tds.length < 15) continue;
-                var row = [];
-                for (var c = 1; c < 15; c++) {  // 从1开始跳过复选框列
-                    row.push(tds[c].innerText.trim());
-                }
-                rows.push(row);
+            for (var i = 0; i < data.length; i++) {
+                var d = data[i];
+                rows.push([
+                    d.执行时间 || '',
+                    d.病人姓名 || '',
+                    d.套餐名称 || '',
+                    d.项目名称 || '',
+                    d.本次执行次数 + '次',
+                    d.数量 != null ? String(d.数量) : '',
+                    d.默认次数 != null ? String(d.默认次数) : '',
+                    d.总次数 != null ? String(d.总次数) : '-',
+                    d.最新本次次数 + '/' + (d.总次数 != null ? d.总次数 : '?'),
+                    d.本次执行金额 != null ? String(d.本次执行金额) : '',
+                    d.操作人提成 != null ? String(d.操作人提成) : '',
+                    d.执行人姓名 || '',
+                    d.岗位 || '',
+                    d.备注 || ''
+                ]);
             }
             if (rows.length === 0) {
                 customDialog.info('没有数据可导出', '提示');
@@ -562,7 +574,7 @@
             fetch('@Url.Action("ExportToExcel", "Export")', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ Headers: headers, Rows: rows })
+                body: JSON.stringify({ Headers: headers, Rows: rows, Formats: formats })
             })
             .then(function(res) { return res.blob(); })
             .then(function(blob) {

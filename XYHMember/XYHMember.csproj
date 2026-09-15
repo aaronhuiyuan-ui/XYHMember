@@ -157,6 +157,7 @@
     <Compile Include="Filters\SessionGuardHtmlFilter.cs" />
     <Compile Include="Helpers\PasswordHelper.cs" />
     <Compile Include="Helpers\QueryHelper.cs" />
+    <Compile Include="Helpers\ExcelValueHelper.cs" />
     <Compile Include="Helpers\PackageAutoDeductService.cs" />
     <Compile Include="Controllers\MemberController.cs" />
     <Compile Include="Controllers\ReportFormsController.cs" />

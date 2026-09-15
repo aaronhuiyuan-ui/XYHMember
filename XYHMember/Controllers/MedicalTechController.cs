@@ -190,15 +190,29 @@ namespace XYHMember.Controllers
                 };
                 int mainCols = 15;
 
+                // 金额列写原始值 + 固定显示格式：逐行四舍五入再求和会和页面合计差几分钱
+                var fmt2Cols = new[] { "项目金额", "实收金额", "已执行金额", "未执行金额" };
+                var fmt4Cols = new[] { "操作人员提成" };
+                var colFormats = headers
+                    .Select(h => fmt2Cols.Contains(h) ? "0.00" : (fmt4Cols.Contains(h) ? "0.0000" : null))
+                    .ToList();
+
                 var rows = new List<List<string>>();
+                decimal sum项目金额 = 0m, sum实收金额 = 0m, sum已执行金额 = 0m, sum未执行金额 = 0m, sum提成金额 = 0m;
                 foreach (var d in items)
                 {
                     var 项目金额 = d.金额 ?? 0m;
                     var 实收金额 = d.实收金额 ?? 项目金额;
                     var 已执行金额 = 0m;
                     if (d.登记ID.HasValue && (d.总次数 ?? 0) > 0 && (d.已执行次数 ?? 0) > 0)
-                        已执行金额 = Math.Round(实收金额 / d.总次数.Value * d.已执行次数.Value, 2);
+                        已执行金额 = 实收金额 / d.总次数.Value * d.已执行次数.Value;
                     var 未执行金额 = 实收金额 - 已执行金额;
+
+                    sum项目金额 += 项目金额;
+                    sum实收金额 += 实收金额;
+                    sum已执行金额 += 已执行金额;
+                    sum未执行金额 += 未执行金额;
+                    sum提成金额 += d.提成金额 ?? 0m;
 
                     var progress = d.登记ID.HasValue ? (d.已执行次数 + "/" + d.总次数 + "次") : "-";
 
@@ -211,15 +225,15 @@ namespace XYHMember.Controllers
                         d.项目ID?.ToString() ?? "",
                         d.项目名称 ?? "",
                         d.数量?.ToString("G29") ?? "",
-                        d.金额?.ToString("F2") ?? "",
-                        实收金额.ToString("F2"),
+                        d.金额?.ToString() ?? "",
+                        实收金额.ToString(),
                         d.日期 ?? "",
                         GetStatus(d),
                         progress,
-                        已执行金额.ToString("F2"),
-                        未执行金额.ToString("F2"),
+                        已执行金额.ToString(),
+                        未执行金额.ToString(),
                         d.执行人 ?? "",
-                        d.提成金额?.ToString("F4") ?? "0.0000"
+                        d.提成金额?.ToString() ?? "0.0000"
                     };
                     while (mainRow.Count < headers.Count) mainRow.Add(""); // 执行次数/执行时间/执行人工号/执行人姓名/岗位/备注 留空
                     rows.Add(mainRow);
@@ -243,8 +257,18 @@ namespace XYHMember.Controllers
                     }
                 }
 
-                if (rows.Count == 0)
+                if (items.Count == 0)
                     return Json(new { success = false, msg = "没有数据可导出" });
+
+                var totalRowIdx = rows.Count;
+                var totalRow = Enumerable.Repeat("", headers.Count).ToList();
+                totalRow[headers.IndexOf("门诊号")] = "合计";
+                totalRow[headers.IndexOf("项目金额")] = sum项目金额.ToString();
+                totalRow[headers.IndexOf("实收金额")] = sum实收金额.ToString();
+                totalRow[headers.IndexOf("已执行金额")] = sum已执行金额.ToString();
+                totalRow[headers.IndexOf("未执行金额")] = sum未执行金额.ToString();
+                totalRow[headers.IndexOf("操作人员提成")] = sum提成金额.ToString();
+                rows.Add(totalRow);
 
                 using (var workbook = new XLWorkbook())
                 {
@@ -262,16 +286,26 @@ namespace XYHMember.Controllers
                     // 数据
                     for (int r = 0; r < rows.Count; r++)
                     {
-                        var isSub = !string.IsNullOrEmpty(rows[r][mainCols]); // 第14列非空 = 明细子行
+                        var isTotal = r == totalRowIdx;
+                        var isSub = !isTotal && !string.IsNullOrEmpty(rows[r][mainCols]); // 第14列非空 = 明细子行
                         for (int c = 0; c < rows[r].Count; c++)
                         {
                             var cell = ws.Cell(r + 2, c + 1);
-                            cell.Value = rows[r][c];
+                            var fmt = colFormats[c];
+                            if (fmt != null && !string.IsNullOrEmpty(rows[r][c]))
+                                ExcelValueHelper.SetNumberCellValue(cell, rows[r][c], fmt);
+                            else
+                                ExcelValueHelper.SetCellValue(cell, rows[r][c]);
                         }
                         if (isSub)
                         {
                             for (int c = 0; c < headers.Count; c++)
                                 ws.Cell(r + 2, c + 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#F2F7FB");
+                        }
+                        else if (isTotal)
+                        {
+                            for (int c = 0; c < headers.Count; c++)
+                                ws.Cell(r + 2, c + 1).Style.Font.Bold = true;
                         }
                     }
 

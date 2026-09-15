@@ -16,6 +16,9 @@ namespace XYHMember.Controllers
         {
             public List<string> Headers { get; set; } = new List<string>();
             public List<List<string>> Rows { get; set; } = new List<List<string>>();
+
+            /// <summary>可选：按列指定显示格式（如 "0.00"）。对应列写入原始值，由 Excel 按格式展示</summary>
+            public List<string> Formats { get; set; }
         }
 
         [HttpPost]
@@ -74,9 +77,16 @@ namespace XYHMember.Controllers
                             cell.Value = "'" + value;
                             cell.SetDataType(XLDataType.Text);
                         }
+                        else if (exportData.Formats != null && c < exportData.Formats.Count
+                                 && !string.IsNullOrEmpty(exportData.Formats[c])
+                                 && !string.IsNullOrEmpty(value))
+                        {
+                            // 金额列：写原始值 + 指定格式，保证整列求和与页面合计一致
+                            ExcelValueHelper.SetNumberCellValue(cell, value, exportData.Formats[c]);
+                        }
                         else
                         {
-                            cell.Value = value;
+                            ExcelValueHelper.SetCellValue(cell, value);
                         }
                     }
                 }
