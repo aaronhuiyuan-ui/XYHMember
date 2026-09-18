@@ -174,6 +174,127 @@
             border-color: #0a7ec4;
             box-shadow: 0 2px 8px rgba(14,144,210,0.4);
         }
+        .colsettings-footer button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        /* 修改弹窗 */
+        /* 这个弹窗比列设置高，覆盖掉 .colsettings-overlay 的垂直居中，往上提一点 */
+        #editOverlay {
+            align-items: flex-start;
+            padding-top: 56px;
+        }
+        .edit-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .edit-row label {
+            width: 72px;
+            flex-shrink: 0;
+            margin: 0 12px 0 0;
+            font-size: 14px;
+            font-weight: normal;
+            color: #333;
+            text-align: right;
+        }
+        /* 用 > 限定直接子元素，免得影响下面支付记录表格里的输入框 */
+        .edit-row > input {
+            flex: 1;
+            height: 34px;
+            padding: 0 10px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        .edit-row > input:focus {
+            border-color: #0e90d2;
+        }
+        .edit-row > input[readonly],
+        .edit-row > input:disabled {
+            background: #f5f5f5;
+            color: #999;
+            cursor: not-allowed;
+        }
+        .edit-row-top {
+            align-items: flex-start;
+        }
+        .edit-row-top > label {
+            padding-top: 9px;
+        }
+        /* 支付记录逐条列出：流水号 / 支付方式 / 备注原文 */
+        .edit-pay-wrap {
+            flex: 1;
+            min-width: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .edit-pay-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 13px;
+        }
+        .edit-pay-table th {
+            position: sticky;
+            top: 0;
+            padding: 7px 8px;
+            background: #f7f7f7;
+            border-bottom: 1px solid #e0e0e0;
+            text-align: left;
+            font-weight: 600;
+            color: #555;
+            white-space: nowrap;
+        }
+        .edit-pay-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+        }
+        .edit-pay-table tr:last-child td {
+            border-bottom: none;
+        }
+        .edit-pay-table .edit-pay-id {
+            color: #666;
+            font-family: Consolas, monospace;
+        }
+        .edit-pay-table input {
+            width: 100%;
+            height: 30px;
+            padding: 0 8px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            font-size: 13px;
+            outline: none;
+            box-sizing: border-box;
+        }
+        .edit-pay-table input:focus {
+            border-color: #0e90d2;
+        }
+        .edit-pay-table input:disabled {
+            background: #f5f5f5;
+            color: #999;
+            cursor: not-allowed;
+        }
+        .edit-pay-table .edit-pay-empty {
+            padding: 18px 8px;
+            text-align: center;
+            color: #999;
+        }
+        .edit-tip {
+            min-height: 18px;
+            font-size: 13px;
+            line-height: 18px;
+            color: #666;
+        }
+        .edit-tip.error { color: #e74c3c; }
+        .edit-tip.ok { color: #27ae60; }
         /* 滚动条美化 */
         .colsettings-body::-webkit-scrollbar {
             width: 6px;
@@ -217,7 +338,7 @@
                             </div>
                         </form>
                     </div>
-                    <div width:100px;><button class="am-btn am-btn-default" id="exportButton" style="margin-top:-20px;">导出到Excel</button><button class="am-btn am-btn-default" id="colSettingsBtn" style="margin-top:-15px;margin-left:10px;">列设置</button></div>
+                    <div width:100px;><button class="am-btn am-btn-default" id="exportButton" style="margin-top:-20px;">导出到Excel</button><button class="am-btn am-btn-default" id="colSettingsBtn" style="margin-top:-15px;margin-left:10px;">列设置</button><button class="am-btn am-btn-default" id="editBtn" style="margin-top:-15px;margin-left:10px;">修改</button></div>
 
                 </div>
             </div>
@@ -341,6 +462,7 @@
     @Scripts.Render("~/Scripts/flatpickrjs")
     <script src="~/Scripts/pagination.js"></script>
     <script src="~/Scripts/table-scroll.js"></script>
+    <script src="~/Scripts/customDialog.js"></script>
 
     <script>
 document.getElementById('exportButton').addEventListener('click', function () {
@@ -424,6 +546,52 @@ document.getElementById('exportButton').addEventListener('click', function () {
                 <button class="btn-reset" onclick="resetColumnSettings()">恢复全部</button>
                 <button onclick="closeColSettings()" class="btn-cancel">取消</button>
                 <button class="btn-primary" onclick="saveColumnSettings()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改弹窗 -->
+    <div class="colsettings-overlay" id="editOverlay">
+        <div class="colsettings-box" style="width:760px;">
+            <div class="colsettings-header">
+                <span>修改</span>
+                <span class="close" onclick="closeEditDialog()">&times;</span>
+            </div>
+            <div class="colsettings-body" style="padding:18px 24px;">
+                <div class="edit-row">
+                    <label for="editBillId">结帐ID</label>
+                    <input type="text" id="editBillId" autocomplete="off" placeholder="输入结帐ID后按回车">
+                </div>
+                <div class="edit-row">
+                    <label for="editCategory">类别</label>
+                    <input type="text" id="editCategory" readonly>
+                </div>
+                <div class="edit-row">
+                    <label for="editSales">关联销售</label>
+                    <input type="text" id="editSales" autocomplete="off" disabled>
+                </div>
+                <div class="edit-row edit-row-top">
+                    <label>备注</label>
+                    <div class="edit-pay-wrap">
+                        <table class="edit-pay-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:88px;">流水号</th>
+                                    <th style="width:78px;">支付方式</th>
+                                    <th>备注（原文）</th>
+                                </tr>
+                            </thead>
+                            <tbody id="editPayBody">
+                                <tr><td colspan="3" class="edit-pay-empty">请先输入结帐ID并回车</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="edit-tip" id="editTip"></div>
+            </div>
+            <div class="colsettings-footer">
+                <button onclick="closeEditDialog()" class="btn-cancel">取消</button>
+                <button class="btn-primary" id="editSaveBtn" onclick="saveEditDialog()" disabled>保存</button>
             </div>
         </div>
     </div>
@@ -513,6 +681,156 @@ document.getElementById('exportButton').addEventListener('click', function () {
 
     // 页面加载时应用保存的列设置
     initColumnSettings();
+    </script>
+
+    <script>
+    // 修改功能：结帐ID 回车载入 → 改动关联销售/备注 → 保存
+    var editBillId = null; // 只有成功载入过才允许保存，避免误改
+
+    // 支付方式代码对照日报表 SQL 的 CASE WHEN 口径
+    var payTypeNames = { 0: '现金', 1: 'POS', 4: '储值卡', 6: '折扣', 31: '微信', 32: '支付宝' };
+
+    function escapeAttr(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // 逐条列出支付记录，备注直接给原文（不做 [备注:值] 标记解析）
+    function renderPayments(payments, canEdit) {
+        var tbody = document.getElementById('editPayBody');
+        if (!payments || payments.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="edit-pay-empty">该结帐ID 没有支付记录</td></tr>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < payments.length; i++) {
+            var p = payments[i];
+            html += '<tr>' +
+                '<td class="edit-pay-id">' + p.流水号 + '</td>' +
+                '<td>' + escapeAttr(payTypeNames[p.支付方式] || ('其他(' + p.支付方式 + ')')) + '</td>' +
+                '<td><input type="text" class="edit-pay-note" value="' + escapeAttr(p.备注) + '"' +
+                    (canEdit ? '' : ' disabled') + '></td>' +
+                '</tr>';
+        }
+        tbody.innerHTML = html;
+    }
+
+    // 只有收费行可改；挂号行和未载入状态下一律锁住所有输入和保存按钮
+    function setEditEditable(canEdit) {
+        document.getElementById('editSales').disabled = !canEdit;
+        document.getElementById('editSaveBtn').disabled = !canEdit;
+        var notes = document.querySelectorAll('#editPayBody .edit-pay-note');
+        for (var i = 0; i < notes.length; i++) notes[i].disabled = !canEdit;
+    }
+
+    function openEditDialog() {
+        editBillId = null;
+        document.getElementById('editBillId').value = '';
+        document.getElementById('editCategory').value = '';
+        document.getElementById('editSales').value = '';
+        renderPayments([], false);
+        setEditEditable(false);
+        setEditTip('输入结帐ID后按回车载入，载入成功后才能保存', '');
+        document.getElementById('editOverlay').classList.add('active');
+        setTimeout(function () { document.getElementById('editBillId').focus(); }, 50);
+    }
+
+    function closeEditDialog() {
+        document.getElementById('editOverlay').classList.remove('active');
+    }
+
+    function setEditTip(text, cls) {
+        var el = document.getElementById('editTip');
+        el.textContent = text || '';
+        el.className = 'edit-tip' + (cls ? ' ' + cls : '');
+    }
+
+    function loadEditInfo() {
+        var billId = document.getElementById('editBillId').value.trim();
+        if (!/^-?\d+$/.test(billId)) {
+            editBillId = null;
+            renderPayments([], false);
+            setEditEditable(false);
+            setEditTip('请输入数字结帐ID', 'error');
+            return;
+        }
+        setEditTip('查询中…', '');
+        fetch('@Url.Action("GetDailyReportEditInfo", "ReportForms")?结帐ID=' + encodeURIComponent(billId))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    editBillId = null;
+                    document.getElementById('editCategory').value = '';
+                    document.getElementById('editSales').value = '';
+                    renderPayments([], false);
+                    setEditEditable(false);
+                    setEditTip((data && data.msg) || '未找到该结帐ID', 'error');
+                    return;
+                }
+                document.getElementById('editCategory').value = data.category;
+                document.getElementById('editSales').value = data.sales || '';
+
+                // 挂号行不让改：其 工作组号 是 char(2) 存不下姓名，备注在挂号支付表里大多也没有记录
+                var 可改 = data.category === '收费';
+                editBillId = 可改 ? billId : null;
+                renderPayments(data.payments, 可改);
+                setEditEditable(可改);
+
+                if (!可改) {
+                    // 挂号行不是查询失败，只是不可改，提示用中性色，别跟"未找到结帐ID"混在一起
+                    setEditTip('挂号行不支持修改', '');
+                    return;
+                }
+                var 条数 = (data.payments || []).length;
+                setEditTip(条数 === 0
+                    ? '该结帐ID 没有支付记录，只能改关联销售'
+                    : '已载入 ' + 条数 + ' 条支付记录，可修改关联销售与各条备注原文', 'ok');
+            })
+            .catch(function (err) { setEditTip('查询失败：' + err.message, 'error'); });
+    }
+
+    function saveEditDialog() {
+        if (!editBillId) { setEditTip('请先输入结帐ID并按回车载入', 'error'); return; }
+
+        var rows = [];
+        var inputs = document.querySelectorAll('#editPayBody .edit-pay-note');
+        for (var i = 0; i < inputs.length; i++) {
+            var tr = inputs[i].closest('tr');
+            rows.push({ 流水号: parseInt(tr.cells[0].textContent, 10), 备注: inputs[i].value });
+        }
+
+        var btn = document.getElementById('editSaveBtn');
+        btn.disabled = true;
+        fetch('@Url.Action("SaveDailyReportEdit", "ReportForms")', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: '结帐ID=' + encodeURIComponent(editBillId) +
+                  '&关联销售=' + encodeURIComponent(document.getElementById('editSales').value.trim()) +
+                  '&支付记录Json=' + encodeURIComponent(JSON.stringify(rows))
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                btn.disabled = false;
+                if (!data || !data.success) {
+                    setEditTip((data && data.msg) || '保存失败', 'error');
+                    return;
+                }
+                customDialog.success(data.msg, '保存成功', function () { location.reload(); });
+            })
+            .catch(function (err) {
+                btn.disabled = false;
+                setEditTip('保存失败：' + err.message, 'error');
+            });
+    }
+
+    document.getElementById('editBtn').addEventListener('click', openEditDialog);
+    document.getElementById('editBillId').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            loadEditInfo();
+        }
+    });
     </script>
 
 </body>

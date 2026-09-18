@@ -407,6 +407,13 @@ namespace XYHMember.Controllers
                     : 分摊基数;
                 var 提成金额 = Math.Round(分摊实付 * (比例 ?? 0) / 100m, 4, MidpointRounding.AwayFromZero);
 
+                // 查不到比例时不要静默按 0 计——把原因带回前端，否则页面上只会看到一个莫名其妙的 0
+                string 提成提示 = null;
+                if (!比例.HasValue)
+                    提成提示 = "项目「" + (项目名称 ?? "") + "」在套餐「" + (string.IsNullOrEmpty(套餐名) ? "(无套餐)" : 套餐名) + "」下"
+                             + (has岗位 ? "未配置岗位「" + 执行人岗位 + "」的" : "未配置")
+                             + "提成比例，本次提成暂记为 0，请在医技项目操作人员提成表里配置";
+
                 var sql = @"INSERT INTO fghis5..医技登记表 (流水号, 门诊号, 就诊ID, 病人姓名, 项目名称, 总次数, 登记时间, 登记人工号, 执行人工号, 执行人姓名, 执行人岗位, 提成金额)
                             VALUES (@流水号, @门诊号, @就诊ID, @病人姓名, @项目名称, @总次数, GETDATE(), @登记人工号, @执行人工号, @执行人姓名, @执行人岗位, @提成金额);
                             SELECT CAST(SCOPE_IDENTITY() AS INT)";
@@ -425,7 +432,7 @@ namespace XYHMember.Controllers
                     new SqlParameter("@提成金额", 提成金额)
                 ).FirstOrDefault();
 
-                return Json(new { success = true, msg = "登记成功", 登记ID = 登记ID });
+                return Json(new { success = true, msg = "登记成功", 登记ID = 登记ID, 提成提示 = 提成提示 });
             }
             catch (Exception ex)
             {

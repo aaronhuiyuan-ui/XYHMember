@@ -815,6 +815,8 @@
                 if (res.success) {
                     closeModal('registerModal');
                     doSearch();
+                    // 提成比例没配，后端会带回提示，别让它静默变成 0
+                    if (res.提成提示) customDialog.info(res.提成提示, '提成未配置');
                 } else {
                     customDialog.error(res.msg, '登记失败');
                 }
@@ -1202,13 +1204,17 @@
             if (toReg.length === 0) { customDialog.info('勾选的项目均已登记，无需重复登记', '提示'); return; }
 
             customDialog.confirm('确定要批量登记选中的 ' + toReg.length + ' 个项目吗？', '确认', function() {
-                var done = 0, fail = 0;
+                var done = 0, fail = 0, 提成提示 = [];
                 (function process(idx) {
                     if (idx >= toReg.length) {
                         var msg = '成功 ' + done + ' 个';
                         if (fail > 0) msg += '，失败 ' + fail + ' 个';
                         customDialog.success(msg, '批量登记完成');
                         doSearch();
+                        if (提成提示.length > 0) {
+                            var uniq = 提成提示.filter(function(v, i, a) { return a.indexOf(v) === i; });
+                            customDialog.info(uniq.join('\n'), '提成未配置');
+                        }
                         return;
                     }
                     var item = toReg[idx];
@@ -1239,7 +1245,10 @@
                     })
                     .then(function(r) { return r.json(); })
                     .then(function(res) {
-                        if (res.success) done++; else fail++;
+                        if (res.success) {
+                            done++;
+                            if (res.提成提示) 提成提示.push(res.提成提示);
+                        } else fail++;
                         process(idx + 1);
                     })
                     .catch(function() { fail++; process(idx + 1); });

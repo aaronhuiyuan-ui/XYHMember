@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
 using System.Web.Mvc;
+using Newtonsoft.Json;
 using XYHMember.Context;
 
 namespace XYHMember.Controllers
@@ -262,6 +263,172 @@ FROM
 
             return View("DailyReport", result);
 
+        }
+
+        // =====================================================================
+        //  日报表：「修改」弹框 —— 按结帐ID 查默认值 / 保存关联销售与备注
+        //
+        //  注意：fghis5 库里的 门诊_收费发票表 / 门诊_挂号发票表 / 门诊_收费支付表 /
+        //        门诊_挂号支付表 都是指向 FGHIS5_MZ 的透传视图，写入必须打基表。
+        //        两张发票表的结帐ID 互不重叠，先查收费命中即可判定类别。
+        //        挂号行一律不允许修改（挂号发票表.工作组号 是 char(2) 存不下姓名，
+        //        且挂号支付表大多没有对应记录），前端置灰 + 后端拒绝双保险。
+        //        备注按支付记录逐条列出、直接编辑原文，不走 ExtractFieldValue 解析；
+        //        但日报表读的是 fghis5.dbo.ExtractFieldValue(备注,'备注')，所以原文里
+        //        的 [备注:值] 标记要保持完整，否则报表那一列会是空的。
+        // =====================================================================
+
+        /// <summary>
+        /// 按结帐ID 取弹框默认值。GET /ReportForms/GetDailyReportEditInfo?结帐ID=31969645
+        /// 备注按支付记录逐条返回原文，不做 [字段名:值] 标记解析
+        /// </summary>
+        [HttpGet]
+        public ActionResult GetDailyReportEditInfo(int 结帐ID)
+        {
+            try
+            {
+                if (结帐ID == 0)
+                    return Json(new { success = false, msg = "请输入结帐ID" }, JsonRequestBehavior.AllowGet);
+
+                var 收费 = db.Database.SqlQuery<int>(
+                    "SELECT COUNT(*) FROM FGHIS5_MZ.dbo.门诊_收费发票表 WHERE 结帐ID = @结帐ID",
+                    new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() > 0;
+
+                if (!收费 && db.Database.SqlQuery<int>(
+                        "SELECT COUNT(*) FROM FGHIS5_MZ.dbo.门诊_挂号发票表 WHERE 结帐ID = @结帐ID",
+                        new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() == 0)
+                {
+                    return Json(new { success = false, msg = "未找到结帐ID " + 结帐ID }, JsonRequestBehavior.AllowGet);
+                }
+
+                var 关联销售 = "";
+                var 支付记录 = new List<PaymentNoteRow>();
+                if (收费)
+                {
+                    关联销售 = db.Database.SqlQuery<string>(
+                        "SELECT TOP 1 工作组号 FROM FGHIS5_MZ.dbo.门诊_收费发票表 WHERE 结帐ID = @结帐ID",
+                        new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() ?? "";
+
+                    // 支付方式范围与日报表那段支付子查询保持一致
+                    支付记录 = db.Database.SqlQuery<PaymentNoteRow>(
+                        "SELECT 流水号, 支付方式, 备注 FROM FGHIS5_MZ.dbo.门诊_收费支付表" +
+                        " WHERE 结帐ID = @结帐ID AND 支付方式 IN (0,1,4,6,31,32) ORDER BY 流水号",
+                        new SqlParameter("@结帐ID", 结帐ID)).ToList();
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    billId = 结帐ID,
+                    category = 收费 ? "收费" : "挂号",
+                    sales = 关联销售,
+                    payments = 支付记录.Select(p => new
+                    {
+                        p.流水号,
+                        p.支付方式,
+                        备注 = p.备注 ?? ""
+                    })
+                }, JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, msg = InnermostMessage(ex) }, JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        /// <summary>
+        /// 保存弹框修改：更新结帐ID 对应的 关联销售(发票表.工作组号) 与各条支付记录的备注原文。
+        /// 备注按原文整体覆盖，不做标记解析，前端逐条回传 支付记录Json。
+        /// POST /ReportForms/SaveDailyReportEdit
+        /// </summary>
+        [HttpPost]
+        public ActionResult SaveDailyReportEdit(int 结帐ID, string 关联销售, string 支付记录Json)
+        {
+            try
+            {
+                if (结帐ID == 0)
+                    return Json(new { success = false, msg = "请输入结帐ID" });
+
+                关联销售 = (关联销售 ?? "").Trim();
+
+                List<PaymentNoteEdit> 改动;
+                try
+                {
+                    改动 = JsonConvert.DeserializeObject<List<PaymentNoteEdit>>(
+                        string.IsNullOrWhiteSpace(支付记录Json) ? "[]" : 支付记录Json)
+                        ?? new List<PaymentNoteEdit>();
+                }
+                catch
+                {
+                    return Json(new { success = false, msg = "支付记录参数格式不正确" });
+                }
+
+                var 收费 = db.Database.SqlQuery<int>(
+                    "SELECT COUNT(*) FROM FGHIS5_MZ.dbo.门诊_收费发票表 WHERE 结帐ID = @结帐ID",
+                    new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() > 0;
+
+                if (!收费)
+                {
+                    if (db.Database.SqlQuery<int>(
+                            "SELECT COUNT(*) FROM FGHIS5_MZ.dbo.门诊_挂号发票表 WHERE 结帐ID = @结帐ID",
+                            new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() > 0)
+                        return Json(new { success = false, msg = "挂号行不支持修改" });
+
+                    return Json(new { success = false, msg = "未找到结帐ID " + 结帐ID });
+                }
+
+                // 取现有值用于比对，值没变的行不写回去
+                var 现有 = db.Database.SqlQuery<PaymentNoteRow>(
+                    "SELECT 流水号, 支付方式, 备注 FROM FGHIS5_MZ.dbo.门诊_收费支付表" +
+                    " WHERE 结帐ID = @结帐ID AND 支付方式 IN (0,1,4,6,31,32)",
+                    new SqlParameter("@结帐ID", 结帐ID)).ToList()
+                    .ToDictionary(p => p.流水号);
+
+                using (var tran = db.Database.BeginTransaction())
+                {
+                    db.Database.ExecuteSqlCommand(
+                        "UPDATE FGHIS5_MZ.dbo.门诊_收费发票表 SET 工作组号 = @工作组号 WHERE 结帐ID = @结帐ID",
+                        new SqlParameter("@工作组号", 关联销售),
+                        new SqlParameter("@结帐ID", 结帐ID));
+
+                    var 改了几条 = 0;
+                    foreach (var r in 改动)
+                    {
+                        PaymentNoteRow 原;
+                        if (!现有.TryGetValue(r.流水号, out 原))
+                        {
+                            tran.Rollback();
+                            return Json(new { success = false, msg = "流水号 " + r.流水号 + " 不属于结帐ID " + 结帐ID + "，已取消保存" });
+                        }
+
+                        var 新值 = r.备注 ?? "";
+                        if (新值 == (原.备注 ?? ""))
+                            continue;
+
+                        db.Database.ExecuteSqlCommand(
+                            "UPDATE FGHIS5_MZ.dbo.门诊_收费支付表 SET 备注 = @备注 WHERE 流水号 = @流水号",
+                            new SqlParameter("@备注", 新值.Length == 0 ? (object)DBNull.Value : 新值),
+                            new SqlParameter("@流水号", r.流水号));
+                        改了几条++;
+                    }
+
+                    tran.Commit();
+                    return Json(new { success = true, msg = "已保存：关联销售、" + 改了几条 + " 条备注" });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, msg = "保存失败：" + InnermostMessage(ex) });
+            }
+        }
+
+        /// <summary>
+        /// 取最内层异常消息，EF 会把真实 SQL 错误包在 InnerException 里
+        /// </summary>
+        private static string InnermostMessage(Exception ex)
+        {
+            while (ex.InnerException != null) ex = ex.InnerException;
+            return ex.Message;
         }
 
         //各科室查询

@@ -141,6 +141,30 @@ namespace XYHMember.Context
 
     }
 
+    //日报表「修改」弹框：按结帐ID 取到的默认值
+    public class DailyReportEditInfo
+    {
+        public int 结帐ID { get; set; }
+        public string 类别 { get; set; }
+        public string 关联销售 { get; set; }
+        public string 备注 { get; set; }
+    }
+
+    //支付表行：日报表「修改」弹框逐条列出，备注直接给原文、不做标记解析
+    public class PaymentNoteRow
+    {
+        public int 流水号 { get; set; }
+        public int 支付方式 { get; set; }
+        public string 备注 { get; set; }
+    }
+
+    //弹框保存时回传的单条支付记录备注
+    public class PaymentNoteEdit
+    {
+        public int 流水号 { get; set; }
+        public string 备注 { get; set; }
+    }
+
     //各科室查询
     public  class Departments
     {
