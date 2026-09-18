@@ -109,7 +109,6 @@
                             <th>批号</th>
                             <th>保质期</th>
                             <th>领用数量</th>
-                            <th>申领日期</th>
                             <th>到库日期</th>
                             <th style="width:60px;">操作</th>
                         </tr>
@@ -142,7 +141,6 @@
                             <th>单位</th>
                             <th>批号</th>
                             <th>领用数量</th>
-                            <th>申领日期</th>
                             <th>到库日期</th>
                             <th>保质期</th>
                             <th>领用人</th>
@@ -155,7 +153,7 @@
                         </tr>
                     </thead>
                     <tbody id="outBody">
-                        <tr><td colspan="18" style="text-align:center;color:#999;">加载中...</td></tr>
+                        <tr><td colspan="17" style="text-align:center;color:#999;">加载中...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -225,7 +223,6 @@
                     '<input type="number" class="l-领用数量" min="0.001" step="0.001" placeholder="数量" style="width:80px;height:34px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;">' +
                     '<span class="l-remain" style="color:#999;font-size:12px;display:block;"></span>' +
                 '</td>' +
-                '<td><input type="text" class="l-申领日期" placeholder="点击选择" style="width:110px;height:34px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;"></td>' +
                 '<td><input type="text" class="l-到库日期" placeholder="点击选择" style="width:110px;height:34px;border:1px solid #d0d0d0;border-radius:3px;padding:0 6px;font-size:13px;box-sizing:border-box;"></td>' +
                 '<td><button type="button" class="btn-action" onclick="removeLine(this)">删除</button></td>';
             tbody.appendChild(tr);
@@ -235,7 +232,6 @@
             bindCombo(input, dd);
 
             flatpickr(tr.querySelector('.l-保质期'), { dateFormat: "Y-m-d" });
-            flatpickr(tr.querySelector('.l-申领日期'), { dateFormat: "Y-m-d" });
             flatpickr(tr.querySelector('.l-到库日期'), { dateFormat: "Y-m-d" });
         }
 
@@ -316,8 +312,7 @@
             tr.querySelector('.l-单位').textContent = item.单位 || '';
             tr.querySelector('.l-批号').textContent = item.批号 || '';
             tr.querySelector('.l-保质期').value = item.有效期 || '';
-            var sq = tr.querySelector('.l-申领日期');
-            if (!sq.value && item.入库日期) sq.value = item.入库日期.substring(0, 10);
+            tr.querySelector('.l-到库日期').value = item.入库日期 ? item.入库日期.substring(0, 10) : '';
             tr.querySelector('.l-领用数量').value = '';
             tr.querySelector('.l-remain').textContent = '剩余:' + item.剩余数量;
             input.value = item.物料名称;
@@ -353,7 +348,6 @@
                     单位: tr.querySelector('.l-单位').textContent,
                     批号: tr.querySelector('.l-批号').textContent,
                     领用数量: qty,
-                    申领日期: tr.querySelector('.l-申领日期').value,
                     到库日期: tr.querySelector('.l-到库日期').value,
                     保质期: tr.querySelector('.l-保质期').value
                 });
@@ -409,21 +403,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('outBody').innerHTML =
-                            '<tr><td colspan="18" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
+                            '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
                     } else {
                         renderOutbound(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('outBody').innerHTML =
-                        '<tr><td colspan="18" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
+                        '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
                 });
         }
 
         function renderOutbound(data) {
             var tbody = document.getElementById('outBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="18" style="text-align:center;color:#999;">暂无出库记录</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#999;">暂无出库记录</td></tr>';
                 return;
             }
             var html = '';
@@ -440,7 +434,6 @@
                     '<td>' + escapeHtml(d.单位) + '</td>' +
                     '<td>' + escapeHtml(d.批号) + '</td>' +
                     '<td>' + (d.领用数量 != null ? Number(d.领用数量) : '') + '</td>' +
-                    '<td>' + escapeHtml(d.申领日期) + '</td>' +
                     '<td>' + escapeHtml(d.到库日期) + '</td>' +
                     '<td>' + escapeHtml(d.保质期) + '</td>' +
                     '<td>' + escapeHtml(d.领用人) + '</td>' +
@@ -455,7 +448,7 @@
             html += '<tr class="summary-row" style="background:#f0f0f0;">' +
                 '<td colspan="7">合计</td>' +
                 '<td>' + totalQty + '</td>' +
-                '<td colspan="10"></td>' +
+                '<td colspan="9"></td>' +
                 '</tr>';
             tbody.innerHTML = html;
             initTablePagination('outTable', { summaryRows: 1 });

@@ -64,7 +64,6 @@ CREATE TABLE fghis5..耗材出库明细 (
     单位         NVARCHAR(50)  NULL,
     批号         NVARCHAR(100) NULL,
     领用数量     DECIMAL(18,3) NULL,
-    申领日期     DATETIME      NULL,
     到库日期     DATETIME      NULL,
     保质期       DATETIME      NULL
 );

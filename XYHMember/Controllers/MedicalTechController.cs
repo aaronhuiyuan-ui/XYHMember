@@ -1513,15 +1513,18 @@ namespace XYHMember.Controllers
 
                 using (var tx = db.Database.BeginTransaction())
                 {
+                    // 来源标识 是幂等键（列 NOT NULL + 唯一索引）：手工出库用单号，
+                    // 与套餐自动扣减的「结帐ID_处方ID_套餐名称」、退费回冲的「回冲_...」区分。
                     db.Database.ExecuteSqlCommand(
-                        @"INSERT INTO fghis5..耗材出库单 (出库单号, 出库日期, 领用人, 发料人签字, 登记人, 登记时间, 备注)
-                          VALUES (@出库单号, @出库日期, @领用人, @发料人签字, @登记人, GETDATE(), @备注)",
+                        @"INSERT INTO fghis5..耗材出库单 (出库单号, 出库日期, 领用人, 发料人签字, 登记人, 登记时间, 备注, 来源标识)
+                          VALUES (@出库单号, @出库日期, @领用人, @发料人签字, @登记人, GETDATE(), @备注, @来源标识)",
                         new SqlParameter("@出库单号", 单号),
                         new SqlParameter("@出库日期", 出库D),
                         new SqlParameter("@领用人", 领用人 ?? ""),
                         new SqlParameter("@发料人签字", 发料人签字 ?? ""),
                         new SqlParameter("@登记人", 登记人 ?? ""),
-                        new SqlParameter("@备注", (object)备注 ?? DBNull.Value));
+                        new SqlParameter("@备注", (object)备注 ?? DBNull.Value),
+                        new SqlParameter("@来源标识", 单号));
 
                     foreach (var line in lines)
                     {
@@ -1541,8 +1544,8 @@ namespace XYHMember.Controllers
 
                         db.Database.ExecuteSqlCommand(
                             @"INSERT INTO fghis5..耗材出库明细
-                              (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 申领日期, 到库日期, 保质期)
-                              VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @申领日期, @到库日期, @保质期)",
+                              (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 到库日期, 保质期)
+                              VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @到库日期, @保质期)",
                             new SqlParameter("@出库单号", 单号),
                             new SqlParameter("@关联入库序号", line.关联入库序号.Value),
                             new SqlParameter("@物料编码", (object)line.物料编码 ?? DBNull.Value),
@@ -1551,7 +1554,6 @@ namespace XYHMember.Controllers
                             new SqlParameter("@单位", (object)line.单位 ?? DBNull.Value),
                             new SqlParameter("@批号", (object)line.批号 ?? DBNull.Value),
                             new SqlParameter("@领用数量", line.领用数量.Value),
-                            new SqlParameter("@申领日期", (object)ParseDate(line.申领日期) ?? DBNull.Value),
                             new SqlParameter("@到库日期", (object)ParseDate(line.到库日期) ?? DBNull.Value),
                             new SqlParameter("@保质期", (object)ParseDate(line.保质期) ?? DBNull.Value));
 
@@ -1589,7 +1591,6 @@ namespace XYHMember.Controllers
                                    CONVERT(varchar(19), h.登记时间, 120) AS 登记时间,
                                    h.备注, h.来源类型,
                                    l.序号, l.关联入库序号, l.物料编码, l.耗材名称, l.规格型号, l.单位, l.批号, l.领用数量,
-                                   CONVERT(varchar(10), l.申领日期, 120) AS 申领日期,
                                    CONVERT(varchar(10), l.到库日期, 120) AS 到库日期,
                                    CONVERT(varchar(10), l.保质期, 120) AS 保质期,
                                    l.备注 AS 明细备注

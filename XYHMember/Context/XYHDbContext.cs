@@ -710,7 +710,6 @@ namespace XYHMember.Context
         public string 单位 { get; set; }
         public string 批号 { get; set; }
         public decimal? 领用数量 { get; set; }
-        public string 申领日期 { get; set; }
         public string 到库日期 { get; set; }
         public string 保质期 { get; set; }
     }
@@ -733,7 +732,6 @@ namespace XYHMember.Context
         public string 单位 { get; set; }
         public string 批号 { get; set; }
         public decimal? 领用数量 { get; set; }
-        public string 申领日期 { get; set; }
         public string 到库日期 { get; set; }
         public string 保质期 { get; set; }
     }

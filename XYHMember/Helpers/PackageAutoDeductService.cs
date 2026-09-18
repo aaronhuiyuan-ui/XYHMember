@@ -59,7 +59,6 @@ namespace XYHMember
         public string 单位 { get; set; }
         public string 批号 { get; set; }
         public decimal? 领用数量 { get; set; }
-        public string 申领日期 { get; set; }
         public string 到库日期 { get; set; }
         public string 保质期 { get; set; }
         public string 备注 { get; set; }
@@ -189,8 +188,8 @@ namespace XYHMember
                                         if (take <= 0) continue;
 
                                         db.Database.ExecuteSqlCommand(
-                                            @"INSERT INTO fghis5..耗材出库明细 (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 申领日期, 到库日期, 保质期, 备注)
-                                              VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @申领日期, NULL, @保质期, @备注)",
+                                            @"INSERT INTO fghis5..耗材出库明细 (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 到库日期, 保质期, 备注)
+                                              VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, NULL, @保质期, @备注)",
                                             new SqlParameter("@出库单号", 单号),
                                             new SqlParameter("@关联入库序号", b2.序号),
                                             new SqlParameter("@物料编码", (object)b2.物料编码 ?? DBNull.Value),
@@ -199,7 +198,6 @@ namespace XYHMember
                                             new SqlParameter("@单位", (object)b2.单位 ?? DBNull.Value),
                                             new SqlParameter("@批号", (object)b2.批号 ?? DBNull.Value),
                                             new SqlParameter("@领用数量", take),
-                                            new SqlParameter("@申领日期", 出库D),
                                             new SqlParameter("@保质期", (object)ParseDate(b2.有效期) ?? DBNull.Value),
                                             new SqlParameter("@备注", (object)(string.IsNullOrWhiteSpace(l.备注) ? "固定消耗" : l.备注) ?? DBNull.Value));
 
@@ -273,7 +271,6 @@ namespace XYHMember
 
                         var lines = db.Database.SqlQuery<PackageOutboundLine>(
                             @"SELECT l.关联入库序号, l.物料编码, l.耗材名称, l.规格型号, l.单位, l.批号, l.领用数量,
-                                     CONVERT(varchar(10), l.申领日期, 120) AS 申领日期,
                                      CONVERT(varchar(10), l.到库日期, 120) AS 到库日期,
                                      CONVERT(varchar(10), l.保质期, 120) AS 保质期, l.备注
                               FROM fghis5..耗材出库明细 l WHERE l.出库单号 = @单号",
@@ -309,8 +306,8 @@ namespace XYHMember
                                         throw new Exception("入库批次不存在（序号 " + l.关联入库序号 + "），无法回冲");
 
                                     db.Database.ExecuteSqlCommand(
-                                        @"INSERT INTO fghis5..耗材出库明细 (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 申领日期, 到库日期, 保质期, 备注)
-                                          VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @申领日期, @到库日期, @保质期, @备注)",
+                                        @"INSERT INTO fghis5..耗材出库明细 (出库单号, 关联入库序号, 物料编码, 耗材名称, 规格型号, 单位, 批号, 领用数量, 到库日期, 保质期, 备注)
+                                          VALUES (@出库单号, @关联入库序号, @物料编码, @耗材名称, @规格型号, @单位, @批号, @领用数量, @到库日期, @保质期, @备注)",
                                         new SqlParameter("@出库单号", 单号),
                                         new SqlParameter("@关联入库序号", (object)l.关联入库序号 ?? DBNull.Value),
                                         new SqlParameter("@物料编码", (object)l.物料编码 ?? DBNull.Value),
@@ -319,7 +316,6 @@ namespace XYHMember
                                         new SqlParameter("@单位", (object)l.单位 ?? DBNull.Value),
                                         new SqlParameter("@批号", (object)l.批号 ?? DBNull.Value),
                                         new SqlParameter("@领用数量", -qty),
-                                        new SqlParameter("@申领日期", (object)ParseDate(l.申领日期) ?? DBNull.Value),
                                         new SqlParameter("@到库日期", (object)ParseDate(l.到库日期) ?? DBNull.Value),
                                         new SqlParameter("@保质期", (object)ParseDate(l.保质期) ?? DBNull.Value),
                                         new SqlParameter("@备注", "套餐退费回冲"));
