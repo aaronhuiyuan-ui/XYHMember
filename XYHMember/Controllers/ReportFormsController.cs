@@ -271,11 +271,13 @@ FROM
         //  注意：fghis5 库里的 门诊_收费发票表 / 门诊_挂号发票表 / 门诊_收费支付表 /
         //        门诊_挂号支付表 都是指向 FGHIS5_MZ 的透传视图，写入必须打基表。
         //        两张发票表的结帐ID 互不重叠，先查收费命中即可判定类别。
-        //        挂号行一律不允许修改（挂号发票表.工作组号 是 char(2) 存不下姓名，
-        //        且挂号支付表大多没有对应记录），前端置灰 + 后端拒绝双保险。
+        //        收费行改 收费发票表.工作组号 + 支付记录；挂号行只改支付记录——
+        //        挂号发票表.工作组号 是 char(2) 存不下姓名（全表也全是空的），
+        //        报表 SQL 的挂号分支本来就写死 '' AS 关联销售。
         //        备注按支付记录逐条列出、直接编辑原文，不走 ExtractFieldValue 解析；
         //        但日报表读的是 fghis5.dbo.ExtractFieldValue(备注,'备注')，所以原文里
         //        的 [备注:值] 标记要保持完整，否则报表那一列会是空的。
+        //        支付方式可改，但只允许 允许支付方式 里那几种，改到范围外金额会掉出报表。
         // =====================================================================
 
         /// <summary>
@@ -302,19 +304,21 @@ FROM
                 }
 
                 var 关联销售 = "";
-                var 支付记录 = new List<PaymentNoteRow>();
                 if (收费)
                 {
                     关联销售 = db.Database.SqlQuery<string>(
                         "SELECT TOP 1 工作组号 FROM FGHIS5_MZ.dbo.门诊_收费发票表 WHERE 结帐ID = @结帐ID",
                         new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() ?? "";
-
-                    // 支付方式范围与日报表那段支付子查询保持一致
-                    支付记录 = db.Database.SqlQuery<PaymentNoteRow>(
-                        "SELECT 流水号, 支付方式, 备注 FROM FGHIS5_MZ.dbo.门诊_收费支付表" +
-                        " WHERE 结帐ID = @结帐ID AND 支付方式 IN (0,1,4,6,31,32) ORDER BY 流水号",
-                        new SqlParameter("@结帐ID", 结帐ID)).ToList();
                 }
+                // 挂号行的关联销售不给改：挂号发票表.工作组号 是 char(2) 存不下姓名（全表也全是空的），
+                // 报表 SQL 的挂号分支本来就是写死的 '' AS 关联销售
+
+                // 收费走收费支付表、挂号走挂号支付表；支付方式范围与日报表那段支付子查询一致
+                var 支付表 = 收费 ? "FGHIS5_MZ.dbo.门诊_收费支付表" : "FGHIS5_MZ.dbo.门诊_挂号支付表";
+                var 支付记录 = db.Database.SqlQuery<PaymentNoteRow>(
+                    "SELECT 流水号, 支付方式, 备注 FROM " + 支付表 +
+                    " WHERE 结帐ID = @结帐ID AND 支付方式 IN (0,1,4,6,31,32) ORDER BY 流水号",
+                    new SqlParameter("@结帐ID", 结帐ID)).ToList();
 
                 return Json(new
                 {
@@ -337,7 +341,7 @@ FROM
         }
 
         /// <summary>
-        /// 保存弹框修改：更新结帐ID 对应的 关联销售(发票表.工作组号) 与各条支付记录的备注原文。
+        /// 保存弹框修改：更新结帐ID 对应的 关联销售(收费发票表.工作组号) 与各条支付记录的支付方式/备注原文。
         /// 备注按原文整体覆盖，不做标记解析，前端逐条回传 支付记录Json。
         /// POST /ReportForms/SaveDailyReportEdit
         /// </summary>
@@ -367,29 +371,32 @@ FROM
                     "SELECT COUNT(*) FROM FGHIS5_MZ.dbo.门诊_收费发票表 WHERE 结帐ID = @结帐ID",
                     new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() > 0;
 
-                if (!收费)
+                if (!收费 && db.Database.SqlQuery<int>(
+                        "SELECT COUNT(*) FROM FGHIS5_MZ.dbo.门诊_挂号发票表 WHERE 结帐ID = @结帐ID",
+                        new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() == 0)
                 {
-                    if (db.Database.SqlQuery<int>(
-                            "SELECT COUNT(*) FROM FGHIS5_MZ.dbo.门诊_挂号发票表 WHERE 结帐ID = @结帐ID",
-                            new SqlParameter("@结帐ID", 结帐ID)).FirstOrDefault() > 0)
-                        return Json(new { success = false, msg = "挂号行不支持修改" });
-
                     return Json(new { success = false, msg = "未找到结帐ID " + 结帐ID });
                 }
 
-                // 取现有值用于比对，值没变的行不写回去
+                var 支付表 = 收费 ? "FGHIS5_MZ.dbo.门诊_收费支付表" : "FGHIS5_MZ.dbo.门诊_挂号支付表";
+
+                // 取现有值用于比对，没变的行不写回去
                 var 现有 = db.Database.SqlQuery<PaymentNoteRow>(
-                    "SELECT 流水号, 支付方式, 备注 FROM FGHIS5_MZ.dbo.门诊_收费支付表" +
+                    "SELECT 流水号, 支付方式, 备注 FROM " + 支付表 +
                     " WHERE 结帐ID = @结帐ID AND 支付方式 IN (0,1,4,6,31,32)",
                     new SqlParameter("@结帐ID", 结帐ID)).ToList()
                     .ToDictionary(p => p.流水号);
 
                 using (var tran = db.Database.BeginTransaction())
                 {
-                    db.Database.ExecuteSqlCommand(
-                        "UPDATE FGHIS5_MZ.dbo.门诊_收费发票表 SET 工作组号 = @工作组号 WHERE 结帐ID = @结帐ID",
-                        new SqlParameter("@工作组号", 关联销售),
-                        new SqlParameter("@结帐ID", 结帐ID));
+                    // 挂号行不给改关联销售：挂号发票表.工作组号 是 char(2) 存不下姓名，报表分支也写死空串
+                    if (收费)
+                    {
+                        db.Database.ExecuteSqlCommand(
+                            "UPDATE FGHIS5_MZ.dbo.门诊_收费发票表 SET 工作组号 = @工作组号 WHERE 结帐ID = @结帐ID",
+                            new SqlParameter("@工作组号", 关联销售),
+                            new SqlParameter("@结帐ID", 结帐ID));
+                    }
 
                     var 改了几条 = 0;
                     foreach (var r in 改动)
@@ -401,19 +408,27 @@ FROM
                             return Json(new { success = false, msg = "流水号 " + r.流水号 + " 不属于结帐ID " + 结帐ID + "，已取消保存" });
                         }
 
-                        var 新值 = r.备注 ?? "";
-                        if (新值 == (原.备注 ?? ""))
+                        // 支付方式超出这个范围，这行会掉出报表的支付子查询，金额整个消失
+                        if (!允许支付方式.Contains(r.支付方式))
+                        {
+                            tran.Rollback();
+                            return Json(new { success = false, msg = "支付方式 " + r.支付方式 + " 不在允许范围内" });
+                        }
+
+                        var 新备注 = r.备注 ?? "";
+                        if (新备注 == (原.备注 ?? "") && r.支付方式 == 原.支付方式)
                             continue;
 
                         db.Database.ExecuteSqlCommand(
-                            "UPDATE FGHIS5_MZ.dbo.门诊_收费支付表 SET 备注 = @备注 WHERE 流水号 = @流水号",
-                            new SqlParameter("@备注", 新值.Length == 0 ? (object)DBNull.Value : 新值),
+                            "UPDATE " + 支付表 + " SET 支付方式 = @支付方式, 备注 = @备注 WHERE 流水号 = @流水号",
+                            new SqlParameter("@支付方式", r.支付方式),
+                            new SqlParameter("@备注", 新备注.Length == 0 ? (object)DBNull.Value : 新备注),
                             new SqlParameter("@流水号", r.流水号));
                         改了几条++;
                     }
 
                     tran.Commit();
-                    return Json(new { success = true, msg = "已保存：关联销售、" + 改了几条 + " 条备注" });
+                    return Json(new { success = true, msg = "已保存：" + (收费 ? "关联销售、" : "") + 改了几条 + " 条支付记录" });
                 }
             }
             catch (Exception ex)
@@ -421,6 +436,9 @@ FROM
                 return Json(new { success = false, msg = "保存失败：" + InnermostMessage(ex) });
             }
         }
+
+        // 日报表支付子查询里统计的支付方式，弹框下拉只允许这几种
+        private static readonly int[] 允许支付方式 = { 0, 1, 4, 6, 31, 32 };
 
         /// <summary>
         /// 取最内层异常消息，EF 会把真实 SQL 错误包在 InnerException 里

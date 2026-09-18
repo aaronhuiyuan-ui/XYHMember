@@ -158,10 +158,11 @@ namespace XYHMember.Context
         public string 备注 { get; set; }
     }
 
-    //弹框保存时回传的单条支付记录备注
+    //弹框保存时回传的单条支付记录
     public class PaymentNoteEdit
     {
         public int 流水号 { get; set; }
+        public int 支付方式 { get; set; }
         public string 备注 { get; set; }
     }
 

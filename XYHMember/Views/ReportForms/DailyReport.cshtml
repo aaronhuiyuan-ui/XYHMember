@@ -264,7 +264,8 @@
             color: #666;
             font-family: Consolas, monospace;
         }
-        .edit-pay-table input {
+        .edit-pay-table input,
+        .edit-pay-table select {
             width: 100%;
             height: 30px;
             padding: 0 8px;
@@ -274,10 +275,17 @@
             outline: none;
             box-sizing: border-box;
         }
-        .edit-pay-table input:focus {
+        .edit-pay-table select {
+            padding: 0 2px;
+            background: #fff;
+            cursor: pointer;
+        }
+        .edit-pay-table input:focus,
+        .edit-pay-table select:focus {
             border-color: #0e90d2;
         }
-        .edit-pay-table input:disabled {
+        .edit-pay-table input:disabled,
+        .edit-pay-table select:disabled {
             background: #f5f5f5;
             color: #999;
             cursor: not-allowed;
@@ -577,7 +585,7 @@ document.getElementById('exportButton').addEventListener('click', function () {
                             <thead>
                                 <tr>
                                     <th style="width:88px;">流水号</th>
-                                    <th style="width:78px;">支付方式</th>
+                                    <th style="width:96px;">支付方式</th>
                                     <th>备注（原文）</th>
                                 </tr>
                             </thead>
@@ -684,11 +692,16 @@ document.getElementById('exportButton').addEventListener('click', function () {
     </script>
 
     <script>
-    // 修改功能：结帐ID 回车载入 → 改动关联销售/备注 → 保存
-    var editBillId = null; // 只有成功载入过才允许保存，避免误改
+    // 修改功能：结帐ID 回车载入 → 改动关联销售/支付方式/备注 → 保存
+    var editBillId = null;   // 只有成功载入过才允许保存，避免误改
+    var editIs收费 = false;
 
-    // 支付方式代码对照日报表 SQL 的 CASE WHEN 口径
-    var payTypeNames = { 0: '现金', 1: 'POS', 4: '储值卡', 6: '折扣', 31: '微信', 32: '支付宝' };
+    // 支付方式下拉项，对标日报表 SQL 的 CASE WHEN 口径，改到范围外这行会掉出报表
+    // 1 在报表里那列的表头就是"二维码"（模型属性名还叫 POS）
+    var payTypes = [
+        { code: 0, name: '现金' }, { code: 1, name: '二维码' }, { code: 4, name: '储值卡' },
+        { code: 6, name: '折扣' }, { code: 31, name: '微信' }, { code: 32, name: '支付宝' }
+    ];
 
     function escapeAttr(s) {
         return String(s === null || s === undefined ? '' : s)
@@ -696,41 +709,51 @@ document.getElementById('exportButton').addEventListener('click', function () {
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // 逐条列出支付记录，备注直接给原文（不做 [备注:值] 标记解析）
+    function payTypeOptions(selected) {
+        var html = '';
+        for (var i = 0; i < payTypes.length; i++) {
+            html += '<option value="' + payTypes[i].code + '"' +
+                (payTypes[i].code === selected ? ' selected' : '') + '>' +
+                payTypes[i].name + '</option>';
+        }
+        return html;
+    }
+
+    // 逐条列出支付记录：支付方式给下拉，备注给原文（不做 [备注:值] 标记解析）
     function renderPayments(payments, canEdit) {
         var tbody = document.getElementById('editPayBody');
         if (!payments || payments.length === 0) {
             tbody.innerHTML = '<tr><td colspan="3" class="edit-pay-empty">该结帐ID 没有支付记录</td></tr>';
             return;
         }
+        var off = canEdit ? '' : ' disabled';
         var html = '';
         for (var i = 0; i < payments.length; i++) {
             var p = payments[i];
             html += '<tr>' +
                 '<td class="edit-pay-id">' + p.流水号 + '</td>' +
-                '<td>' + escapeAttr(payTypeNames[p.支付方式] || ('其他(' + p.支付方式 + ')')) + '</td>' +
-                '<td><input type="text" class="edit-pay-note" value="' + escapeAttr(p.备注) + '"' +
-                    (canEdit ? '' : ' disabled') + '></td>' +
+                '<td><select class="edit-pay-type"' + off + '>' + payTypeOptions(p.支付方式) + '</select></td>' +
+                '<td><input type="text" class="edit-pay-note" value="' + escapeAttr(p.备注) + '"' + off + '></td>' +
                 '</tr>';
         }
         tbody.innerHTML = html;
     }
 
-    // 只有收费行可改；挂号行和未载入状态下一律锁住所有输入和保存按钮
-    function setEditEditable(canEdit) {
-        document.getElementById('editSales').disabled = !canEdit;
-        document.getElementById('editSaveBtn').disabled = !canEdit;
-        var notes = document.querySelectorAll('#editPayBody .edit-pay-note');
-        for (var i = 0; i < notes.length; i++) notes[i].disabled = !canEdit;
+    // 挂号行不给改关联销售：挂号发票表.工作组号 是 char(2) 存不下姓名，报表分支也写死空串
+    function applyEditEditable() {
+        document.getElementById('editSales').disabled = !editIs收费;
+        var 有支付记录 = document.querySelectorAll('#editPayBody .edit-pay-type').length > 0;
+        document.getElementById('editSaveBtn').disabled = !(editIs收费 || 有支付记录);
     }
 
     function openEditDialog() {
         editBillId = null;
+        editIs收费 = false;
         document.getElementById('editBillId').value = '';
         document.getElementById('editCategory').value = '';
         document.getElementById('editSales').value = '';
         renderPayments([], false);
-        setEditEditable(false);
+        applyEditEditable();
         setEditTip('输入结帐ID后按回车载入，载入成功后才能保存', '');
         document.getElementById('editOverlay').classList.add('active');
         setTimeout(function () { document.getElementById('editBillId').focus(); }, 50);
@@ -750,8 +773,9 @@ document.getElementById('exportButton').addEventListener('click', function () {
         var billId = document.getElementById('editBillId').value.trim();
         if (!/^-?\d+$/.test(billId)) {
             editBillId = null;
+            editIs收费 = false;
             renderPayments([], false);
-            setEditEditable(false);
+            applyEditEditable();
             setEditTip('请输入数字结帐ID', 'error');
             return;
         }
@@ -761,31 +785,32 @@ document.getElementById('exportButton').addEventListener('click', function () {
             .then(function (data) {
                 if (!data || !data.success) {
                     editBillId = null;
+                    editIs收费 = false;
                     document.getElementById('editCategory').value = '';
                     document.getElementById('editSales').value = '';
                     renderPayments([], false);
-                    setEditEditable(false);
+                    applyEditEditable();
                     setEditTip((data && data.msg) || '未找到该结帐ID', 'error');
                     return;
                 }
                 document.getElementById('editCategory').value = data.category;
                 document.getElementById('editSales').value = data.sales || '';
+                editIs收费 = data.category === '收费';
+                editBillId = billId;
+                renderPayments(data.payments, true);
+                applyEditEditable();
 
-                // 挂号行不让改：其 工作组号 是 char(2) 存不下姓名，备注在挂号支付表里大多也没有记录
-                var 可改 = data.category === '收费';
-                editBillId = 可改 ? billId : null;
-                renderPayments(data.payments, 可改);
-                setEditEditable(可改);
-
-                if (!可改) {
-                    // 挂号行不是查询失败，只是不可改，提示用中性色，别跟"未找到结帐ID"混在一起
-                    setEditTip('挂号行不支持修改', '');
-                    return;
-                }
                 var 条数 = (data.payments || []).length;
-                setEditTip(条数 === 0
-                    ? '该结帐ID 没有支付记录，只能改关联销售'
-                    : '已载入 ' + 条数 + ' 条支付记录，可修改关联销售与各条备注原文', 'ok');
+                if (editIs收费) {
+                    setEditTip(条数 === 0
+                        ? '该结帐ID 没有支付记录，只能改关联销售'
+                        : '已载入 ' + 条数 + ' 条支付记录，可改关联销售、支付方式与备注', 'ok');
+                } else if (条数 === 0) {
+                    // 挂号行不是查询失败，只是没东西可改，提示用中性色，别跟"未找到结帐ID"混在一起
+                    setEditTip('挂号行没有支付记录，无可修改内容', '');
+                } else {
+                    setEditTip('挂号行 ' + 条数 + ' 条支付记录，可改支付方式与备注（关联销售不支持）', 'ok');
+                }
             })
             .catch(function (err) { setEditTip('查询失败：' + err.message, 'error'); });
     }
@@ -794,10 +819,16 @@ document.getElementById('exportButton').addEventListener('click', function () {
         if (!editBillId) { setEditTip('请先输入结帐ID并按回车载入', 'error'); return; }
 
         var rows = [];
-        var inputs = document.querySelectorAll('#editPayBody .edit-pay-note');
-        for (var i = 0; i < inputs.length; i++) {
-            var tr = inputs[i].closest('tr');
-            rows.push({ 流水号: parseInt(tr.cells[0].textContent, 10), 备注: inputs[i].value });
+        var trs = document.querySelectorAll('#editPayBody tr');
+        for (var i = 0; i < trs.length; i++) {
+            var sel = trs[i].querySelector('.edit-pay-type');
+            var inp = trs[i].querySelector('.edit-pay-note');
+            if (!sel || !inp) continue; // 没有支付记录时是占位行
+            rows.push({
+                流水号: parseInt(trs[i].cells[0].textContent, 10),
+                支付方式: parseInt(sel.value, 10),
+                备注: inp.value
+            });
         }
 
         var btn = document.getElementById('editSaveBtn');
