@@ -88,7 +88,7 @@
         <fieldset class="ob-box" id="obRegisterBox">
             <legend>出库登记</legend>
             <div class="ob-header">
-                <label>出库日期 <input type="text" id="obOutDate" style="width:130px;"></label>
+                <label>出库日期 <input type="text" id="obOutDate" style="width:172px;"></label>
                 <label>领用人 <select id="ob领用人" style="width:150px;"><option value="">请选择</option></select></label>
                 <label>发料人签字 <input type="text" id="ob发料人" value="夏紫薇" style="width:110px;"></label>
                 <label>登记人 <select id="ob登记人" style="width:150px;"><option value="">请选择</option></select></label>
@@ -167,7 +167,13 @@
     @Scripts.Render("~/Scripts/flatpickrjs")
 
     <script>
-        flatpickr("#obOutDate", { dateFormat: "Y-m-d", defaultDate: "today" });
+        flatpickr("#obOutDate", {
+            enableTime: true,
+            time_24hr: true,
+            enableSeconds: true,
+            dateFormat: "Y-m-d H:i:S",
+            defaultDate: new Date()
+        });
         flatpickr("#obBdate", { dateFormat: "Y-m-d", defaultDate: "@bdate" });
         flatpickr("#obEdate", { dateFormat: "Y-m-d", defaultDate: "@edate" });
 

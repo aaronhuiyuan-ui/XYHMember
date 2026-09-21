@@ -26,6 +26,12 @@
    选中 fghis5 执行本脚本。可重复执行。
    ============================================================ */
 
+-- 建索引要求会话 SET 正确：sqlcmd 默认 QUOTED_IDENTIFIER OFF，不显式打开
+-- 会在「4) 建唯一索引」这步失败（把旧索引删了却建不回新的）。SSMS 无此问题。
+SET QUOTED_IDENTIFIER ON;
+SET ARITHABORT ON;
+GO
+
 -- 0) 前置检查：来源标识 有重复时唯一索引建不起来，先报清楚
 IF EXISTS (SELECT 1 FROM fghis5..耗材出库单 WHERE 来源标识 IS NOT NULL
            GROUP BY 来源标识 HAVING COUNT(*) > 1)

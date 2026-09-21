@@ -1509,7 +1509,7 @@ namespace XYHMember.Controllers
                     return Json(new { success = false, msg = "请填写发料人签字" });
 
                 var 单号 = "CK" + DateTime.Now.ToString("yyyyMMddHHmmss");
-                var 出库D = ParseDate(出库日期) ?? DateTime.Today;
+                var 出库D = ParseDate(出库日期) ?? DateTime.Now;
 
                 using (var tx = db.Database.BeginTransaction())
                 {
