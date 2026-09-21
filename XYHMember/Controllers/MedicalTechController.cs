@@ -1492,6 +1492,23 @@ namespace XYHMember.Controllers
             return null;
         }
 
+        // 出库单号 = CK + 秒 + 2位序号，跟套餐自动扣减的「TC/TCR + 秒 + 序号」同一套命名。
+        // 序号在锁内按秒重置：原来只用秒级时间戳，同一秒保存两次会撞主键（双击「保存出库」就能触发）
+        private static readonly object 单号锁 = new object();
+        private static string 单号秒位 = "";
+        private static int 单号序号 = 0;
+
+        private static string 新出库单号()
+        {
+            lock (单号锁)
+            {
+                var 秒 = DateTime.Now.ToString("yyyyMMddHHmmss");
+                if (秒 != 单号秒位) { 单号秒位 = 秒; 单号序号 = 0; }
+                单号序号++;
+                return "CK" + 秒 + 单号序号.ToString("D2");
+            }
+        }
+
         /// <summary>
         /// 保存耗材出库（一单多条），校验并扣减剩余数量
         /// POST /MedicalTech/SaveMaterialOutbound
@@ -1508,7 +1525,14 @@ namespace XYHMember.Controllers
                 if (string.IsNullOrWhiteSpace(发料人签字))
                     return Json(new { success = false, msg = "请填写发料人签字" });
 
-                var 单号 = "CK" + DateTime.Now.ToString("yyyyMMddHHmmss");
+                var 单号 = 新出库单号();
+                // 兜底：进程刚重启时进程内序号被清零，同一秒里可能已有旧号，往后顺延到没被占用的
+                while (db.Database.SqlQuery<int>(
+                    "SELECT COUNT(*) FROM fghis5..耗材出库单 WHERE 出库单号 = @no",
+                    new SqlParameter("@no", 单号)).FirstOrDefault() > 0)
+                {
+                    单号 = 新出库单号();
+                }
                 var 出库D = ParseDate(出库日期) ?? DateTime.Now;
 
                 using (var tx = db.Database.BeginTransaction())
@@ -1567,6 +1591,100 @@ namespace XYHMember.Controllers
                 }
 
                 return Json(new { success = true, msg = "出库成功，单号：" + 单号 });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 撤销用的 IN 参数：每次都要新建实例，SqlParameter 一旦被某个命令收进
+        /// SqlParameterCollection 就不能再给别的命令用（否则报「已包含 SqlParameter」）
+        /// </summary>
+        private static SqlParameter[] 建单号参数(List<string> 单号s)
+        {
+            return 单号s.Select((s, i) => new SqlParameter("@p" + i, s)).ToArray();
+        }
+
+        /// <summary>
+        /// 撤销手工出库单（整单撤销）：领用数量加回耗材入库表.剩余数量，删除出库单与明细，
+        /// 并把明细返回给页面，由页面回填到「出库登记」等待重新保存
+        /// POST /MedicalTech/RevokeMaterialOutbound  body: { 出库单号: ["CK...", ...] }
+        /// </summary>
+        [HttpPost]
+        public ActionResult RevokeMaterialOutbound(string[] 出库单号)
+        {
+            try
+            {
+                var 单号s = (出库单号 ?? new string[0])
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x.Trim())
+                    .Distinct()
+                    .ToList();
+                if (单号s.Count == 0)
+                    return Json(new { success = false, msg = "请先勾选要撤销的出库记录" });
+
+                var inClause = string.Join(", ", 单号s.Select((s, i) => "@p" + i));
+
+                using (var tx = db.Database.BeginTransaction())
+                {
+                    // 套餐自动扣减/退费回冲的单子不能撤销：它们的 来源标识 是幂等键，
+                    // 删掉之后每日 02:00 的自动任务会把同一笔再扣一遍，库存会重复扣
+                    var 来源s = db.Database.SqlQuery<string>(
+                        "SELECT DISTINCT 来源类型 FROM fghis5..耗材出库单 WHERE 出库单号 IN (" + inClause + ")",
+                        建单号参数(单号s)).ToList();
+
+                    if (来源s.Count == 0)
+                        return Json(new { success = false, msg = "选中的出库单已不存在，请重新查询" });
+                    if (来源s.Any(s => s != "手工出库"))
+                        return Json(new { success = false, msg = "选中的记录包含「套餐自动扣减 / 套餐退费回冲」的出库单，不能撤销" });
+
+                    // 同一入库批次被同一张单拆成多条明细时，先按批次汇总再加回，
+                    // 否则关联更新只会命中一条，数量会少加
+                    db.Database.ExecuteSqlCommand(
+                        @"UPDATE i SET i.剩余数量 = ISNULL(i.剩余数量, 0) + x.用量
+                          FROM fghis5..耗材入库表 i
+                               JOIN (SELECT 关联入库序号, SUM(领用数量) AS 用量
+                                     FROM fghis5..耗材出库明细
+                                     WHERE 出库单号 IN (" + inClause + @") AND 关联入库序号 IS NOT NULL
+                                     GROUP BY 关联入库序号) x ON x.关联入库序号 = i.序号",
+                        建单号参数(单号s));
+
+                    var 明细 = db.Database.SqlQuery<RevokedOutboundLine>(
+                        @"SELECT l.出库单号, l.关联入库序号, l.物料编码, l.耗材名称, l.规格型号, l.单位, l.批号, l.领用数量,
+                                 CONVERT(varchar(10), l.到库日期, 120) AS 到库日期,
+                                 CONVERT(varchar(10), l.保质期, 120) AS 保质期,
+                                 i.剩余数量
+                          FROM fghis5..耗材出库明细 l
+                               LEFT JOIN fghis5..耗材入库表 i ON i.序号 = l.关联入库序号
+                          WHERE l.出库单号 IN (" + inClause + @")
+                          ORDER BY l.出库单号, l.序号",
+                        建单号参数(单号s)).ToList();
+
+                    var 单据 = db.Database.SqlQuery<MaterialOutboundHeader>(
+                        @"SELECT 出库单号, CONVERT(varchar(19), 出库日期, 120) AS 出库日期, 领用人, 发料人签字, 登记人
+                          FROM fghis5..耗材出库单
+                          WHERE 出库单号 IN (" + inClause + ")",
+                        建单号参数(单号s)).ToList();
+
+                    db.Database.ExecuteSqlCommand(
+                        "DELETE FROM fghis5..耗材出库明细 WHERE 出库单号 IN (" + inClause + ")", 建单号参数(单号s));
+                    db.Database.ExecuteSqlCommand(
+                        "DELETE FROM fghis5..耗材出库单 WHERE 出库单号 IN (" + inClause + ")", 建单号参数(单号s));
+
+                    tx.Commit();
+
+                    return Json(new
+                    {
+                        success = true,
+                        msg = "已撤销 " + 单号s.Count + " 张出库单，" + 明细.Count + " 条明细已回到出库登记，请核对后重新保存出库",
+                        lines = 明细,
+                        单据 = 单据
+                    });
+                }
             }
             catch (Exception ex)
             {

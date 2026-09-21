@@ -743,6 +743,22 @@ namespace XYHMember.Context
         public string 明细备注 { get; set; }
     }
 
+    //撤销出库返回给页面、回填「出库登记」用（明细 + 回加后的剩余数量）
+    public class RevokedOutboundLine
+    {
+        public string 出库单号 { get; set; }
+        public int? 关联入库序号 { get; set; }
+        public string 物料编码 { get; set; }
+        public string 耗材名称 { get; set; }
+        public string 规格型号 { get; set; }
+        public string 单位 { get; set; }
+        public string 批号 { get; set; }
+        public decimal? 领用数量 { get; set; }
+        public string 到库日期 { get; set; }
+        public string 保质期 { get; set; }
+        public decimal? 剩余数量 { get; set; }
+    }
+
     //套餐表（后台维护：套餐名称与 HIS 门诊_收费明细表.套餐名称 一致）
     public class PackageItem
     {

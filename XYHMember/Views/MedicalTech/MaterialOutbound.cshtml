@@ -128,11 +128,13 @@
                 <input type="text" id="obEdate" value="@edate" style="width:120px;height:30px;border:1px solid #d0d0d0;border-radius:3px;">
                 <input type="text" id="obKw" placeholder="耗材名称/领用人/单号" style="width:180px;height:30px;border:1px solid #d0d0d0;border-radius:3px;">
                 <button class="am-btn am-btn-default" type="button" onclick="doSearchOutbound()">查询</button>
+                <button class="am-btn am-btn-danger" type="button" id="revokeOutBtn">撤销</button>
             </div>
             <div class="table-wrapper">
                 <table class="am-table am-table-striped am-table-hover table-main" id="outTable">
                     <thead>
                         <tr>
+                            <th style="width:34px;text-align:center;"><input type="checkbox" id="outChkAll" title="全选"></th>
                             <th>出库单号</th>
                             <th>出库日期</th>
                             <th>物料编码</th>
@@ -153,7 +155,7 @@
                         </tr>
                     </thead>
                     <tbody id="outBody">
-                        <tr><td colspan="17" style="text-align:center;color:#999;">加载中...</td></tr>
+                        <tr><td colspan="18" style="text-align:center;color:#999;">加载中...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -239,6 +241,8 @@
 
             flatpickr(tr.querySelector('.l-保质期'), { dateFormat: "Y-m-d" });
             flatpickr(tr.querySelector('.l-到库日期'), { dateFormat: "Y-m-d" });
+
+            return tr;
         }
 
         function removeLine(btn) {
@@ -409,21 +413,21 @@
                 .then(function(data) {
                     if (data && data.success === false) {
                         document.getElementById('outBody').innerHTML =
-                            '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
+                            '<tr><td colspan="18" style="text-align:center;color:red;">查询失败：' + escapeHtml(data.msg) + '</td></tr>';
                     } else {
                         renderOutbound(data);
                     }
                 })
                 .catch(function(err) {
                     document.getElementById('outBody').innerHTML =
-                        '<tr><td colspan="17" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
+                        '<tr><td colspan="18" style="text-align:center;color:red;">查询失败：' + escapeHtml(err.message) + '</td></tr>';
                 });
         }
 
         function renderOutbound(data) {
             var tbody = document.getElementById('outBody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#999;">暂无出库记录</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="18" style="text-align:center;color:#999;">暂无出库记录</td></tr>';
                 return;
             }
             var html = '';
@@ -431,7 +435,15 @@
             for (var i = 0; i < data.length; i++) {
                 var d = data[i];
                 totalQty += (d.领用数量 || 0);
-                html += '<tr>' +
+                // 只有手工出库能撤销；套餐自动扣减/退费回冲的 来源标识 是幂等键，
+                // 删掉后每日自动任务会重复扣减，这里禁掉复选框
+                var 可撤销 = !d.来源类型 || d.来源类型 === '手工出库';
+                html += '<tr data-单号="' + escapeHtml(d.出库单号) + '">' +
+                    '<td style="text-align:center;">' +
+                        (可撤销
+                            ? '<input type="checkbox" class="out-chk">'
+                            : '<input type="checkbox" disabled title="' + escapeHtml(d.来源类型) + '记录不能撤销">') +
+                    '</td>' +
                     '<td>' + escapeHtml(d.出库单号) + '</td>' +
                     '<td>' + escapeHtml(d.出库日期) + '</td>' +
                     '<td>' + escapeHtml(d.物料编码) + '</td>' +
@@ -452,17 +464,161 @@
                     '</tr>';
             }
             html += '<tr class="summary-row" style="background:#f0f0f0;">' +
-                '<td colspan="7">合计</td>' +
+                '<td colspan="8">合计</td>' +
                 '<td>' + totalQty + '</td>' +
                 '<td colspan="9"></td>' +
                 '</tr>';
             tbody.innerHTML = html;
+            var chkAll = document.getElementById('outChkAll');
+            if (chkAll) chkAll.checked = false;
             initTablePagination('outTable', { summaryRows: 1 });
+        }
+
+        // ===== 撤销出库记录（整单撤销，明细回填到出库登记）=====
+
+        // 勾选是按明细行显示的，但撤销以「出库单号」为单位：
+        // 点中任意一行，同一单号的其它明细行一起勾上，避免撤出半张单
+        function setOrderChecked(no, checked) {
+            var rows = document.querySelectorAll('#outBody tr[data-单号]');
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i].getAttribute('data-单号') !== no) continue;
+                var chk = rows[i].querySelector('.out-chk');
+                if (chk) chk.checked = checked;
+            }
+        }
+
+        function syncChkAll() {
+            var boxes = document.querySelectorAll('#outBody .out-chk');
+            var all = boxes.length > 0, any = false;
+            for (var i = 0; i < boxes.length; i++) {
+                if (boxes[i].checked) any = true; else all = false;
+            }
+            var chkAll = document.getElementById('outChkAll');
+            chkAll.checked = all;
+            chkAll.indeterminate = any && !all;
+        }
+
+        function getSelectedOutboundNos() {
+            var rows = document.querySelectorAll('#outBody tr[data-单号]');
+            var seen = {}, nos = [];
+            for (var i = 0; i < rows.length; i++) {
+                var chk = rows[i].querySelector('.out-chk');
+                if (!chk || !chk.checked) continue;
+                var no = rows[i].getAttribute('data-单号');
+                if (!seen[no]) { seen[no] = 1; nos.push(no); }
+            }
+            return nos;
+        }
+
+        function revokeOutbound() {
+            var nos = getSelectedOutboundNos();
+            if (nos.length === 0) { customDialog.info('请先勾选要撤销的出库记录', '提示'); return; }
+
+            customDialog.confirm(
+                '确定撤销选中的 ' + nos.length + ' 张出库单？\n' +
+                '记录会从出库记录里删除，领用数量加回到库存，明细回到上方「出库登记」等待重新提交。',
+                '撤销出库',
+                function() {
+                    fetch('@Url.Action("RevokeMaterialOutbound", "MedicalTech")', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 出库单号: nos })
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(res) {
+                        if (!res.success) { customDialog.error(res.msg, '撤销失败'); return; }
+                        fillRegisterAfterRevoke(res);
+                        doSearchOutbound();
+                        customDialog.info(res.msg, '提示');
+                    })
+                    .catch(function(err) { customDialog.error(err.message, '撤销失败'); });
+                });
+        }
+
+        // 去掉登记区里没填任何内容的空行，免得回填后夹着空行
+        function removeBlankRegisterLines() {
+            var trs = document.querySelectorAll('#outGrid tbody tr');
+            for (var i = 0; i < trs.length; i++) {
+                var tr = trs[i];
+                var combo = tr.querySelector('.line-combo');
+                var qty = tr.querySelector('.l-领用数量');
+                if (!tr.getAttribute('data-inbound-id') &&
+                    (!combo || !combo.value.trim()) &&
+                    (!qty || !qty.value)) {
+                    tr.parentNode.removeChild(tr);
+                }
+            }
+        }
+
+        function appendRegisterLine(item) {
+            var tr = addLine();
+            tr.setAttribute('data-inbound-id', item.关联入库序号 || '');
+            tr.querySelector('.l-物料编码').textContent = item.物料编码 || '';
+            tr.querySelector('.l-耗材名称').textContent = item.耗材名称 || '';
+            tr.querySelector('.l-规格型号').textContent = item.规格型号 || '';
+            tr.querySelector('.l-单位').textContent = item.单位 || '';
+            tr.querySelector('.l-批号').textContent = item.批号 || '';
+            tr.querySelector('.l-保质期').value = item.保质期 || '';
+            tr.querySelector('.l-到库日期').value = item.到库日期 || '';
+            tr.querySelector('.l-领用数量').value = (item.领用数量 != null ? item.领用数量 : '');
+            tr.querySelector('.l-remain').textContent = (item.剩余数量 != null ? '剩余:' + item.剩余数量 : '');
+            tr.querySelector('.line-combo').value = item.耗材名称 || '';
+        }
+
+        // 领用人/登记人是下拉框，历史单上的人可能已不在员工列表里，
+        // 直接赋值会静默失败，这里补一个选项保证原值能带回来
+        function setSelectValue(selectId, value) {
+            var sel = document.getElementById(selectId);
+            if (!sel) return;
+            var found = false;
+            for (var i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === value) { found = true; break; }
+            }
+            if (!found) {
+                var opt = document.createElement('option');
+                opt.value = value;
+                opt.textContent = value;
+                sel.appendChild(opt);
+            }
+            sel.value = value;
+        }
+
+        function fillRegisterAfterRevoke(res) {
+            var lines = res.lines || [];
+            if (lines.length === 0) return;
+            removeBlankRegisterLines();
+            for (var i = 0; i < lines.length; i++) appendRegisterLine(lines[i]);
+            // 只撤了一张单时顺手把表头带出来；多张单的表头可能不同，留给用户自己填
+            var heads = res.单据 || [];
+            if (heads.length === 1) {
+                var h = heads[0];
+                if (h.出库日期) document.getElementById('obOutDate').value = h.出库日期;
+                if (h.领用人) setSelectValue('ob领用人', h.领用人);
+                if (h.发料人签字) document.getElementById('ob发料人').value = h.发料人签字;
+                if (h.登记人) setSelectValue('ob登记人', h.登记人);
+            }
+            if (!document.querySelectorAll('#outGrid tbody tr').length) addLine();
         }
 
         // ===== 事件绑定 =====
         document.getElementById('addLineBtn').addEventListener('click', addLine);
         document.getElementById('saveOutBtn').addEventListener('click', saveOutbound);
+        document.getElementById('revokeOutBtn').addEventListener('click', revokeOutbound);
+
+        document.getElementById('outChkAll').addEventListener('change', function() {
+            var on = this.checked;
+            var boxes = document.querySelectorAll('#outBody .out-chk');
+            for (var i = 0; i < boxes.length; i++) boxes[i].checked = on;
+            this.indeterminate = false;
+        });
+
+        // 勾选一行 → 同单号其它明细行一起勾上（整单撤销）
+        document.getElementById('outBody').addEventListener('click', function(e) {
+            var chk = e.target;
+            if (!chk || !chk.classList || !chk.classList.contains('out-chk')) return;
+            setOrderChecked(chk.closest('tr').getAttribute('data-单号'), chk.checked);
+            syncChkAll();
+        });
         document.getElementById('obKw').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') { doSearchOutbound(); e.preventDefault(); }
         });
