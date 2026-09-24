@@ -79,6 +79,7 @@
         .status-pending { background: #fff3cd; color: #856404; }
         .status-active { background: #cce5ff; color: #004085; }
         .status-done { background: #d4edda; color: #155724; }
+        .status-ended { background: #e2e3e5; color: #41464b; }
         .btn-action {
             padding: 2px 10px;
             border-radius: 3px;
@@ -195,6 +196,7 @@
                                 <button class="am-btn am-btn-primary" type="button" id="batchRegBtn" style="margin-left:10px;background:#0e90d2!important;border-color:#0e90d2!important;color:#fff!important;">批量登记</button>
                                 <button class="am-btn am-btn-primary" type="button" id="batchExecBtn" style="margin-left:5px;background:#5eb95e!important;border-color:#5eb95e!important;color:#fff!important;">批量执行</button>
                                 <button class="am-btn am-btn-default" type="button" id="updateTotalBtn" style="margin-left:10px;">修改总次数</button>
+                                <button class="am-btn am-btn-default" type="button" id="endBtn" style="margin-left:10px;">结束</button>
                                 <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:10px;">导出到Excel</button>
                             </span>
                         </span>
@@ -233,6 +235,7 @@
                                     <div class="hdr-filter-opt" data-value="未登记">未登记</div>
                                     <div class="hdr-filter-opt" data-value="进行中">进行中</div>
                                     <div class="hdr-filter-opt" data-value="已完成">已完成</div>
+                                    <div class="hdr-filter-opt" data-value="已结束">已结束</div>
                                 </div>
                             </th>
                             <th>执行进度</th>
@@ -457,7 +460,13 @@
                 var d = data[i];
                 var statusText, statusClass, progressText, actionHtml;
 
-                if (d.登记ID == null) {
+                if (d.是否结束 === 't') {
+                    // 已结束：终态，只能看，不能再执行
+                    statusText = '已结束';
+                    statusClass = 'status-ended';
+                    progressText = d.登记ID != null ? (d.已执行次数 + '/' + d.总次数 + '次') : '-';
+                    actionHtml = '<button class="btn-action btn-view" onclick="openHistory(' + i + ')">查看</button>';
+                } else if (d.登记ID == null) {
                     statusText = '未登记';
                     statusClass = 'status-pending';
                     progressText = '-';
@@ -683,10 +692,11 @@
                 if (pkgFilter && d.套餐名称 !== pkgFilter) return false;
                 if (execFilter && d.执行人 !== execFilter) return false;
                 if (statusFilter) {
-                    var status = '未登记';
-                    if (d.登记ID != null) {
-                        status = (d.已执行次数 < d.总次数) ? '进行中' : '已完成';
-                    }
+                    // 与 renderTable / 后端 GetStatus 同一套判定，否则筛选结果和徽章对不上
+                    var status;
+                    if (d.是否结束 === 't') status = '已结束';
+                    else if (d.登记ID == null) status = '未登记';
+                    else status = (d.已执行次数 < d.总次数) ? '进行中' : '已完成';
                     if (status !== statusFilter) return false;
                 }
                 return true;
@@ -1163,6 +1173,43 @@
             return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) +
                    ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
         }
+
+        // ===== 结束（作用于勾选的登记，结束后不能再执行）=====
+        document.getElementById('endBtn').addEventListener('click', function() {
+            var checked = getCheckedData();
+            if (checked.length === 0) { customDialog.info('请先勾选要结束的记录', '提示'); return; }
+
+            var ids = [];
+            var 已有结束 = 0;
+            for (var i = 0; i < checked.length; i++) {
+                var d = checked[i].data;
+                if (d.登记ID == null) continue;          // 未登记的项目没有可结束的东西
+                if (d.是否结束 === 't') { 已有结束++; continue; }
+                ids.push(d.登记ID);
+            }
+
+            if (ids.length === 0) {
+                customDialog.info(已有结束 > 0 ? '勾选的记录都已是结束状态' : '勾选的项目均未登记，无需结束', '提示');
+                return;
+            }
+
+            customDialog.confirm('确定结束选中的 ' + ids.length + ' 条登记吗？\n结束后这些登记不能再执行。', '确认结束', function() {
+                fetch('@Url.Action("EndRegistration", "MedicalTech")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 登记IDs: ids })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(res) {
+                    if (res.success) {
+                        customDialog.success(res.msg, '结束成功', function() { doSearch(); });
+                    } else {
+                        customDialog.error(res.msg || '结束失败', '结束失败');
+                    }
+                })
+                .catch(function(err) { customDialog.error(err.message, '请求失败'); });
+            });
+        });
 
         // ===== 弹窗控制 =====
         function openModal(id) { document.getElementById(id).classList.add('active'); }

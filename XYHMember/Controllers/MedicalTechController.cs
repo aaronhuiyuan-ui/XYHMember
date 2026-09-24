@@ -102,7 +102,9 @@ namespace XYHMember.Controllers
                        r.登记ID, r.总次数,
                        -- 整单默认执行人（登记时指定；未登记/旧数据为空）
                        r.执行人工号 AS 默认执行人工号, r.执行人姓名 AS 默认执行人姓名, r.执行人岗位 AS 默认执行人岗位,
-                       ISNULL(e.已执行次数, 0) AS 已执行次数
+                       ISNULL(e.已执行次数, 0) AS 已执行次数,
+                       -- 结束状态：人工置的，结束后不再允许执行
+                       ISNULL(r.是否结束, 'f') AS 是否结束
                 FROM fghis5..门诊_收费发票表 a
                 JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
                 LEFT JOIN fghis5..医技登记表 r ON r.流水号 = CAST(a.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR)
@@ -312,6 +314,8 @@ namespace XYHMember.Controllers
         /// </summary>
         private string GetStatus(MedicalTechChargeItem d)
         {
+            // 已结束是人工置的终态，优先于其它一切
+            if (d.是否结束 == "t") return "已结束";
             if (!d.登记ID.HasValue) return "未登记";
             return (d.已执行次数 ?? 0) < (d.总次数 ?? 0) ? "进行中" : "已完成";
         }
@@ -465,6 +469,14 @@ namespace XYHMember.Controllers
 
                 var 总次数 = totalCount.Value;
 
+                // 病人退费等场景下已人工结束的登记，不再允许执行
+                var 是否结束 = db.Database.SqlQuery<string>(
+                    "SELECT ISNULL(是否结束, 'f') FROM fghis5..医技登记表 WHERE 登记ID = @登记ID",
+                    new SqlParameter("@登记ID", 登记ID)).FirstOrDefault();
+
+                if (是否结束 == "t")
+                    return Json(new { success = false, msg = "该登记已结束，不能再执行" });
+
                 // 获取当前最大执行次数（排除已取消的）
                 var maxSql = @"SELECT ISNULL(MAX(本次次数), 0) FROM fghis5..医技执行记录表 WHERE 登记ID = @登记ID AND delete_flag = 'f'";
                 var maxCount = db.Database.SqlQuery<int>(maxSql,
@@ -560,6 +572,38 @@ namespace XYHMember.Controllers
                 // 取消后实际执行人/岗位可能变化，同步重算该单存档提成
                 SyncStoredCommission(登记ID);
                 return Json(new { success = true, msg = "取消成功" });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Json(new { success = false, msg = inner.Message });
+            }
+        }
+
+        /// <summary>
+        /// 结束选中的医技登记，结束后不能再执行
+        /// </summary>
+        [HttpPost]
+        public ActionResult EndRegistration(List<int> 登记IDs)
+        {
+            try
+            {
+                if (登记IDs == null || 登记IDs.Count == 0)
+                    return Json(new { success = false, msg = "请选择要结束的记录" });
+
+                var sql = @"UPDATE fghis5..医技登记表 SET 是否结束 = 't'
+                            WHERE 登记ID = @登记ID AND ISNULL(是否结束, 'f') = 'f'";
+                var 已结束条数 = 0;
+                foreach (var id in 登记IDs)
+                {
+                    已结束条数 += db.Database.ExecuteSqlCommand(sql, new SqlParameter("@登记ID", id));
+                }
+
+                if (已结束条数 <= 0)
+                    return Json(new { success = false, msg = "选中的记录都已是结束状态" });
+
+                return Json(new { success = true, msg = "已结束 " + 已结束条数 + " 条记录，不能再执行" });
             }
             catch (Exception ex)
             {

@@ -488,6 +488,7 @@ namespace XYHMember.Context
         public int? 登记ID { get; set; }
         public int? 总次数 { get; set; }
         public int? 已执行次数 { get; set; }
+        public string 是否结束 { get; set; }
     }
 
     //处方结果本地缓存
