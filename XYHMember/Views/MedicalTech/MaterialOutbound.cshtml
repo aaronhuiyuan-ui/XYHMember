@@ -129,6 +129,7 @@
                 <input type="text" id="obKw" placeholder="耗材名称/领用人/单号" style="width:180px;height:30px;border:1px solid #d0d0d0;border-radius:3px;">
                 <button class="am-btn am-btn-default" type="button" onclick="doSearchOutbound()">查询</button>
                 <button class="am-btn am-btn-danger" type="button" id="revokeOutBtn">撤销</button>
+                <button class="am-btn am-btn-primary" type="button" id="exportOutBtn">导出到Excel</button>
             </div>
             <div class="table-wrapper">
                 <table class="am-table am-table-striped am-table-hover table-main" id="outTable">
@@ -469,6 +470,7 @@
                 '<td colspan="9"></td>' +
                 '</tr>';
             tbody.innerHTML = html;
+            window._outboundData = data;   // 导出用，存整份查询结果（翻页不影响）
             var chkAll = document.getElementById('outChkAll');
             if (chkAll) chkAll.checked = false;
             initTablePagination('outTable', { summaryRows: 1 });
@@ -604,6 +606,68 @@
         document.getElementById('addLineBtn').addEventListener('click', addLine);
         document.getElementById('saveOutBtn').addEventListener('click', saveOutbound);
         document.getElementById('revokeOutBtn').addEventListener('click', revokeOutbound);
+
+        // ===== 导出出库记录到Excel（列与页面表格一致，去掉勾选列）=====
+        document.getElementById('exportOutBtn').addEventListener('click', function() {
+            var headers = ['出库单号', '出库日期', '物料编码', '耗材名称', '规格型号', '单位', '批号', '领用数量',
+                           '到库日期', '保质期', '领用人', '发料人签字', '登记人', '登记时间', '来源类型', '备注', '明细备注'];
+
+            var data = window._outboundData || [];
+            var rows = [];
+            var totalQty = 0;
+            for (var i = 0; i < data.length; i++) {
+                var d = data[i];
+                totalQty += (d.领用数量 || 0);
+                rows.push([
+                    d.出库单号 || '',
+                    d.出库日期 || '',
+                    d.物料编码 || '',
+                    d.耗材名称 || '',
+                    d.规格型号 || '',
+                    d.单位 || '',
+                    d.批号 || '',
+                    d.领用数量 != null ? String(Number(d.领用数量)) : '',
+                    d.到库日期 || '',
+                    d.保质期 || '',
+                    d.领用人 || '',
+                    d.发料人签字 || '',
+                    d.登记人 || '',
+                    d.登记时间 || '',
+                    d.来源类型 || '手工出库',
+                    d.备注 || '',
+                    d.明细备注 || ''
+                ]);
+            }
+            if (rows.length === 0) {
+                customDialog.info('没有数据可导出', '提示');
+                return;
+            }
+
+            // 合计行与页面一致（只合计领用数量）
+            var totalRow = [];
+            for (var c = 0; c < headers.length; c++) totalRow.push('');
+            totalRow[0] = '合计';
+            totalRow[7] = String(Number(totalQty.toFixed(3)));
+            rows.push(totalRow);
+
+            fetch('@Url.Action("ExportToExcel", "Export")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Headers: headers, Rows: rows })
+            })
+            .then(function(res) { return res.blob(); })
+            .then(function(blob) {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '耗材出库记录.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(function(err) { customDialog.error(err.message, '导出失败'); });
+        });
 
         document.getElementById('outChkAll').addEventListener('change', function() {
             var on = this.checked;
