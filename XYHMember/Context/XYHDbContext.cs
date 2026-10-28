@@ -110,6 +110,7 @@ namespace XYHMember.Context
         public string 姓名 { get; set; }
         public string 出生日期 { get; set; }
         public string 身份证号 { get; set; }
+        public string 来源 { get; set; }
         public int? 结帐ID { get; set; }
         public string 结帐日期 { get; set; }
         public string 结帐时间 { get; set; }
@@ -489,6 +490,7 @@ namespace XYHMember.Context
         public int? 总次数 { get; set; }
         public int? 已执行次数 { get; set; }
         public string 是否结束 { get; set; }
+        public string 来源 { get; set; }
     }
 
     //处方结果本地缓存

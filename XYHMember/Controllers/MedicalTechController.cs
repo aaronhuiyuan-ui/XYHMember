@@ -104,9 +104,12 @@ namespace XYHMember.Controllers
                        r.执行人工号 AS 默认执行人工号, r.执行人姓名 AS 默认执行人姓名, r.执行人岗位 AS 默认执行人岗位,
                        ISNULL(e.已执行次数, 0) AS 已执行次数,
                        -- 结束状态：人工置的，结束后不再允许执行
-                       ISNULL(r.是否结束, 'f') AS 是否结束
+                       ISNULL(r.是否结束, 'f') AS 是否结束,
+                       -- 来源：病人基本信息表的 信息来源，TJ 显示为「体检」
+                       CASE WHEN pt.信息来源 = 'TJ' THEN '体检' ELSE pt.信息来源 END AS 来源
                 FROM fghis5..门诊_收费发票表 a
                 JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
+                LEFT JOIN fghis5..系统_病人基本信息表 pt ON pt.门诊号 = a.门诊号
                 LEFT JOIN fghis5..医技登记表 r ON r.流水号 = CAST(a.结帐ID AS NVARCHAR) + '_' + CAST(b.处方ID AS NVARCHAR)
                     AND r.项目名称 = b.项目名称
                 LEFT JOIN 支付汇总 p ON p.结帐ID = a.结帐ID
@@ -163,14 +166,14 @@ namespace XYHMember.Controllers
                     execMap = execs.GroupBy(e => e.登记ID).ToDictionary(g => g.Key, g => g.ToList());
                 }
 
-                // 表头：主列13 + 执行明细列6
+                // 表头：主列16 + 执行明细列6
                 var headers = new List<string>
                 {
-                    "门诊号", "姓名", "套餐名称", "项目ID", "项目名称", "数量", "项目金额", "实收金额", "收费日期",
+                    "来源", "门诊号", "姓名", "套餐名称", "项目ID", "项目名称", "数量", "项目金额", "实收金额", "收费日期",
                     "状态", "执行进度", "已执行金额", "未执行金额", "执行人", "操作人员提成",
                     "执行次数", "执行时间", "执行人工号", "执行人姓名", "岗位", "备注"
                 };
-                int mainCols = 15;
+                int mainCols = 16;
 
                 // 金额列写原始值 + 固定显示格式：逐行四舍五入再求和会和页面合计差几分钱
                 var fmt2Cols = new[] { "项目金额", "实收金额", "已执行金额", "未执行金额" };
@@ -196,9 +199,10 @@ namespace XYHMember.Controllers
 
                     var progress = d.登记ID.HasValue ? (d.已执行次数 + "/" + d.总次数 + "次") : "-";
 
-                    // 主行（补足执行明细列，保持与表头同宽 19 列）
+                    // 主行（补足执行明细列，保持与表头同宽 22 列）
                     var mainRow = new List<string>
                     {
+                        d.来源 ?? "",
                         d.门诊号?.ToString() ?? "",
                         d.姓名 ?? "",
                         d.套餐名称 ?? "",
@@ -267,7 +271,7 @@ namespace XYHMember.Controllers
                     for (int r = 0; r < rows.Count; r++)
                     {
                         var isTotal = r == totalRowIdx;
-                        var isSub = !isTotal && !string.IsNullOrEmpty(rows[r][mainCols]); // 第14列非空 = 明细子行
+                        var isSub = !isTotal && !string.IsNullOrEmpty(rows[r][mainCols]); // 第17列非空 = 明细子行
                         for (int c = 0; c < rows[r].Count; c++)
                         {
                             var cell = ws.Cell(r + 2, c + 1);
