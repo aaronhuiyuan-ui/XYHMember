@@ -62,7 +62,7 @@
             <div>
                 <form action="@Url.Action("GetFeeSummaryCompare", "Pharmacy")" method="post">
                     <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;">
-                        <label style="margin:0 5px 0 10px;">收费日期</label>
+                        <label style="margin:0 5px 0 10px;">发药日期</label>
                         <input type="text" name="bdatepicker" id="bdatepicker"
                                value="@bdatepicker" placeholder="开始日期" style="height:30px;">
                         <label style="margin:0 5px;">—</label>
@@ -238,32 +238,42 @@
         });
 
         // 导入到OA：校验足月后，将当月应付加工费/应付快递费写入 上海真仁堂统计汇总
+        // 已导入月份金额变化时，服务端返回 needConfirm，二次确认后带 confirm=1 再提交
         var importOaBtn = document.getElementById('importOaBtn');
+        function doImportToOA(confirmFlag) {
+            importOaBtn.disabled = true;
+            importOaBtn.innerText = '导入中...';
+
+            var bd = document.getElementById('bdatepicker').value;
+            var ed = document.getElementById('edatepicker').value;
+
+            fetch('@Url.Action("ImportToOA", "Pharmacy")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'bdatepicker=' + encodeURIComponent(bd) + '&edatepicker=' + encodeURIComponent(ed)
+                      + (confirmFlag ? '&confirm=1' : '')
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                importOaBtn.disabled = false;
+                importOaBtn.innerText = '导入到OA';
+                if (data.success) {
+                    customDialog.success(data.msg);
+                } else if (data.needConfirm) {
+                    customDialog.confirm(data.msg, '覆盖确认', function () { doImportToOA(true); });
+                } else {
+                    customDialog.error(data.msg);
+                }
+            })
+            .catch(function (err) {
+                importOaBtn.disabled = false;
+                importOaBtn.innerText = '导入到OA';
+                customDialog.error('导入失败：' + err.message);
+            });
+        }
         importOaBtn.addEventListener('click', function () {
             customDialog.confirm('确认将当前足月查询的汇总数据导入到OA吗？', '导入确认', function () {
-                importOaBtn.disabled = true;
-                importOaBtn.innerText = '导入中...';
-
-                var bd = document.getElementById('bdatepicker').value;
-                var ed = document.getElementById('edatepicker').value;
-
-                fetch('@Url.Action("ImportToOA", "Pharmacy")', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'bdatepicker=' + encodeURIComponent(bd) + '&edatepicker=' + encodeURIComponent(ed)
-                })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    importOaBtn.disabled = false;
-                    importOaBtn.innerText = '导入到OA';
-                    if (data.success) customDialog.success(data.msg);
-                    else customDialog.error(data.msg);
-                })
-                .catch(function (err) {
-                    importOaBtn.disabled = false;
-                    importOaBtn.innerText = '导入到OA';
-                    customDialog.error('导入失败：' + err.message);
-                });
+                doImportToOA(false);
             });
         });
     </script>

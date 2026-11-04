@@ -70,7 +70,7 @@
             <div style="margin-left:300px;">
                 <form action="@Url.Action("GetDrugDetailCompare", "Pharmacy")" method="post">
                     <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;">
-                        <label style="margin:0 5px 0 10px;">收费日期</label>
+                        <label style="margin:0 5px 0 10px;">发药日期</label>
                         <input type="text" name="bdatepicker" id="bdatepicker"
                                value="@bdatepicker" placeholder="开始日期" style="height:30px;">
                         <label style="margin:0 5px;">—</label>
@@ -81,7 +81,7 @@
                                 <button class="am-btn am-btn-default" type="submit">查询比对</button>
                             </span>
                         </span>
-                        <button class="am-btn am-btn-primary" type="button" id="batchQueryBtn" style="margin-left:15px;background:#5cb85c!important;border-color:#4cae4c!important;color:#fff!important;">批量查询处方结果</button>
+                        <button class="am-btn am-btn-primary" type="button" id="batchQueryBtn" title="按收费日期取处方，不受上方发药日期筛选影响" style="margin-left:15px;background:#5cb85c!important;border-color:#4cae4c!important;color:#fff!important;">批量查询处方结果（按收费日期）</button>
                         <button class="am-btn am-btn-default" type="button" id="exportBtn" style="margin-left:15px;">导出到Excel</button>
                     </div>
                 </form>
@@ -114,6 +114,7 @@
                             <th>来源</th>
                             <th>处方ID</th>
                             <th>日期</th>
+                            <th>发药日期</th>
                             <th>病人姓名</th>
                             <th>项目ID</th>
                             <th>收费药品编码</th>
@@ -159,6 +160,7 @@
                                     <td><span class="source-tag @sourceTagClass">@item.来源</span></td>
                                     <td>@item.处方ID</td>
                                     <td>@item.日期</td>
+                                    <td>@item.发药日期</td>
                                     <td>@item.病人姓名</td>
                                     <td>@item.项目ID</td>
                                     <td>@item.收费药品编码</td>
@@ -179,6 +181,7 @@
                                 </tr>
                             }
                             <tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">
+                                <td></td>
                                 <td></td>
                                 <td></td>
                                 <td></td>

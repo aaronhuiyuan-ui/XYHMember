@@ -64,7 +64,7 @@
             <div>
                 <form action="@Url.Action("GetFeeDetailCompare", "Pharmacy")" method="post">
                     <div class="am-input-group am-input-group-sm" style="display:inline-flex;align-items:center;">
-                        <label style="margin:0 5px 0 10px;">收费日期</label>
+                        <label style="margin:0 5px 0 10px;">发药日期</label>
                         <input type="text" name="bdatepicker" id="bdatepicker"
                                value="@bdatepicker" placeholder="开始日期" style="height:30px;">
                         <label style="margin:0 5px;">—</label>
@@ -105,6 +105,7 @@
                             <th>序号</th>
                             <th>处方ID</th>
                             <th>日期</th>
+                            <th>发药日期</th>
                             <th>病人姓名</th>
                             <th>加工方式</th>
                             <th>剂数</th>
@@ -134,6 +135,7 @@
                                     <td>@(seq++)</td>
                                     <td>@item.处方ID</td>
                                     <td>@item.日期</td>
+                                    <td>@item.发药日期</td>
                                     <td>@item.病人姓名</td>
                                     <td>@item.加工方式</td>
                                     <td>@(item.剂数.HasValue ? item.剂数.Value.ToString() : "")</td>
@@ -156,7 +158,7 @@
                             }
                             <tr class="summary-row" style="background:#f0f0f0;font-weight:bold;">
                                 <td></td>
-                                <td colspan="5">合计</td>
+                                <td colspan="6">合计</td>
                                 <td></td>
                                 <td></td>
                                 <td>@(sum收费加工费.ToString("F2"))</td>

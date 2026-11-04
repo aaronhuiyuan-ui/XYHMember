@@ -647,17 +647,26 @@ ORDER BY 发药时间 DESC";
         private List<DrugDetailCompareItem> BuildDrugDetailCompare(string bdate, string edate)
         {
             // 1. 查询 HIS 收费明细（药品：项目类别='3'）
+            // 归属月份按「发药时间」：只核对有发药记录的处方，避免跨月发药记到收费月。
             var billingSql = @"
-SELECT CAST(b.处方ID AS INT) AS 处方ID, CONVERT(varchar, b.日期, 23) AS 日期,
+SELECT CAST(b.处方ID AS INT) AS 处方ID,
+       CONVERT(varchar(10), CONVERT(date, b.日期), 23) AS 日期,
+       CONVERT(varchar(10), CONVERT(date, dx.发药时间), 23) AS 发药日期,
        a.姓名 AS 病人姓名,
        CAST(b.项目ID AS NVARCHAR(50)) AS 项目ID, b.项目名称, b.单价, b.数量, b.金额,
        c.注册商标 AS 药品编码
 FROM fghis5..门诊_收费发票表 a
 JOIN fghis5..门诊_收费明细表 b ON a.结帐ID = b.结帐ID
 LEFT JOIN fghis5..代码_药品基本信息表 c ON c.药品ID = b.项目ID
+JOIN (
+    SELECT 处方ID, MAX(发药时间) AS 发药时间
+    FROM fghis5..门诊_发药信息表
+    WHERE ISNULL(delete_flag, 0) = 0
+    GROUP BY 处方ID
+) dx ON dx.处方ID = b.处方ID
 WHERE a.发票状态 = '2'
   AND b.项目类别 = 3
-  AND b.日期 BETWEEN @bdate AND @edate
+  AND CONVERT(date, dx.发药时间) BETWEEN @bdate AND @edate
 ORDER BY b.处方ID, b.项目名称";
 
             var billingItems = db.Database.SqlQuery<BillingDrugItem>(billingSql,
@@ -666,7 +675,7 @@ ORDER BY b.处方ID, b.项目名称";
 
             // 2. 查询处方结果本地表（HIS处方结果接口数据），作为发药侧
             // 说明：该表由「已发药查询 → 处方结果」写入，存的是 getPrescriptionInfo 返回的 data；
-            //       只加载本次收费日期范围内有收费明细的处方ID，避免带入范围外的数据
+            //       只加载本次归属范围内有收费明细的处方ID，避免带入范围外的数据
             var billingPids = new HashSet<int>(billingItems.Select(b => b.处方ID));
             var dispenseMap = new Dictionary<int, DispenseInfo>();
             if (billingPids.Count > 0)
@@ -736,6 +745,7 @@ WHERE outcfcode IS NOT NULL
                     来源 = "收费",
                     处方ID = bill.处方ID,
                     日期 = bill.日期,
+                    发药日期 = bill.发药日期,
                     病人姓名 = bill.病人姓名,
                     项目ID = bill.项目ID,
                     收费药品编码 = bill.药品编码,
@@ -793,6 +803,10 @@ WHERE outcfcode IS NOT NULL
             }
 
             // 4b. 遍历发药明细，补充收费中没有的条目
+            var dispenseDateMap = billingItems
+                .Where(x => !string.IsNullOrEmpty(x.发药日期))
+                .GroupBy(x => x.处方ID)
+                .ToDictionary(g => g.Key, g => g.First().发药日期);
             foreach (var kv in dispenseMap)
             {
                 var pid = kv.Key;
@@ -822,6 +836,7 @@ WHERE outcfcode IS NOT NULL
                     {
                         来源 = "发药",
                         处方ID = pid,
+                        发药日期 = dispenseDateMap.TryGetValue(pid, out var dispDate) ? dispDate : null,
                         病人姓名 = dispInfo.Patient ?? "",
                         项目ID = !string.IsNullOrEmpty(item.goodsid) ? item.goodsid : item.goodscode,
                         收费药品编码 = "",
@@ -947,9 +962,11 @@ WHERE outcfcode IS NOT NULL
         private List<FeeDetailCompareItem> BuildFeeDetailCompare(string bdate, string edate)
         {
             // 1. 收费侧 + 处方侧（医生_处方明细 聚合，避免 JOIN 扇出）
+            // 归属月份与药品核对一致：只核对有发药记录的处方，按「发药时间」归属
             var sql = @"
 SELECT a.处方ID,
        CONVERT(varchar(10), CONVERT(date, a.日期), 23) AS 日期,
+       CONVERT(varchar(10), CONVERT(date, a.发药时间), 23) AS 发药日期,
        a.病人姓名,
        d.途径 AS 煎药要求,
        CASE d.途径
@@ -962,14 +979,21 @@ SELECT a.处方ID,
 FROM (
     SELECT b.处方ID,
            MAX(b.日期) AS 日期,
+           MAX(fx.发药时间) AS 发药时间,
            MAX(f.姓名) AS 病人姓名,
            SUM(CASE WHEN b.项目类别 = 99 THEN b.金额 ELSE 0 END) AS 收费加工费,
            SUM(CASE WHEN b.项目类别 = 91 THEN b.金额 ELSE 0 END) AS 收费快递费
     FROM fghis5..门诊_收费明细表 b
     JOIN fghis5..门诊_收费发票表 f ON f.结帐ID = b.结帐ID
+    JOIN (
+        SELECT 处方ID, MAX(发药时间) AS 发药时间
+        FROM fghis5..门诊_发药信息表
+        WHERE ISNULL(delete_flag, 0) = 0
+        GROUP BY 处方ID
+    ) fx ON fx.处方ID = b.处方ID
     WHERE b.项目类别 IN (99, 91)
       AND f.发票状态 = '2'
-      AND b.日期 BETWEEN @bdate AND @edate
+      AND CONVERT(date, fx.发药时间) BETWEEN @bdate AND @edate
     GROUP BY b.处方ID
 ) a
 OUTER APPLY (
@@ -1223,9 +1247,26 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
                 decimal 应付快递费 = summary.Sum(s => s.应收快递费 ?? 0m);
 
                 // 合并更新：加工费页只负责加工费/快递费；药品费保留已有值（无则0），不覆盖
-                var 已有药品费 = db.Database.SqlQuery<decimal?>(
-                    "SELECT 应付药品费 FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
-                    new SqlParameter("@month", 月份)).FirstOrDefault() ?? 0m;
+                var existing = db.Database.SqlQuery<ZhenRenTangStat>(
+                    @"SELECT 月份, 应付加工费, 应付快递费, 应付药品费
+                      FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
+                    new SqlParameter("@month", 月份)).FirstOrDefault();
+
+                // 已导入月份若金额变化，要求二次确认，避免误覆盖已确认的数据
+                if (existing != null &&
+                    (existing.应付加工费 != 应付加工费 || existing.应付快递费 != 应付快递费) &&
+                    Request["confirm"] != "1")
+                    return Json(new
+                    {
+                        success = false,
+                        needConfirm = true,
+                        msg = 月份 + " 已导入应付加工费 " + existing.应付加工费.ToString("F2") +
+                              "、应付快递费 " + existing.应付快递费.ToString("F2") +
+                              "，本次将覆盖为 " + 应付加工费.ToString("F2") +
+                              "、" + 应付快递费.ToString("F2") + "。确认覆盖吗？"
+                    });
+
+                var 已有药品费 = existing?.应付药品费 ?? 0m;
 
                 var 应付总金额 = UpsertZhenRenTangStat(月份,
                     b.ToString("yyyy-MM-dd"), e.ToString("yyyy-MM-dd"),
@@ -1282,12 +1323,23 @@ WHERE ISNULL(delete_flag,0) = 0 AND 处方ID IN (" + pidIn + ")";
                 decimal 应付药品费 = Math.Round(detail.Sum(x => x.结算金额 ?? 0m), 3, MidpointRounding.AwayFromZero);
 
                 // 合并更新：药品页只负责药品费；加工费/快递费保留已有值（无则0），不覆盖
-                var 已有加工费 = db.Database.SqlQuery<decimal?>(
-                    "SELECT 应付加工费 FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
-                    new SqlParameter("@month", 月份)).FirstOrDefault() ?? 0m;
-                var 已有快递费 = db.Database.SqlQuery<decimal?>(
-                    "SELECT 应付快递费 FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
-                    new SqlParameter("@month", 月份)).FirstOrDefault() ?? 0m;
+                var existing = db.Database.SqlQuery<ZhenRenTangStat>(
+                    @"SELECT 月份, 应付加工费, 应付快递费, 应付药品费
+                      FROM fghis5..上海真仁堂统计汇总 WHERE 月份 = @month",
+                    new SqlParameter("@month", 月份)).FirstOrDefault();
+
+                // 已导入月份若金额变化，要求二次确认，避免误覆盖已确认的数据（如9月）
+                if (existing != null && existing.应付药品费 != 应付药品费 && Request["confirm"] != "1")
+                    return Json(new
+                    {
+                        success = false,
+                        needConfirm = true,
+                        msg = 月份 + " 已导入应付药品费 " + existing.应付药品费.ToString("F3") +
+                              "，本次将覆盖为 " + 应付药品费.ToString("F3") + "。确认覆盖吗？"
+                    });
+
+                var 已有加工费 = existing?.应付加工费 ?? 0m;
+                var 已有快递费 = existing?.应付快递费 ?? 0m;
 
                 var 应付总金额 = UpsertZhenRenTangStat(月份,
                     b.ToString("yyyy-MM-dd"), e.ToString("yyyy-MM-dd"),

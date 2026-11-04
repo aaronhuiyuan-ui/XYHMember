@@ -509,6 +509,7 @@ namespace XYHMember.Context
     {
         public int 处方ID { get; set; }
         public string 日期 { get; set; }
+        public string 发药日期 { get; set; }      // 门诊_发药信息表.发药时间；未发药为 NULL
         public string 病人姓名 { get; set; }
         public string 项目ID { get; set; }
         public string 药品编码 { get; set; }
@@ -550,7 +551,8 @@ namespace XYHMember.Context
     {
         public string 来源 { get; set; }         // "收费" 或 "发药"
         public int 处方ID { get; set; }
-        public string 日期 { get; set; }
+        public string 日期 { get; set; }         // 收费日期
+        public string 发药日期 { get; set; }     // 发药时间；未发药为空
         public string 病人姓名 { get; set; }
         public string 项目ID { get; set; }
         public string 收费药品编码 { get; set; }          // 代码_药品基本信息表.注册商标
@@ -587,7 +589,8 @@ namespace XYHMember.Context
     public class FeeDetailCompareItem
     {
         public int 处方ID { get; set; }
-        public string 日期 { get; set; }          // yyyy-MM-dd
+        public string 日期 { get; set; }          // yyyy-MM-dd（收费日期）
+        public string 发药日期 { get; set; }      // 发药时间；未发药为空
         public string 病人姓名 { get; set; }
         public string 煎药要求 { get; set; }        // 原始途径（煎药/浓缩/合煎/丸剂/粉剂/膏方/草药/其他）
         public string 加工方式 { get; set; }       // 由 煎药要求 映射：代煎/浓汤/合煎颗粒/浓缩蜜丸/打粉/膏方/代配/其他
