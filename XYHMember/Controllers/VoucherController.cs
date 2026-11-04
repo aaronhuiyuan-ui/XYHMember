@@ -11,14 +11,14 @@ using XYHMember.Context;
 namespace XYHMember.Controllers
 {
     /// <summary>
-    /// 抵扣券管理：199 元锁客券的发放、维护和费用明细。
-    /// 199 元独立记账，不写入储值卡 MS_BRZH / MS_SZMX。
+    /// 抵扣券管理：350 元锁客券的发放、维护和费用明细。
+    /// 350 元独立记账，不写入储值卡 MS_BRZH / MS_SZMX。
     /// </summary>
     [AuthFilter]
     public class VoucherController : Controller
     {
         private XYHDbContext db = new XYHDbContext();
-        private const decimal VoucherAmount = 199m;
+        private const decimal VoucherAmount = 350m;
 
         // ===== 发券 =====
 
