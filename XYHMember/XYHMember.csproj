@@ -161,6 +161,7 @@
     <Compile Include="Helpers\MoneyAllocationSql.cs" />
     <Compile Include="Helpers\PackageAutoDeductService.cs" />
     <Compile Include="Controllers\MemberController.cs" />
+    <Compile Include="Controllers\VoucherController.cs" />
     <Compile Include="Controllers\ReportFormsController.cs" />
     <Compile Include="Controllers\UserController.cs" />
     <Compile Include="Global.asax.cs">
@@ -207,6 +208,7 @@
     <Content Include="Content\my.css" />
     <Content Include="Content\plugins.css" />
     <Content Include="Content\style.css" />
+    <Content Include="Content\voucher.css" />
     <Content Include="favicon.ico" />
     <Content Include="fonts\glyphicons-halflings-regular.svg" />
     <Content Include="Global.asax" />
@@ -300,6 +302,11 @@
     <Content Include="Views\User\AddUser.cshtml" />
     <Content Include="Views\Member\PatientInfo.cshtml" />
     <Content Include="Views\Member\TopUP.cshtml" />
+    <Content Include="Views\Voucher\Detail.cshtml" />
+    <Content Include="Views\Voucher\Edit.cshtml" />
+    <Content Include="Views\Voucher\Issue.cshtml" />
+    <Content Include="Views\Voucher\IssueForm.cshtml" />
+    <Content Include="Views\Voucher\VoucherList.cshtml" />
     <Content Include="Views\Outpatient\PhysicalExamQuery.cshtml" />
     <Content Include="Views\Outpatient\SavedPatientsQuery.cshtml" />
     <Content Include="Views\MedicalTech\Index.cshtml" />

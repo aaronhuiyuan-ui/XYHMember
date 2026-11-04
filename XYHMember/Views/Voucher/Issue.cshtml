@@ -1,0 +1,124 @@
+@{
+    Layout = null;
+}
+
+@using XYHMember.Context;
+@model List<VoucherPatient>
+
+@{
+    var pid = Request["pid"] ?? "";
+    var name = Request["name"] ?? "";
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>抵扣券发券</title>
+
+    @Styles.Render("~/Content/upcss")
+    <link rel="stylesheet" href="@(Url.Content("~/Content/voucher.css") + "?v=20261104c")" />
+</head>
+
+<body class="voucher-body">
+    <div class="voucher-page">
+        <div class="voucher-page-head">
+            <div>
+                <h2>抵扣券发券</h2>
+                <div class="voucher-sub">199 元锁客券 · 一人一张 · 仅抵扣膏方制作费</div>
+            </div>
+        </div>
+
+        <div class="voucher-card">
+            <form class="voucher-filter" action="@Url.Action("GetPatientsForIssue", "Voucher")" method="get">
+                <div class="voucher-field">
+                    <label>PID</label>
+                    <input type="text" name="pid" value="@pid" placeholder="请输入 PID" />
+                </div>
+                <div class="voucher-field">
+                    <label>姓名</label>
+                    <input type="text" name="name" value="@name" placeholder="请输入姓名" />
+                </div>
+                <div class="voucher-filter-actions">
+                    <button type="submit" class="voucher-btn primary">查询</button>
+                    <a class="voucher-btn" href="@Url.Action("Issue", "Voucher")">重置</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="voucher-card">
+            <div class="voucher-table-head">
+                <div class="voucher-table-title">病人列表</div>
+                <div class="voucher-table-hint">共 @Model.Count 条</div>
+            </div>
+            <div class="voucher-table-wrap">
+                <table class="voucher-table">
+                    <thead>
+                        <tr>
+                            <th>PID</th>
+                            <th>门诊号</th>
+                            <th>姓名</th>
+                            <th>性别</th>
+                            <th>身份证号</th>
+                            <th>联系手机</th>
+                            <th>发券状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Count == 0)
+                        {
+                            <tr><td colspan="8"><div class="voucher-empty">未找到病人</div></td></tr>
+                        }
+                        else
+                        {
+                            foreach (var result in Model)
+                            {
+                                <tr>
+                                    <td>@result.PID</td>
+                                    <td>@result.门诊号</td>
+                                    <td>@result.姓名</td>
+                                    <td>@result.性别</td>
+                                    <td>@result.身份证号</td>
+                                    <td>@result.联系手机</td>
+                                    <td>
+                                        @if (result.是否已发券 == "已发券")
+                                        {
+                                            <span class="voucher-badge used">已发券</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="voucher-badge void">未发券</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (result.是否已发券 == "未发券")
+                                        {
+                                            <button type="button" class="voucher-btn primary small" onclick="openIssue(@result.PID)">发券</button>
+                                        }
+                                        else
+                                        {
+                                            <span class="muted">已有有效券</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        function openIssue(pid) {
+            var url = '@Url.Action("IssueForm", "Voucher")' + '?pid=' + pid;
+            var width = 500;
+            var height = 680;
+            var left = (screen.width / 2) - (width / 2);
+            var top = (screen.height / 2) - (height / 2);
+
+            window.open(url, '发券', 'width=' + width + ',height=' + height + ',top=' + top + ',left=' + left);
+        }
+    </script>
+</body>
+</html>

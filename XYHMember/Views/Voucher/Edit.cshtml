@@ -1,0 +1,80 @@
+@{
+    Layout = null;
+}
+
+@using XYHMember.Context;
+@model DeductionVoucher
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>编辑抵扣券</title>
+
+    @Styles.Render("~/Content/upcss")
+    <link rel="stylesheet" href="@(Url.Content("~/Content/voucher.css") + "?v=20261104c")" />
+</head>
+
+<body class="voucher-body">
+    <div class="voucher-page voucher-page-popup">
+        <div class="voucher-popup-head">
+            <h2>编辑抵扣券</h2>
+            <div class="sub">券码：@Model.券码</div>
+        </div>
+
+        <form class="voucher-form" action="@Url.Action("UpdateVoucher", "Voucher")" method="post">
+            <input type="hidden" name="id" value="@Model.序号" />
+
+            <div class="voucher-form-section">
+                <h3>券信息</h3>
+                <div class="voucher-form-row">
+                    <label>券码</label>
+                    <div class="control"><input type="text" value="@Model.券码" readonly /></div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>门诊号</label>
+                    <div class="control"><input type="text" value="@Model.门诊号" readonly /></div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>姓名</label>
+                    <div class="control"><input type="text" value="@Model.姓名" readonly /></div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>状态</label>
+                    <div class="control"><input type="text" value="@Model.状态" readonly /></div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>券面额</label>
+                    <div class="control"><input type="text" value="@Model.券面额" readonly /></div>
+                </div>
+            </div>
+
+            <div class="voucher-form-section">
+                <h3>可维护信息</h3>
+                <div class="voucher-form-row">
+                    <label>手机</label>
+                    <div class="control">
+                        <input type="text" name="phone" value="@Model.手机" placeholder="选填" />
+                    </div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>支付方式</label>
+                    <div class="control">
+                        <input type="text" name="payway" value="@Model.支付方式" placeholder="现金 / 微信 / 支付宝 / 银行卡" />
+                    </div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>备注</label>
+                    <div class="control">
+                        <input type="text" name="remark" value="@Model.备注" placeholder="选填" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="voucher-form-footer">
+                <button type="button" class="voucher-btn" onclick="window.close()">取消</button>
+                <button type="submit" class="voucher-btn primary">保存</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

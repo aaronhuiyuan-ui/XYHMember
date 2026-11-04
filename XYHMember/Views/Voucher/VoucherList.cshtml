@@ -1,0 +1,212 @@
+@{
+    Layout = null;
+}
+
+@using XYHMember.Context;
+@model List<DeductionVoucher>
+
+@{
+    var name = Request["name"] ?? "";
+    var code = Request["code"] ?? "";
+    var phone = Request["phone"] ?? "";
+    var selectedStatus = Request["status"] ?? "";
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>抵扣券维护</title>
+
+    @Styles.Render("~/Content/upcss")
+    <link rel="stylesheet" href="@(Url.Content("~/Content/voucher.css") + "?v=20261104c")" />
+</head>
+
+<body class="voucher-body">
+    <div class="voucher-page">
+        <div class="voucher-page-head">
+            <div>
+                <h2>抵扣券维护</h2>
+                <div class="voucher-sub">抵扣券信息维护、作废与查询</div>
+            </div>
+            <div class="voucher-head-actions">
+                <button type="button" class="voucher-btn" id="exportButton">导出到 Excel</button>
+            </div>
+        </div>
+
+        <div class="voucher-card">
+            <form class="voucher-filter" action="@Url.Action("GetVoucherList", "Voucher")" method="get">
+                <div class="voucher-field">
+                    <label>姓名</label>
+                    <input type="text" name="name" value="@name" placeholder="请输入姓名" />
+                </div>
+                <div class="voucher-field">
+                    <label>券码</label>
+                    <input type="text" name="code" value="@code" placeholder="请输入券码" />
+                </div>
+                <div class="voucher-field">
+                    <label>手机号</label>
+                    <input type="text" name="phone" value="@phone" placeholder="请输入手机号" />
+                </div>
+                <div class="voucher-field">
+                    <label>状态</label>
+                    <select name="status">
+                        <option value="" @(selectedStatus == "" ? "selected" : "")>全部状态</option>
+                        <option value="未使用" @(selectedStatus == "未使用" ? "selected" : "")>未使用</option>
+                        <option value="已使用" @(selectedStatus == "已使用" ? "selected" : "")>已使用</option>
+                        <option value="已作废" @(selectedStatus == "已作废" ? "selected" : "")>已作废</option>
+                    </select>
+                </div>
+                <div class="voucher-filter-actions">
+                    <button type="submit" class="voucher-btn primary">查询</button>
+                    <a class="voucher-btn" href="@Url.Action("VoucherList", "Voucher")">重置</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="voucher-card">
+            <div class="voucher-table-head">
+                <div class="voucher-table-title">抵扣券列表</div>
+                <div class="voucher-table-hint">共 @Model.Count 条</div>
+            </div>
+            <div class="voucher-table-wrap">
+                <table class="voucher-table" id="dataTable" style="min-width:1180px;">
+                    <thead>
+                        <tr>
+                            <th>序号</th>
+                            <th>券码</th>
+                            <th>门诊号</th>
+                            <th>姓名</th>
+                            <th>手机</th>
+                            <th>状态</th>
+                            <th class="num">券面额</th>
+                            <th class="num">已用金额</th>
+                            <th>支付方式</th>
+                            <th>发券工号</th>
+                            <th>发券时间</th>
+                            <th>备注</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Count == 0)
+                        {
+                            <tr><td colspan="13"><div class="voucher-empty">暂无抵扣券</div></td></tr>
+                        }
+                        else
+                        {
+                            foreach (var result in Model)
+                            {
+                                <tr>
+                                    <td>@result.序号</td>
+                                    <td class="code">@result.券码</td>
+                                    <td>@result.门诊号</td>
+                                    <td>@result.姓名</td>
+                                    <td>@result.手机</td>
+                                    <td>
+                                        @if (result.状态 == "未使用")
+                                        {
+                                            <span class="voucher-badge unused">未使用</span>
+                                        }
+                                        else if (result.状态 == "已使用")
+                                        {
+                                            <span class="voucher-badge used">已使用</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="voucher-badge void">已作废</span>
+                                        }
+                                    </td>
+                                    <td class="num money">@(result.券面额.ToString("N2"))</td>
+                                    <td class="num">@(result.已用金额.ToString("N2"))</td>
+                                    <td>@result.支付方式</td>
+                                    <td>@result.发券工号</td>
+                                    <td>@(result.发券时间.ToString("yyyy-MM-dd HH:mm:ss"))</td>
+                                    <td>
+                                        @if (string.IsNullOrEmpty(result.备注))
+                                        {
+                                            <span class="muted">—</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="remark" title="@result.备注">@(result.备注.Length > 20 ? result.备注.Substring(0, 20) + "…" : result.备注)</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="voucher-table-actions">
+                                            @if (result.状态 != "已作废")
+                                            {
+                                                <button type="button" class="voucher-btn small" onclick="openEdit(@result.序号)">编辑</button>
+                                            }
+                                            @if (result.状态 == "未使用")
+                                            {
+                                                <form id="voidForm-@result.序号" action="@Url.Action("VoidVoucher", "Voucher")" method="post">
+                                                    <input type="hidden" name="id" value="@result.序号" />
+                                                    <input type="hidden" name="reason" id="voidReason-@result.序号" />
+                                                    <button type="button" class="voucher-btn danger small" onclick="voidVoucher(@result.序号)">作废</button>
+                                                </form>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        function openEdit(id) {
+            var url = '@Url.Action("Edit", "Voucher")' + '?id=' + id;
+            var width = 500;
+            var height = 620;
+            var left = (screen.width / 2) - (width / 2);
+            var top = (screen.height / 2) - (height / 2);
+
+            window.open(url, '编辑抵扣券', 'width=' + width + ',height=' + height + ',top=' + top + ',left=' + left);
+        }
+
+        function voidVoucher(id) {
+            var reason = prompt('请输入作废原因', '手工作废');
+            if (reason === null) return;
+
+            if (!confirm('确定要作废该抵扣券吗？作废后不可恢复。')) return;
+
+            document.getElementById('voidReason-' + id).value = reason;
+            document.getElementById('voidForm-' + id).submit();
+        }
+
+        document.getElementById('exportButton').addEventListener('click', function () {
+            if (document.querySelector('#dataTable tbody td[colspan]')) {
+                alert('没有可导出的数据');
+                return;
+            }
+
+            // 表头与数据都排除最后一列「操作」
+            var headers = Array.from(document.querySelectorAll('#dataTable thead th')).map(th => th.innerText).slice(0, -1);
+
+            var rows = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(tr => {
+                return Array.from(tr.children).map(td => td.innerText).slice(0, -1);
+            });
+
+            fetch('@Url.Action("ExportToExcel", "Export")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Headers: headers, Rows: rows })
+            })
+                .then(response => response.blob())
+                .then(blob => {
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = '抵扣券管理.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                })
+                .catch(error => console.error('Error exporting to Excel:', error));
+        });
+    </script>
+</body>
+</html>

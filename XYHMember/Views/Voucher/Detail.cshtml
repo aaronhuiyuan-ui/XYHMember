@@ -1,0 +1,207 @@
+@{
+    Layout = null;
+}
+
+@using XYHMember.Context;
+@model List<DeductionVoucherDetail>
+
+@{
+    var bdatepicker = Request.QueryString["bdatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var edatepicker = Request.QueryString["edatepicker"] ?? DateTime.Today.ToString("yyyy-MM-dd");
+    var name = Request["name"] ?? "";
+    var selectedType = Request.QueryString["type"] ?? "";
+}
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>抵扣券费用明细</title>
+
+    @Styles.Render("~/Content/upcss")
+    @Styles.Render("~/Content/flatpickr")
+    <link rel="stylesheet" href="@(Url.Content("~/Content/voucher.css") + "?v=20261104c")" />
+</head>
+
+<body class="voucher-body">
+    <div class="voucher-page">
+        <div class="voucher-page-head">
+            <div>
+                <h2>抵扣券费用明细</h2>
+                <div class="voucher-sub">发券、作废流水查询与汇总</div>
+            </div>
+            <div class="voucher-head-actions">
+                <button type="button" class="voucher-btn" id="exportButton">导出到 Excel</button>
+            </div>
+        </div>
+
+        <div class="voucher-card">
+            <form class="voucher-filter" action="@Url.Action("GetVoucherDetail", "Voucher")" method="get">
+                <div class="voucher-field">
+                    <label>开始日期</label>
+                    <input type="text" name="bdatepicker" id="bdatepicker" value="@bdatepicker" placeholder="开始日期" />
+                </div>
+                <div class="voucher-field">
+                    <label>结束日期</label>
+                    <input type="text" name="edatepicker" id="edatepicker" value="@edatepicker" placeholder="结束日期" />
+                </div>
+                <div class="voucher-field">
+                    <label>类型</label>
+                    <select name="type">
+                        <option value="" @(selectedType == "" ? "selected" : "")>全部</option>
+                        <option value="发券" @(selectedType == "发券" ? "selected" : "")>发券</option>
+                        <option value="作废" @(selectedType == "作废" ? "selected" : "")>作废</option>
+                    </select>
+                </div>
+                <div class="voucher-field">
+                    <label>姓名</label>
+                    <input type="text" name="name" value="@name" placeholder="请输入姓名" />
+                </div>
+                <div class="voucher-filter-actions">
+                    <button type="submit" class="voucher-btn primary">查询</button>
+                    <a class="voucher-btn" href="@Url.Action("Detail", "Voucher")">重置</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="voucher-card">
+            <div class="voucher-stats">
+                <div class="voucher-stat">
+                    <div class="label">发券张数</div>
+                    <div class="value">@ViewBag.发券张数<span class="unit">张</span></div>
+                </div>
+                <div class="voucher-stat">
+                    <div class="label">发券金额</div>
+                    <div class="value">@(((decimal)ViewBag.发券金额).ToString("N2"))<span class="unit">元</span></div>
+                </div>
+                <div class="voucher-stat">
+                    <div class="label">作废张数</div>
+                    <div class="value">@ViewBag.作废张数<span class="unit">张</span></div>
+                    <div class="sub">作废金额 @(((decimal)ViewBag.作废金额).ToString("N2")) 元</div>
+                </div>
+                <div class="voucher-stat">
+                    <div class="label">当前未使用</div>
+                    <div class="value">@(((decimal)ViewBag.未使用金额).ToString("N2"))<span class="unit">元</span></div>
+                    <div class="sub">共 @ViewBag.未使用张数 张</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="voucher-card">
+            <div class="voucher-table-head">
+                <div class="voucher-table-title">流水明细</div>
+                <div class="voucher-table-hint">共 @Model.Count 条</div>
+            </div>
+            <div class="voucher-table-wrap">
+                <table class="voucher-table" id="dataTable" style="min-width:1000px;">
+                    <thead>
+                        <tr>
+                            <th>流水号</th>
+                            <th>券码</th>
+                            <th>类型</th>
+                            <th class="num">发生金额</th>
+                            <th class="num">券余额</th>
+                            <th>门诊号</th>
+                            <th>姓名</th>
+                            <th>操作工号</th>
+                            <th>操作时间</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Count == 0)
+                        {
+                            <tr><td colspan="10"><div class="voucher-empty">当前条件下没有流水记录</div></td></tr>
+                        }
+                        else
+                        {
+                            foreach (var result in Model)
+                            {
+                                <tr>
+                                    <td>@result.流水号</td>
+                                    <td class="code">@result.券码</td>
+                                    <td>
+                                        @if (result.类型 == "发券")
+                                        {
+                                            <span class="voucher-badge issue">发券</span>
+                                        }
+                                        else if (result.类型 == "作废")
+                                        {
+                                            <span class="voucher-badge cancel">作废</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="voucher-badge used">@result.类型</span>
+                                        }
+                                    </td>
+                                    <td class="num money @(result.发生金额 < 0 ? "minus" : "plus")">@(result.发生金额.ToString("N2"))</td>
+                                    <td class="num">@(result.券余额.ToString("N2"))</td>
+                                    <td>@result.门诊号</td>
+                                    <td>@result.姓名</td>
+                                    <td>@result.操作工号</td>
+                                    <td>@(result.操作时间.ToString("yyyy-MM-dd HH:mm:ss"))</td>
+                                    <td>
+                                        @if (string.IsNullOrEmpty(result.备注))
+                                        {
+                                            <span class="muted">—</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="remark" title="@result.备注">@(result.备注.Length > 20 ? result.备注.Substring(0, 20) + "…" : result.备注)</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @Scripts.Render("~/Scripts/flatpickrjs")
+
+    <script>
+        flatpickr("#bdatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@bdatepicker",
+            minDate: "2024-05-13"
+        });
+
+        flatpickr("#edatepicker", {
+            dateFormat: "Y-m-d",
+            defaultDate: "@edatepicker",
+            minDate: "2024-05-13"
+        });
+
+        document.getElementById('exportButton').addEventListener('click', function () {
+            if (document.querySelector('#dataTable tbody td[colspan]')) {
+                alert('没有可导出的数据');
+                return;
+            }
+
+            var headers = Array.from(document.querySelectorAll('#dataTable thead th')).map(th => th.innerText);
+
+            var rows = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(tr => {
+                return Array.from(tr.children).map(td => td.innerText);
+            });
+
+            fetch('@Url.Action("ExportToExcel", "Export")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Headers: headers, Rows: rows })
+            })
+                .then(response => response.blob())
+                .then(blob => {
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = '抵扣券费用明细.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                })
+                .catch(error => console.error('Error exporting to Excel:', error));
+        });
+    </script>
+</body>
+</html>

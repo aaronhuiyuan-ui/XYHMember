@@ -1,0 +1,83 @@
+@{
+    Layout = null;
+}
+
+@using XYHMember.Context;
+@model VoucherPatient
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>发放抵扣券</title>
+
+    @Styles.Render("~/Content/upcss")
+    <link rel="stylesheet" href="@(Url.Content("~/Content/voucher.css") + "?v=20261104c")" />
+</head>
+
+<body class="voucher-body">
+    <div class="voucher-page voucher-page-popup">
+        <div class="voucher-popup-head">
+            <h2>发放抵扣券</h2>
+            <div class="sub">@Model.姓名 · 门诊号 @Model.门诊号</div>
+        </div>
+
+        <form class="voucher-form" action="@Url.Action("IssueVoucher", "Voucher")" method="post">
+            <input type="hidden" name="pid" value="@Model.PID" />
+
+            <div class="voucher-highlight">
+                <span class="amount">¥@ViewBag.券面额</span>
+                <span class="desc">锁客券面额，发券时一次性收取</span>
+            </div>
+
+            <div class="voucher-form-section">
+                <h3>病人信息</h3>
+                <div class="voucher-form-row">
+                    <label>PID</label>
+                    <div class="control"><input type="text" value="@Model.PID" readonly /></div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>门诊号</label>
+                    <div class="control"><input type="text" value="@Model.门诊号" readonly /></div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>姓名</label>
+                    <div class="control"><input type="text" value="@Model.姓名" readonly /></div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>身份证号</label>
+                    <div class="control"><input type="text" value="@Model.身份证号" readonly /></div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>联系手机</label>
+                    <div class="control"><input type="text" value="@Model.联系手机" readonly /></div>
+                </div>
+            </div>
+
+            <div class="voucher-form-section">
+                <h3>发券信息</h3>
+                <div class="voucher-form-row">
+                    <label>支付方式</label>
+                    <div class="control">
+                        <input type="text" name="payway" required placeholder="现金 / 微信 / 支付宝 / 银行卡" />
+                    </div>
+                </div>
+                <div class="voucher-form-row">
+                    <label>备注</label>
+                    <div class="control">
+                        <input type="text" name="remark" placeholder="选填" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="voucher-inline-note">
+                199 元仅记入抵扣券台账，<strong>不进入储值卡余额</strong>，使用时用于抵扣膏方制作费。
+            </div>
+
+            <div class="voucher-form-footer">
+                <button type="button" class="voucher-btn" onclick="window.close()">取消</button>
+                <button type="submit" class="voucher-btn primary">确定发券</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

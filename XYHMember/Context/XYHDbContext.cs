@@ -100,6 +100,69 @@ namespace XYHMember.Context
         public string 关联销售 { get; set; }
     }
 
+    // ===== 抵扣券管理 =====
+
+    // 抵扣券主表：hisdata..抵扣券表
+    public class DeductionVoucher
+    {
+        public int 序号 { get; set; }
+        public string 券码 { get; set; }
+        public int PID { get; set; }
+        public string 门诊号 { get; set; }
+        public string 姓名 { get; set; }
+        public string 手机 { get; set; }
+        public decimal 券面额 { get; set; }
+        public decimal 已用金额 { get; set; }
+        public string 状态 { get; set; }
+        public string 支付方式 { get; set; }
+        public string 发券工号 { get; set; }
+        public DateTime 发券时间 { get; set; }
+        public string 作废工号 { get; set; }
+        public DateTime? 作废时间 { get; set; }
+        public string 备注 { get; set; }
+    }
+
+    // 抵扣券流水：hisdata..抵扣券流水表
+    public class DeductionVoucherDetail
+    {
+        public int 流水号 { get; set; }
+        public int 券序号 { get; set; }
+        public string 券码 { get; set; }
+        public string 类型 { get; set; }
+        public decimal 发生金额 { get; set; }
+        public decimal 券余额 { get; set; }
+        public string 门诊号 { get; set; }
+        public string 姓名 { get; set; }
+        public string 操作工号 { get; set; }
+        public DateTime 操作时间 { get; set; }
+        public string 备注 { get; set; }
+        public int? 关联结帐ID { get; set; }
+        public string 关联发票号 { get; set; }
+    }
+
+    // 发券时选择的病人（fghis5..系统_病人基本信息表 + 是否已发券）
+    public class VoucherPatient
+    {
+        public int PID { get; set; }
+        public string 门诊号 { get; set; }
+        public string 姓名 { get; set; }
+        public string 性别 { get; set; }
+        public string 身份证号 { get; set; }
+        public string 联系手机 { get; set; }
+        public string 是否已发券 { get; set; }
+    }
+
+    // 抵扣券费用明细汇总
+    public class VoucherSummary
+    {
+        public int 发券张数 { get; set; }
+        public decimal 发券金额 { get; set; }
+        public int 作废张数 { get; set; }
+        public decimal 作废金额 { get; set; }
+        public int 未使用张数 { get; set; }
+        public decimal 未使用金额 { get; set; }
+    }
+
 
     //日报表
     public class DailyReports

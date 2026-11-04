@@ -1,0 +1,461 @@
+/* ============================================================
+   抵扣券管理模块共用样式
+   与 MedicalTech / Pharmacy 新页面的表格风格保持一致
+   ============================================================ */
+
+.voucher-body {
+    margin: 0;
+    background: #f4f6f8;
+    color: #22303f;
+    font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+}
+
+.voucher-page {
+    padding: 18px 22px 28px;
+    box-sizing: border-box;
+}
+
+.voucher-page-popup {
+    padding: 0;
+    background: #fff;
+}
+
+/* ---------- 页头 ---------- */
+.voucher-page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.voucher-page-head h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #22303f;
+    letter-spacing: .3px;
+}
+
+.voucher-page-head .voucher-sub {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #8a97a6;
+}
+
+.voucher-head-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ---------- 卡片 ---------- */
+.voucher-card {
+    background: #fff;
+    border: 1px solid #e6e9ee;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(20, 40, 70, .05);
+    margin-bottom: 14px;
+}
+
+/* ---------- 筛选栏 ---------- */
+.voucher-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px 22px;
+    padding: 16px 20px;
+}
+
+.voucher-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.voucher-field label {
+    display: flex;
+    align-items: center;
+    height: 34px;
+    line-height: 34px;
+    font-size: 13px;
+    color: #5c6b7a;
+    white-space: nowrap;
+}
+
+.voucher-field input,
+.voucher-field select {
+    height: 34px;
+    line-height: 32px;
+    min-width: 140px;
+    padding: 0 10px;
+    border: 1px solid #d7dde5;
+    border-radius: 4px;
+    background: #fff;
+    color: #22303f;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.voucher-field input:focus,
+.voucher-field select:focus {
+    border-color: #0e90d2;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(14, 144, 210, .12);
+}
+
+.voucher-filter-actions {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+    padding-left: 8px;
+}
+
+/* ---------- 按钮 ---------- */
+.voucher-btn {
+    display: inline-block;
+    height: 34px;
+    padding: 0 16px;
+    border: 1px solid #d7dde5;
+    border-radius: 4px;
+    background: #fff;
+    color: #3a4756;
+    font-size: 13px;
+    line-height: 32px;
+    cursor: pointer;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.voucher-btn:hover {
+    border-color: #0e90d2;
+    color: #0e90d2;
+    text-decoration: none;
+}
+
+.voucher-btn.primary {
+    background: #0e90d2;
+    border-color: #0e90d2;
+    color: #fff;
+}
+
+.voucher-btn.primary:hover {
+    background: #0b7db8;
+    border-color: #0b7db8;
+    color: #fff;
+}
+
+.voucher-btn.danger {
+    color: #d64541;
+    border-color: #f0c9c7;
+}
+
+.voucher-btn.danger:hover {
+    background: #d64541;
+    border-color: #d64541;
+    color: #fff;
+}
+
+.voucher-btn.small {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+    line-height: 26px;
+}
+
+.voucher-btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+/* ---------- 表格 ---------- */
+.voucher-table-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 16px;
+    border-bottom: 1px solid #eef1f4;
+}
+
+.voucher-table-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #22303f;
+}
+
+.voucher-table-hint {
+    font-size: 12px;
+    color: #9aa5b1;
+}
+
+.voucher-table-wrap {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.voucher-table {
+    width: 100%;
+    min-width: 900px;
+    margin: 0;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.voucher-table th,
+.voucher-table td {
+    padding: 9px 12px !important;
+    white-space: nowrap;
+    border-bottom: 1px solid #eef1f4;
+    vertical-align: middle;
+}
+
+.voucher-table thead th {
+    background: #4d7496 !important;
+    color: #fff !important;
+    font-weight: 500;
+    border-bottom: 2px solid #3d5f7a;
+}
+
+.voucher-table tbody tr:nth-child(even) {
+    background: #fafbfc;
+}
+
+.voucher-table tbody tr:hover {
+    background: #eef3f7 !important;
+}
+
+.voucher-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.voucher-table .money {
+    font-weight: 600;
+}
+
+.voucher-table .money.plus { color: #1f9d55; }
+.voucher-table .money.minus { color: #d64541; }
+
+.voucher-table .code {
+    font-family: Consolas, "Courier New", monospace;
+    font-weight: 600;
+    letter-spacing: .4px;
+    color: #2b3a4a;
+}
+
+.voucher-table .muted { color: #9aa5b1; }
+.voucher-table .remark { color: #7a8797; }
+
+.voucher-table-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.voucher-empty {
+    padding: 46px 16px;
+    text-align: center;
+    color: #9aa5b1;
+    font-size: 14px;
+}
+
+/* ---------- 状态徽标 ---------- */
+.voucher-badge {
+    display: inline-block;
+    min-width: 52px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 18px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.voucher-badge.unused { background: #e8f7ee; color: #1f9d55; }
+.voucher-badge.used { background: #e8f1fb; color: #2b6cb0; }
+.voucher-badge.void { background: #f2f3f5; color: #8a94a6; }
+.voucher-badge.issue { background: #e8f7ee; color: #1f9d55; }
+.voucher-badge.cancel { background: #fdecec; color: #d64541; }
+
+/* ---------- 汇总卡 ---------- */
+.voucher-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    padding: 14px 16px;
+}
+
+.voucher-stat {
+    padding: 12px 14px;
+    background: #f7f9fb;
+    border: 1px solid #eef1f4;
+    border-radius: 6px;
+}
+
+.voucher-stat .label {
+    font-size: 12px;
+    color: #7a8797;
+}
+
+.voucher-stat .value {
+    margin-top: 5px;
+    font-size: 21px;
+    font-weight: 600;
+    color: #22303f;
+    font-variant-numeric: tabular-nums;
+}
+
+.voucher-stat .unit {
+    margin-left: 2px;
+    font-size: 12px;
+    font-weight: 400;
+    color: #8a97a6;
+}
+
+.voucher-stat .sub {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #9aa5b1;
+}
+
+/* ---------- 弹窗表单 ---------- */
+.voucher-popup-head {
+    padding: 15px 20px;
+    background: #f7f9fb;
+    border-bottom: 1px solid #eef1f4;
+}
+
+.voucher-popup-head h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #22303f;
+}
+
+.voucher-popup-head .sub {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #8a97a6;
+}
+
+.voucher-form {
+    padding: 16px 20px 18px;
+}
+
+.voucher-form-section + .voucher-form-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed #e6e9ee;
+}
+
+.voucher-form-section h3 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #4b5a6a;
+}
+
+.voucher-form-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.voucher-form-row > label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 88px;
+    height: 34px;
+    flex: none;
+    text-align: right;
+    line-height: 34px;
+    font-size: 13px;
+    color: #5c6b7a;
+}
+
+.voucher-form-row .control {
+    flex: 1;
+    min-width: 0;
+}
+
+.voucher-form-row input,
+.voucher-form-row select {
+    width: 100%;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid #d7dde5;
+    border-radius: 4px;
+    background: #fff;
+    color: #22303f;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.voucher-form-row input[readonly] {
+    background: #f5f6f8;
+    color: #6b7785;
+}
+
+.voucher-form-row input:focus {
+    border-color: #0e90d2;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(14, 144, 210, .12);
+}
+
+.voucher-form-row .hint {
+    margin-left: 8px;
+    font-size: 12px;
+    color: #9aa5b1;
+}
+
+.voucher-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 16px;
+    margin-top: 4px;
+    border-top: 1px solid #eef1f4;
+}
+
+.voucher-highlight {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    background: #fff8ec;
+    border: 1px solid #ffe2b8;
+    border-radius: 6px;
+}
+
+.voucher-highlight .amount {
+    font-size: 26px;
+    font-weight: 700;
+    color: #e67e22;
+    font-variant-numeric: tabular-nums;
+}
+
+.voucher-highlight .desc {
+    font-size: 12px;
+    color: #a9793a;
+}
+
+.voucher-inline-note {
+    padding: 9px 12px;
+    margin-bottom: 14px;
+    background: #f5f9ff;
+    border: 1px solid #dbeafe;
+    border-radius: 4px;
+    color: #3b6ea5;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+    .voucher-page { padding: 12px; }
+    .voucher-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .voucher-filter-actions { margin-left: 0; }
+}
