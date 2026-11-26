@@ -1442,7 +1442,7 @@ namespace XYHMember.Controllers
                                    CONVERT(varchar(10), 有效期, 120) AS 有效期,
                                    单位, 数量, 入库人, 物料类别, 状态, 剩余数量
                             FROM fghis5..耗材入库表
-                            WHERE 状态 = '已审核' AND (剩余数量 IS NULL OR 剩余数量 > 0)
+                            WHERE 状态 = '已审核' AND ISNULL(剩余数量, 数量) > 0
                             ORDER BY 序号 DESC";
                 var list = db.Database.SqlQuery<LocalMaterialInbound>(sql).ToList();
 
@@ -1482,47 +1482,37 @@ namespace XYHMember.Controllers
                 if (string.IsNullOrWhiteSpace(审核人))
                     return Json(new { success = false, msg = "请选择审核人" });
 
-                int ok = 0, dup = 0;
+                int ok = 0, dup = 0, 冲减 = 0;
                 var now = DateTime.Now;
-                foreach (var it in items)
+                using (var tx = db.Database.BeginTransaction())
                 {
-                    var key = (it.ckdh ?? "") + "|" + (it.wlbm ?? "") + "|" + (it.ph ?? "");
-                    var exists = db.Database.SqlQuery<int>(
-                        "SELECT COUNT(*) FROM fghis5..耗材入库表 WHERE 唯一键 = @key",
-                        new SqlParameter("@key", key)).FirstOrDefault();
-                    if (exists > 0) { dup++; continue; }
+                    foreach (var it in items)
+                    {
+                        var key = (it.ckdh ?? "") + "|" + (it.wlbm ?? "") + "|" + (it.ph ?? "");
+                        var exists = db.Database.SqlQuery<int>(
+                            "SELECT COUNT(*) FROM fghis5..耗材入库表 WHERE 唯一键 = @key",
+                            new SqlParameter("@key", key)).FirstOrDefault();
+                        if (exists > 0) { dup++; continue; }
 
-                    db.Database.ExecuteSqlCommand(
-                        @"INSERT INTO fghis5..耗材入库表
-                          (入库日期, 单号, 仓库, 物料编码, 物料名称, 规格, 产地编码, 产地名称, 批号, 有效期,
-                           单位, 数量, 入库人, 物料类别, 审核时间, 审核人, 状态, 剩余数量, 唯一键)
-                          VALUES (@入库日期, @单号, @仓库, @物料编码, @物料名称, @规格, @产地编码, @产地名称, @批号, @有效期,
-                            @单位, @数量, @入库人, @物料类别, @审核时间, @审核人, '已审核', @剩余数量, @唯一键)",
-                        new SqlParameter("@入库日期", (object)ParseDate(it.ckrq) ?? DBNull.Value),
-                        new SqlParameter("@单号", (object)it.ckdh ?? DBNull.Value),
-                        new SqlParameter("@仓库", (object)it.ckmc ?? DBNull.Value),
-                        new SqlParameter("@物料编码", (object)it.wlbm ?? DBNull.Value),
-                        new SqlParameter("@物料名称", (object)it.wlmc ?? DBNull.Value),
-                        new SqlParameter("@规格", (object)it.gg ?? DBNull.Value),
-                        new SqlParameter("@产地编码", (object)it.cdbm ?? DBNull.Value),
-                        new SqlParameter("@产地名称", (object)it.cdmc ?? DBNull.Value),
-                        new SqlParameter("@批号", (object)it.ph ?? DBNull.Value),
-                        new SqlParameter("@有效期", (object)ParseDate(it.xq) ?? DBNull.Value),
-                        new SqlParameter("@单位", (object)it.dw ?? DBNull.Value),
-                        new SqlParameter("@数量", (object)it.sl ?? DBNull.Value),
-                        new SqlParameter("@入库人", (object)it.ckr ?? DBNull.Value),
-                        new SqlParameter("@物料类别", (object)it.wllb ?? DBNull.Value),
-                        new SqlParameter("@审核时间", now),
-                        new SqlParameter("@审核人", 审核人 ?? ""),
-                        new SqlParameter("@剩余数量", (object)it.sl ?? DBNull.Value),
-                        new SqlParameter("@唯一键", key));
-                    ok++;
+                        // 负数入库（退耗/作废）不增加库存：冲减同物料原入库行的剩余数量。
+                        // 负数行本身以「作废」状态落库，唯一键去重保证重复审核不会重复冲减。
+                        if (it.sl.HasValue && it.sl.Value < 0)
+                        {
+                            冲减负数入库(it, 审核人, now, key);
+                            冲减++;
+                            continue;
+                        }
+
+                        写入入库行(it, 审核人, now, key, "已审核", it.sl);
+                        ok++;
+                    }
+                    tx.Commit();
                 }
 
                 return Json(new
                 {
                     success = true,
-                    msg = "审核成功 " + ok + " 条" + (dup > 0 ? "，" + dup + " 条已审核过跳过" : "")
+                    msg = "审核成功 " + ok + " 条" + (冲减 > 0 ? "，作废冲减 " + 冲减 + " 条" : "") + (dup > 0 ? "，" + dup + " 条已审核过跳过" : "")
                 });
             }
             catch (Exception ex)
@@ -1531,6 +1521,89 @@ namespace XYHMember.Controllers
                 while (inner.InnerException != null) inner = inner.InnerException;
                 return Json(new { success = false, msg = inner.Message });
             }
+        }
+
+        // 负数入库冲减：按 物料编码+批号 找已审核正数行扣减剩余数量；批号对不上时放宽到同物料编码，
+        // 多批次按入库日期倒序（最近一批先冲）。可冲减量不足直接报错，整单回滚，绝不写出负库存。
+        private void 冲减负数入库(MaterialInboundItem it, string 审核人, DateTime now, string key)
+        {
+            var need = -it.sl.Value;
+
+            var 候选 = 查可冲减行(it, 限定同批号: true);
+            if (候选.Sum(x => x.剩余数量 ?? 0) < need)
+                候选 = 查可冲减行(it, 限定同批号: false);
+
+            var 可用 = 候选.Sum(x => x.剩余数量 ?? 0);
+            if (可用 < need)
+                throw new Exception("负数入库冲减失败：" + (it.wlmc ?? it.wlbm ?? "") +
+                    "，需冲减 " + need + "，当前可冲减库存 " + 可用);
+
+            写入入库行(it, 审核人, now, key, "作废", 0);
+
+            var 余 = need;
+            foreach (var row in 候选)
+            {
+                if (余 <= 0) break;
+                var 扣 = Math.Min(余, row.剩余数量 ?? 0);
+                if (扣 <= 0) continue;
+                db.Database.ExecuteSqlCommand(
+                    "UPDATE fghis5..耗材入库表 SET 剩余数量 = ISNULL(剩余数量, 数量) - @q WHERE 序号 = @id",
+                    new SqlParameter("@q", 扣),
+                    new SqlParameter("@id", row.序号));
+                余 -= 扣;
+            }
+        }
+
+        private class 可冲减入库行
+        {
+            public int 序号 { get; set; }
+            public decimal? 剩余数量 { get; set; }
+        }
+
+        private List<可冲减入库行> 查可冲减行(MaterialInboundItem it, bool 限定同批号)
+        {
+            var sql = @"SELECT 序号, ISNULL(剩余数量, 数量) AS 剩余数量
+                        FROM fghis5..耗材入库表
+                        WHERE 状态 = '已审核'
+                          AND ISNULL(剩余数量, 数量) > 0
+                          AND (物料编码 = @bm OR (物料编码 IS NULL AND @bm IS NULL))";
+            var ps = new List<SqlParameter> { new SqlParameter("@bm", (object)it.wlbm ?? DBNull.Value) };
+            if (限定同批号)
+            {
+                sql += @" AND ((@ph IS NOT NULL AND 批号 = @ph) OR (@ph IS NULL AND 批号 IS NULL))";
+                ps.Add(new SqlParameter("@ph", (object)it.ph ?? DBNull.Value));
+            }
+            sql += " ORDER BY 入库日期 DESC, 序号 DESC";
+            return db.Database.SqlQuery<可冲减入库行>(sql, ps.ToArray()).ToList();
+        }
+
+        private void 写入入库行(MaterialInboundItem it, string 审核人, DateTime now, string key, string 状态, decimal? 剩余数量)
+        {
+            db.Database.ExecuteSqlCommand(
+                @"INSERT INTO fghis5..耗材入库表
+                  (入库日期, 单号, 仓库, 物料编码, 物料名称, 规格, 产地编码, 产地名称, 批号, 有效期,
+                   单位, 数量, 入库人, 物料类别, 审核时间, 审核人, 状态, 剩余数量, 唯一键)
+                  VALUES (@入库日期, @单号, @仓库, @物料编码, @物料名称, @规格, @产地编码, @产地名称, @批号, @有效期,
+                    @单位, @数量, @入库人, @物料类别, @审核时间, @审核人, @状态, @剩余数量, @唯一键)",
+                new SqlParameter("@入库日期", (object)ParseDate(it.ckrq) ?? DBNull.Value),
+                new SqlParameter("@单号", (object)it.ckdh ?? DBNull.Value),
+                new SqlParameter("@仓库", (object)it.ckmc ?? DBNull.Value),
+                new SqlParameter("@物料编码", (object)it.wlbm ?? DBNull.Value),
+                new SqlParameter("@物料名称", (object)it.wlmc ?? DBNull.Value),
+                new SqlParameter("@规格", (object)it.gg ?? DBNull.Value),
+                new SqlParameter("@产地编码", (object)it.cdbm ?? DBNull.Value),
+                new SqlParameter("@产地名称", (object)it.cdmc ?? DBNull.Value),
+                new SqlParameter("@批号", (object)it.ph ?? DBNull.Value),
+                new SqlParameter("@有效期", (object)ParseDate(it.xq) ?? DBNull.Value),
+                new SqlParameter("@单位", (object)it.dw ?? DBNull.Value),
+                new SqlParameter("@数量", (object)it.sl ?? DBNull.Value),
+                new SqlParameter("@入库人", (object)it.ckr ?? DBNull.Value),
+                new SqlParameter("@物料类别", (object)it.wllb ?? DBNull.Value),
+                new SqlParameter("@审核时间", now),
+                new SqlParameter("@审核人", 审核人 ?? ""),
+                new SqlParameter("@状态", 状态),
+                new SqlParameter("@剩余数量", (object)剩余数量 ?? DBNull.Value),
+                new SqlParameter("@唯一键", key));
         }
 
         private static DateTime? ParseDate(string s)
